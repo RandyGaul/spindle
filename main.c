@@ -2,7 +2,6 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define CKIT_IMPLEMENTATION
-#include <stddef.h>
 #include "ckit.h"
 
 typedef enum Tok
@@ -121,10 +120,7 @@ void emit_decl_init_begin()               { printf("EMIT decl_init_begin\n"); }
 void emit_decl_init_end()                 { printf("EMIT decl_init_end\n"); }
 void emit_decl_separator()                { printf("EMIT decl_separator\n"); }
 void emit_decl_end()                      { printf("EMIT decl_end\n"); }
-void emit_func_begin(const char* rt, int rn, const char* name, int nn)
-{
-	printf("EMIT func_begin return=%.*s name=%.*s\n", rn, rt, nn, name);
-}
+void emit_func_begin(const char* rt, int rn, const char* name, int nn) { printf("EMIT func_begin return=%.*s name=%.*s\n", rn, rt, nn, name); }
 void emit_func_params_begin()
 {
 	printf("EMIT func_params_begin\n");
@@ -383,23 +379,6 @@ void func_decl_or_def(const char* type_name, int type_len, const char* name, int
 	parse_error("expected ';' or function body");
 }
 
-void toplevel()
-{
-	if (!is_type_token()) parse_error("expected type at top level");
-	const char* type_name = tok.lexeme;
-	int type_len = tok.len;
-	next();
-	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
-	const char* name = tok.lexeme;
-	int name_len = tok.len;
-	next();
-	if (tok.kind == TOK_LPAREN) {
-		func_decl_or_def(type_name, type_len, name, name_len);
-		return;
-	}
-	global_var_decl(type_name, type_len, name, name_len);
-}
-
 void stmt_decl()
 {
 	const char* type_name = tok.lexeme;
@@ -594,10 +573,27 @@ void stmt()
 	}
 }
 
+void top_level()
+{
+	if (!is_type_token()) parse_error("expected type at top level");
+	const char* type_name = tok.lexeme;
+	int type_len = tok.len;
+	next();
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
+	const char* name = tok.lexeme;
+	int name_len = tok.len;
+	next();
+	if (tok.kind == TOK_LPAREN) {
+		func_decl_or_def(type_name, type_len, name, name_len);
+		return;
+	}
+	global_var_decl(type_name, type_len, name, name_len);
+}
+
 void parse()
 {
 	while (tok.kind != TOK_EOF) {
-		toplevel();
+		top_level();
 	}
 }
 
