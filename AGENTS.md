@@ -94,3 +94,7 @@ We expect specific form of resource sets:
 ```
 
 These above are some examples of things we expect to be able to parse, not fully inclusive but just as starter examples for context.
+
+# Format
+
+We expect tabs as regular /t tabs no spaces, except when aligning text at the end of a line we use spaces. Just look at main.cpp for aesthetic style and make any new patches in the same style.
