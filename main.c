@@ -3,8 +3,10 @@
 
 #define CKIT_IMPLEMENTATION
 
-#include "ckit.h"
+#include <stddef.h>
 #include <string.h>
+#include <strings.h>
+#include "ckit.h"
 
 typedef enum Tok
 {
@@ -95,21 +97,33 @@ struct
 	int len;
 } tok;
 
-void emit_int(int v)                   { printf("EMIT push_int %d\n", v); }
-void emit_ident(const char* s, int n)  { printf("EMIT push_ident \"%.*s\"\n", n, s); }
-void emit_unary(Tok op)                { printf("EMIT unary %s\n", tok_name[op]); }
-void emit_binary(Tok op)               { printf("EMIT binary %s\n", tok_name[op]); }
-void emit_call(int argc)               { printf("EMIT call argc=%d\n", argc); }
-void emit_index(void)                  { printf("EMIT index []\n"); }
-void emit_member(const char* s, int n) { printf("EMIT member .%.*s\n", n, s); }
-void emit_select(void)                 { printf("EMIT select ?:\n"); }
-void emit_if_begin(void)               { printf("EMIT if_begin\n"); }
-void emit_if_then(void)                { printf("EMIT if_then\n"); }
-void emit_if_else(void)                { printf("EMIT if_else\n"); }
-void emit_if_end(void)                 { printf("EMIT if_end\n"); }
-void emit_block_begin(void)            { printf("EMIT block_begin\n"); }
-void emit_block_end(void)              { printf("EMIT block_end\n"); }
-void emit_stmt_expr(void)              { printf("EMIT stmt_expr\n"); }
+void emit_int(int v)                    { printf("EMIT push_int %d\n", v); }
+void emit_ident(const char* s, int n)   { printf("EMIT push_ident \"%.*s\"\n", n, s); }
+void emit_unary(Tok op)                 { printf("EMIT unary %s\n", tok_name[op]); }
+void emit_binary(Tok op)                { printf("EMIT binary %s\n", tok_name[op]); }
+void emit_call(int argc)                { printf("EMIT call argc=%d\n", argc); }
+void emit_index(void)                   { printf("EMIT index []\n"); }
+void emit_member(const char* s, int n)  { printf("EMIT member .%.*s\n", n, s); }
+void emit_select(void)                  { printf("EMIT select ?:\n"); }
+void emit_if_begin(void)                { printf("EMIT if_begin\n"); }
+void emit_if_then(void)                 { printf("EMIT if_then\n"); }
+void emit_if_else(void)                 { printf("EMIT if_else\n"); }
+void emit_if_end(void)                  { printf("EMIT if_end\n"); }
+void emit_block_begin(void)             { printf("EMIT block_begin\n"); }
+void emit_block_end(void)               { printf("EMIT block_end\n"); }
+void emit_stmt_expr(void)               { printf("EMIT stmt_expr\n"); }
+void emit_decl_begin(void)              { printf("EMIT decl_begin\n"); }
+void emit_decl_type(const char* s, int n) { printf("EMIT decl_type %.*s\n", n, s); }
+void emit_decl_var(const char* s, int n)  { printf("EMIT decl_var %.*s\n", n, s); }
+void emit_decl_array_begin(void)        { printf("EMIT decl_array_begin\n"); }
+void emit_decl_array_unsized(void)      { printf("EMIT decl_array_unsized\n"); }
+void emit_decl_array_size_begin(void)   { printf("EMIT decl_array_size_begin\n"); }
+void emit_decl_array_size_end(void)     { printf("EMIT decl_array_size_end\n"); }
+void emit_decl_array_end(void)          { printf("EMIT decl_array_end\n"); }
+void emit_decl_init_begin(void)         { printf("EMIT decl_init_begin\n"); }
+void emit_decl_init_end(void)           { printf("EMIT decl_init_end\n"); }
+void emit_decl_separator(void)          { printf("EMIT decl_separator\n"); }
+void emit_decl_end(void)                { printf("EMIT decl_end\n"); }
 
 void parse_error(const char* msg)
 {
@@ -154,12 +168,90 @@ void skip_ws_comments()
 	}
 }
 
+int str_eq_n(const char* s, int n, const char* kw)
+{
+	size_t klen = strlen(kw);
+	return n == (int)klen && strncmp(s, kw, n) == 0;
+}
+
+int is_type_name(const char* s, int n)
+{
+	static const char* type_names[] = {
+		"float", "int", "uint", "bool",
+		"vec2", "vec3", "vec4",
+		"ivec2", "ivec3", "ivec4",
+		"uvec2", "uvec3", "uvec4",
+		"bvec2", "bvec3", "bvec4",
+		"mat2", "mat3", "mat4",
+		"mat2x3", "mat2x4", "mat3x2", "mat3x4", "mat4x2", "mat4x3",
+		"sampler2D", "samplerCube", "sampler2DArray",
+	};
+	for (size_t i = 0; i < sizeof(type_names) / sizeof(type_names[0]); ++i) {
+		if (str_eq_n(s, n, type_names[i])) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int is_type_token(void)
+{
+	return tok.kind == TOK_IDENTIFIER && is_type_name(tok.lexeme, tok.len);
+}
+
 void expr_binary(Prec min_prec);
 void expr() { expr_binary(PREC_EXPR); }
 void expr_error() { parse_error("unexpected token in expression"); }
 
 void stmt();
+void stmt_decl();
 void parse();
+
+void decl_array_suffix(void)
+{
+	while (tok.kind == TOK_LBRACK) {
+		next();
+		emit_decl_array_begin();
+		if (tok.kind == TOK_RBRACK) {
+			emit_decl_array_unsized();
+		} else {
+			emit_decl_array_size_begin();
+			expr();
+			emit_decl_array_size_end();
+		}
+		expect(TOK_RBRACK);
+		emit_decl_array_end();
+	}
+}
+
+void stmt_decl(void)
+{
+	const char* type_name = tok.lexeme;
+	int type_len = tok.len;
+	emit_decl_begin();
+	emit_decl_type(type_name, type_len);
+	next();
+	while (1) {
+		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+		emit_decl_var(tok.lexeme, tok.len);
+		next();
+		decl_array_suffix();
+		if (tok.kind == TOK_ASSIGN) {
+			next();
+			emit_decl_init_begin();
+			expr();
+			emit_decl_init_end();
+		}
+		if (tok.kind == TOK_COMMA) {
+			next();
+			emit_decl_separator();
+			continue;
+		}
+		break;
+	}
+	expect(TOK_SEMI);
+	emit_decl_end();
+}
 
 void expr_int()
 {
@@ -304,6 +396,10 @@ void stmt_expr()
 
 void stmt()
 {
+	if (is_type_token()) {
+		stmt_decl();
+		return;
+	}
 	switch (tok.kind) {
 	case TOK_IF:
 		stmt_if();
@@ -352,7 +448,7 @@ void next()
 
 	skip_ws_comments();
 
-        switch (ch) {
+	switch (ch) {
 		// single-char punctuation
 		TOK_CHAR(  0 , EOF)
 		TOK_CHAR( ')', RPAREN)
@@ -386,7 +482,7 @@ void next()
 		TOK_EXPR_EXPR('|', NOT,    UNARY,  error, error,  '|', OR_OR,    OR_OR,   error, lor)
 
 		default: break;
-        }
+	}
 
 	if (tok.kind != TOK_EOF) return;
 
@@ -436,8 +532,16 @@ int main(void)
 {
 #define STR(X) #X
 	const char* input = STR(
+		float x = 1;
+		vec3 normals[3];
+		sampler2D tex_sampler;
+		bool flags[];
+		mat4 model;
+		uint counter = 0;
+		uint other;
+		ivec2 coords[2][3];
 		if (foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7) {
-			bar();
+			vec4 color = texture(tex_sampler, v_uv);
 		} else baz();
 	);
 	printf("Input : %s\n\n", input);
