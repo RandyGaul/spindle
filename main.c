@@ -2,6 +2,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define CKIT_IMPLEMENTATION
+#include <stddef.h>
 #include "ckit.h"
 
 typedef enum Tok
@@ -120,6 +121,70 @@ void emit_decl_init_begin()               { printf("EMIT decl_init_begin\n"); }
 void emit_decl_init_end()                 { printf("EMIT decl_init_end\n"); }
 void emit_decl_separator()                { printf("EMIT decl_separator\n"); }
 void emit_decl_end()                      { printf("EMIT decl_end\n"); }
+void emit_func_begin(const char* rt, int rn, const char* name, int nn)
+{
+	printf("EMIT func_begin return=%.*s name=%.*s\n", rn, rt, nn, name);
+}
+void emit_func_params_begin()
+{
+	printf("EMIT func_params_begin\n");
+}
+void emit_func_param_begin()
+{
+	printf("EMIT func_param_begin\n");
+}
+void emit_func_param_type(const char* s, int n)
+{
+	printf("EMIT func_param_type %.*s\n", n, s);
+}
+void emit_func_param_name(const char* s, int n)
+{
+	printf("EMIT func_param_name %.*s\n", n, s);
+}
+void emit_func_param_array_begin()
+{
+	printf("EMIT func_param_array_begin\n");
+}
+void emit_func_param_array_unsized()
+{
+	printf("EMIT func_param_array_unsized\n");
+}
+void emit_func_param_array_size_begin()
+{
+	printf("EMIT func_param_array_size_begin\n");
+}
+void emit_func_param_array_size_end()
+{
+	printf("EMIT func_param_array_size_end\n");
+}
+void emit_func_param_array_end()
+{
+	printf("EMIT func_param_array_end\n");
+}
+void emit_func_param_end()
+{
+	printf("EMIT func_param_end\n");
+}
+void emit_func_param_separator()
+{
+	printf("EMIT func_param_separator\n");
+}
+void emit_func_params_end()
+{
+	printf("EMIT func_params_end\n");
+}
+void emit_func_prototype_end()
+{
+	printf("EMIT func_prototype_end\n");
+}
+void emit_func_definition_begin()
+{
+	printf("EMIT func_definition_begin\n");
+}
+void emit_func_definition_end()
+{
+	printf("EMIT func_definition_end\n");
+}
 
 void parse_error(const char* msg)
 {
@@ -173,7 +238,7 @@ int str_eq_n(const char* s, int n, const char* kw)
 int is_type_name(const char* s, int n)
 {
 	static const char* type_names[] = {
-		"float", "int", "uint", "bool",
+		"void", "float", "int", "uint", "bool",
 		"vec2", "vec3", "vec4",
 		"ivec2", "ivec3", "ivec4",
 		"uvec2", "uvec3", "uvec4",
@@ -201,6 +266,7 @@ void expr_error() { parse_error("unexpected token in expression"); }
 
 void stmt();
 void stmt_decl();
+void stmt_block();
 void parse();
 
 void decl_array_suffix()
@@ -218,6 +284,120 @@ void decl_array_suffix()
 		expect(TOK_RBRACK);
 		emit_decl_array_end();
 	}
+}
+
+void func_param_array_suffix()
+{
+	while (tok.kind == TOK_LBRACK) {
+		next();
+		emit_func_param_array_begin();
+		if (tok.kind == TOK_RBRACK) {
+			emit_func_param_array_unsized();
+		} else {
+			emit_func_param_array_size_begin();
+			expr();
+			emit_func_param_array_size_end();
+		}
+		expect(TOK_RBRACK);
+		emit_func_param_array_end();
+	}
+}
+
+void func_param()
+{
+	if (!is_type_token()) parse_error("expected type in parameter");
+	emit_func_param_begin();
+	emit_func_param_type(tok.lexeme, tok.len);
+	next();
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
+	emit_func_param_name(tok.lexeme, tok.len);
+	next();
+	func_param_array_suffix();
+	emit_func_param_end();
+}
+
+void func_param_list()
+{
+	emit_func_params_begin();
+	if (tok.kind != TOK_RPAREN) {
+		while (1) {
+			func_param();
+			if (tok.kind == TOK_COMMA) {
+				next();
+				emit_func_param_separator();
+				continue;
+			}
+			break;
+		}
+	}
+	expect(TOK_RPAREN);
+	emit_func_params_end();
+}
+
+void global_var_decl(const char* type_name, int type_len, const char* first_name, int first_len)
+{
+	emit_decl_begin();
+	emit_decl_type(type_name, type_len);
+	emit_decl_var(first_name, first_len);
+	decl_array_suffix();
+	if (tok.kind == TOK_ASSIGN) {
+		next();
+		emit_decl_init_begin();
+		expr();
+		emit_decl_init_end();
+	}
+	while (tok.kind == TOK_COMMA) {
+		next();
+		emit_decl_separator();
+		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+		emit_decl_var(tok.lexeme, tok.len);
+		next();
+		decl_array_suffix();
+		if (tok.kind == TOK_ASSIGN) {
+			next();
+			emit_decl_init_begin();
+			expr();
+			emit_decl_init_end();
+		}
+	}
+	expect(TOK_SEMI);
+	emit_decl_end();
+}
+
+void func_decl_or_def(const char* type_name, int type_len, const char* name, int name_len)
+{
+	emit_func_begin(type_name, type_len, name, name_len);
+	expect(TOK_LPAREN);
+	func_param_list();
+	if (tok.kind == TOK_SEMI) {
+		next();
+		emit_func_prototype_end();
+		return;
+	}
+	if (tok.kind == TOK_LBRACE) {
+		emit_func_definition_begin();
+		stmt_block();
+		emit_func_definition_end();
+		return;
+	}
+	parse_error("expected ';' or function body");
+}
+
+void toplevel()
+{
+	if (!is_type_token()) parse_error("expected type at top level");
+	const char* type_name = tok.lexeme;
+	int type_len = tok.len;
+	next();
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
+	const char* name = tok.lexeme;
+	int name_len = tok.len;
+	next();
+	if (tok.kind == TOK_LPAREN) {
+		func_decl_or_def(type_name, type_len, name, name_len);
+		return;
+	}
+	global_var_decl(type_name, type_len, name, name_len);
 }
 
 void stmt_decl()
@@ -417,7 +597,7 @@ void stmt()
 void parse()
 {
 	while (tok.kind != TOK_EOF) {
-		stmt();
+		toplevel();
 	}
 }
 
@@ -528,17 +708,22 @@ int main()
 {
 #define STR(X) #X
 	const char* input = STR(
-		float x = 1;
-		vec3 normals[3];
+		float helper(int count, vec3 normals[3]);
+		vec3 g_normals[3];
 		sampler2D tex_sampler;
-		bool flags[];
-		mat4 model;
-		uint counter = 0;
-		uint other;
-		ivec2 coords[2][3];
-		if (foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7) {
-			vec4 color = texture(tex_sampler, v_uv);
-		} else baz();
+		float helper(int count, vec3 normals[3])
+		{
+			vec4 color = texture(tex_sampler, normals[count]);
+			if (color.a == 0) {
+				vec4 fallback = vec4(0, 0, 0, 1);
+			}
+		}
+		void main_image(vec2 uv)
+		{
+			int count = 0;
+			vec4 color = texture(tex_sampler, uv);
+			helper(count, g_normals);
+		}
 	);
 	printf("Input : %s\n\n", input);
 
