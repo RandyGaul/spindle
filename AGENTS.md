@@ -19,3 +19,78 @@ We're using ckit.h to power our C fundamentals with dynamic array (such as apush
 We're just starting out the implementation with a lex/parse combination that implements a pratt expression parser by the lexer setting up function pointers and passing to a tiny generic pratt handler.
 
 The next steps would be to flesh out IR format as we expect to emit to SPIRV blob or to gles300 shaders. We want 100% functional transpiling and don't really care about optimization. The vendors will compile our SPIRV or gles300 further onto the target GPU anyways, and have thier own optimization passes we can piggy back off of.
+
+# GLSL 340
+
+Here's a simple vertex shader
+
+```glsl
+layout (location = 0) in vec2 in_pos;
+layout (location = 1) in vec2 in_uv;
+layout (location = 2) in vec4 in_col;
+
+layout (location = 0) out vec2 v_uv;
+layout (location = 1) out vec4 v_col;
+
+void main()
+{
+    vec4 posH = vec4(in_pos, 0, 1);
+    v_uv = in_uv;
+    v_col = in_col;
+    gl_Position = posH;
+}
+```
+
+And here's a simple fragment shader
+
+```glsl
+layout (location = 0) in vec2 v_uv;
+layout (location = 1) in vec4 v_col;
+
+layout(location = 0) out vec4 result;
+
+layout (set = 2, binding = 0) uniform sampler2D u_image;
+
+layout (set = 3, binding = 0) uniform uniform_block {
+    vec2 u_texture_size;
+};
+
+#include "smooth_uv.shd"
+
+void main()
+{
+    vec4 c = de_gamma(texture(u_image, smooth_uv(v_uv, u_texture_size)));
+    if (c.a == 0) discard;
+    result = c;
+}
+```
+
+We expect specific form of resource sets:
+
+```glsl
+/**
+ * For _VERTEX_ shaders:
+ *  0: Sampled textures, followed by storage textures, followed by storage buffers
+ *  1: Uniform buffers
+ * For _FRAGMENT_ shaders:
+ *  2: Sampled textures, followed by storage textures, followed by storage buffers
+ *  3: Uniform buffers
+ * 
+ * Example _VERTEX shader:
+ * layout (set = 0, binding = 0) uniform sampler2D u_image;
+ * 
+ * layout (set = 1, binding = 0) uniform uniform_block {
+ *     vec2 u_texture_size;
+ * };
+ * 
+ * Example _FRAGMENT_ shader:
+ * 
+ * layout (set = 2, binding = 0) uniform sampler2D u_image;
+ * 
+ * layout (set = 3, binding = 0) uniform uniform_block {
+ *     vec2 u_texture_size;
+ * };
+ */
+```
+
+These above are some examples of things we expect to be able to parse, not fully inclusive but just as starter examples for context.
