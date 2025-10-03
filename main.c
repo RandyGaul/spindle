@@ -2,12 +2,6 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define CKIT_IMPLEMENTATION
-#include <stddef.h>
-#include <strings.h>
-
-#ifndef _MSC_VER
-#define _stricmp strcasecmp
-#endif
 
 #include "ckit.h"
 #include <string.h>
@@ -16,9 +10,9 @@ typedef enum Tok
 {
 	TOK_EOF, TOK_IDENTIFIER, TOK_INT,
 
-        TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
+	TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
 
-        TOK_IF, TOK_ELSE,
+	TOK_IF, TOK_ELSE,
 
 	TOK_PLUS, TOK_MINUS, TOK_STAR, TOK_SLASH, TOK_PERCENT,
 	TOK_NOT, TOK_TILDE,
@@ -36,18 +30,18 @@ const char* tok_name[TOK_COUNT] = {
 
 	[TOK_LPAREN]     = "(",
 	[TOK_RPAREN]     = ")",
-        [TOK_LBRACK]     = "[",
-        [TOK_RBRACK]     = "]",
-        [TOK_LBRACE]     = "{",
-        [TOK_RBRACE]     = "}",
-        [TOK_DOT]        = ".",
-        [TOK_COMMA]      = ",",
-        [TOK_SEMI]       = ";",
-        [TOK_QUESTION]   = "?",
-        [TOK_COLON]      = ":",
+	[TOK_LBRACK]     = "[",
+	[TOK_RBRACK]     = "]",
+	[TOK_LBRACE]     = "{",
+	[TOK_RBRACE]     = "}",
+	[TOK_DOT]        = ".",
+	[TOK_COMMA]      = ",",
+	[TOK_SEMI]       = ";",
+	[TOK_QUESTION]   = "?",
+	[TOK_COLON]      = ":",
 
-        [TOK_IF]         = "if",
-        [TOK_ELSE]       = "else",
+	[TOK_IF]         = "if",
+	[TOK_ELSE]       = "else",
 
 	[TOK_PLUS]       = "+",
 	[TOK_MINUS]      = "-",
@@ -264,13 +258,13 @@ EXPR_BINARY(assign, ASSIGN,   ASSIGN);
 
 void expr_binary(Prec min_prec)
 {
-        tok.lexpr(); // start: number/ident/paren/unary...
+	tok.lexpr(); // start: number/ident/paren/unary...
 
-        while (tok.prec > min_prec) {
-                void (*cont)() = tok.rexpr;
-                next(); // consume operator -> next token begins RHS
-                cont(); // parse RHS/args/member and "emit"
-        }
+	while (tok.prec > min_prec) {
+		void (*cont)() = tok.rexpr;
+		next(); // consume operator -> next token begins RHS
+		cont(); // parse RHS/args/member and "emit"
+	}
 }
 
 void stmt_block()
@@ -334,8 +328,6 @@ void parse()
 		stmt();
 	}
 }
-
-
 
 #define TOK_CHAR(ch1, tok1) \
 	case ch1: next_ch(); tok.kind = TOK_##tok1; tok.prec = 0; tok.lexpr = expr_error; tok.rexpr = expr_error; break;
@@ -443,18 +435,18 @@ void next()
 int main(void)
 {
 #define STR(X) #X
-        const char* input = STR(
-                if (foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7) {
-                        bar();
-                } else baz();
-        );
-        printf("Input : %s\n\n", input);
+	const char* input = STR(
+		if (foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7) {
+			bar();
+		} else baz();
+	);
+	printf("Input : %s\n\n", input);
 
 	in = input;
 	at = in;
 	next_ch();
 	next();
-        parse();
+	parse();
 
-        return 0;
+	return 0;
 }

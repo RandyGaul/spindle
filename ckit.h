@@ -191,6 +191,13 @@ const char* str_intern_range(const char* start, const char* end);
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stddef.h>
+
+#ifndef _MSC_VER
+#	ifndef _stricmp
+#		define _stricmp strcasecmp
+#	endif
+#endif
 
 void* agrow(const void* a, int new_size, size_t element_size)
 {
