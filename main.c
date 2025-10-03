@@ -2,13 +2,23 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define CKIT_IMPLEMENTATION
+#include <stddef.h>
+#include <strings.h>
+
+#ifndef _MSC_VER
+#define _stricmp strcasecmp
+#endif
+
 #include "ckit.h"
+#include <string.h>
 
 typedef enum Tok
 {
 	TOK_EOF, TOK_IDENTIFIER, TOK_INT,
 
-	TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_DOT, TOK_COMMA, TOK_QUESTION, TOK_COLON,
+        TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
+
+        TOK_IF, TOK_ELSE,
 
 	TOK_PLUS, TOK_MINUS, TOK_STAR, TOK_SLASH, TOK_PERCENT,
 	TOK_NOT, TOK_TILDE,
@@ -26,12 +36,18 @@ const char* tok_name[TOK_COUNT] = {
 
 	[TOK_LPAREN]     = "(",
 	[TOK_RPAREN]     = ")",
-	[TOK_LBRACK]     = "[",
-	[TOK_RBRACK]     = "]",
-	[TOK_DOT]        = ".",
-	[TOK_COMMA]      = ",",
-	[TOK_QUESTION]   = "?",
-	[TOK_COLON]      = ":",
+        [TOK_LBRACK]     = "[",
+        [TOK_RBRACK]     = "]",
+        [TOK_LBRACE]     = "{",
+        [TOK_RBRACE]     = "}",
+        [TOK_DOT]        = ".",
+        [TOK_COMMA]      = ",",
+        [TOK_SEMI]       = ";",
+        [TOK_QUESTION]   = "?",
+        [TOK_COLON]      = ":",
+
+        [TOK_IF]         = "if",
+        [TOK_ELSE]       = "else",
 
 	[TOK_PLUS]       = "+",
 	[TOK_MINUS]      = "-",
@@ -93,6 +109,13 @@ void emit_call(int argc)               { printf("EMIT call argc=%d\n", argc); }
 void emit_index(void)                  { printf("EMIT index []\n"); }
 void emit_member(const char* s, int n) { printf("EMIT member .%.*s\n", n, s); }
 void emit_select(void)                 { printf("EMIT select ?:\n"); }
+void emit_if_begin(void)               { printf("EMIT if_begin\n"); }
+void emit_if_then(void)                { printf("EMIT if_then\n"); }
+void emit_if_else(void)                { printf("EMIT if_else\n"); }
+void emit_if_end(void)                 { printf("EMIT if_end\n"); }
+void emit_block_begin(void)            { printf("EMIT block_begin\n"); }
+void emit_block_end(void)              { printf("EMIT block_end\n"); }
+void emit_stmt_expr(void)              { printf("EMIT stmt_expr\n"); }
 
 void parse_error(const char* msg)
 {
@@ -140,6 +163,9 @@ void skip_ws_comments()
 void expr_binary(Prec min_prec);
 void expr() { expr_binary(PREC_EXPR); }
 void expr_error() { parse_error("unexpected token in expression"); }
+
+void stmt();
+void parse();
 
 void expr_int()
 {
@@ -238,14 +264,78 @@ EXPR_BINARY(assign, ASSIGN,   ASSIGN);
 
 void expr_binary(Prec min_prec)
 {
-	tok.lexpr(); // start: number/ident/paren/unary...
+        tok.lexpr(); // start: number/ident/paren/unary...
 
-	while (tok.prec > min_prec) {
-		void (*cont)() = tok.rexpr;
-		next(); // consume operator -> next token begins RHS
-		cont(); // parse RHS/args/member and "emit"
+        while (tok.prec > min_prec) {
+                void (*cont)() = tok.rexpr;
+                next(); // consume operator -> next token begins RHS
+                cont(); // parse RHS/args/member and "emit"
+        }
+}
+
+void stmt_block()
+{
+	expect(TOK_LBRACE);
+	emit_block_begin();
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF) {
+		stmt();
+	}
+	expect(TOK_RBRACE);
+	emit_block_end();
+}
+
+void stmt_if()
+{
+	expect(TOK_IF);
+	emit_if_begin();
+	expect(TOK_LPAREN);
+	expr();
+	expect(TOK_RPAREN);
+	emit_if_then();
+	stmt();
+	if (tok.kind == TOK_ELSE) {
+		next();
+		emit_if_else();
+		stmt();
+	}
+	emit_if_end();
+}
+
+void stmt_expr()
+{
+	expr();
+	expect(TOK_SEMI);
+	emit_stmt_expr();
+}
+
+void stmt()
+{
+	switch (tok.kind) {
+	case TOK_IF:
+		stmt_if();
+		break;
+	case TOK_LBRACE:
+		stmt_block();
+		break;
+	case TOK_SEMI:
+		next();
+		break;
+	case TOK_EOF:
+		break;
+	default:
+		stmt_expr();
+		break;
 	}
 }
+
+void parse()
+{
+	while (tok.kind != TOK_EOF) {
+		stmt();
+	}
+}
+
+
 
 #define TOK_CHAR(ch1, tok1) \
 	case ch1: next_ch(); tok.kind = TOK_##tok1; tok.prec = 0; tok.lexpr = expr_error; tok.rexpr = expr_error; break;
@@ -270,15 +360,18 @@ void next()
 
 	skip_ws_comments();
 
-	switch (ch) {
+        switch (ch) {
 		// single-char punctuation
 		TOK_CHAR(  0 , EOF)
 		TOK_CHAR( ')', RPAREN)
 		TOK_CHAR( ']', RBRACK)
+		TOK_CHAR( '}', RBRACE)
 		TOK_CHAR( ',', COMMA)
+		TOK_CHAR( ';', SEMI)
 		TOK_CHAR( ':', COLON)
 		TOK_EXPR( '(', LPAREN,   POSTFIX, paren,  call )
 		TOK_EXPR( '[', LBRACK,   POSTFIX, error,  index)
+		TOK_CHAR( '{', LBRACE)
 		TOK_EXPR( '.', DOT,      POSTFIX, error,  member)
 
 		// prefix + binary-ish
@@ -301,7 +394,7 @@ void next()
 		TOK_EXPR_EXPR('|', NOT,    UNARY,  error, error,  '|', OR_OR,    OR_OR,   error, lor)
 
 		default: break;
-	}
+        }
 
 	if (tok.kind != TOK_EOF) return;
 
@@ -309,12 +402,20 @@ void next()
 	if (is_alpha(ch)) {
 		const char* s = at - 1;
 		while (is_alpha(ch) || is_digit(ch)) next_ch();
+		tok.len = (int)((at - 1) - s);
+		tok.lexeme = s;
 		tok.kind = TOK_IDENTIFIER;
 		tok.prec = 0;
 		tok.lexpr = expr_ident;
 		tok.rexpr = expr_error;
-		tok.lexeme = s;
-		tok.len = (int)((at - 1) - s);
+		if (tok.len == 2 && strncmp(s, "if", 2) == 0) {
+			tok.kind = TOK_IF;
+			tok.lexpr = expr_error;
+		}
+		else if (tok.len == 4 && strncmp(s, "else", 4) == 0) {
+			tok.kind = TOK_ELSE;
+			tok.lexpr = expr_error;
+		}
 		return;
 	}
 
@@ -342,16 +443,18 @@ void next()
 int main(void)
 {
 #define STR(X) #X
-	const char* input = STR(
-		foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7
-	);
-	printf("Input : %s\n\n", input);
+        const char* input = STR(
+                if (foo(1 + 2*3, a.b[4] ? y : z) && (u+v) / 2 == 7) {
+                        bar();
+                } else baz();
+        );
+        printf("Input : %s\n\n", input);
 
 	in = input;
 	at = in;
 	next_ch();
 	next();
-	expr();
+        parse();
 
-	return 0;
+        return 0;
 }
