@@ -1613,6 +1613,7 @@ void expr_error() { parse_error("unexpected token in expression"); }
 void stmt();
 void stmt_decl();
 void stmt_block();
+void stmt_controlled();
 void parse();
 
 void decl_array_suffix()
@@ -1995,6 +1996,17 @@ void stmt_block()
 	ir_emit(IR_BLOCK_END);
 }
 
+void stmt_controlled()
+{
+	if (tok.kind == TOK_LBRACE) {
+		stmt_block();
+		return;
+	}
+	ir_emit(IR_BLOCK_BEGIN);
+	stmt();
+	ir_emit(IR_BLOCK_END);
+}
+
 void stmt_if()
 {
 	expect(TOK_IF);
@@ -2003,11 +2015,11 @@ void stmt_if()
 	expr();
 	expect(TOK_RPAREN);
 	ir_emit(IR_IF_THEN);
-	stmt();
+	stmt_controlled();
 	if (tok.kind == TOK_ELSE) {
-	next();
+		next();
 		ir_emit(IR_IF_ELSE);
-		stmt();
+		stmt_controlled();
 	}
 	ir_emit(IR_IF_END);
 }
