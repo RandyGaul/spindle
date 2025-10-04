@@ -146,7 +146,7 @@ void unit_test()
 	const char* custom_name = sintern("test_struct");
 	Type* declared_type = type_system_add_internal(custom_name, custom_type);
 	assert(declared_type == type_system_get(custom_name));
-	type_system_free(&ts);
+	type_system_free();
 
 	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
 	symbol_table_init();
@@ -157,7 +157,7 @@ void unit_test()
 	assert(value_sym && value_sym->name == value_name);
 	symbol_add_storage(value_sym, SYM_STORAGE_IN);
 	assert(symbol_has_storage(value_sym, SYM_STORAGE_IN));
-	symbol_table_enter_scope(&st);
+	symbol_table_enter_scope();
 	Type float_type_local = (Type){ 0 };
 	float_type_local.tag = T_FLOAT;
 	const char* inner_name = sintern("inner_value");
@@ -165,10 +165,10 @@ void unit_test()
 	symbol_set_layout(inner_sym, SYM_LAYOUT_LOCATION, 3);
 	assert(symbol_get_layout(inner_sym, SYM_LAYOUT_LOCATION) == 3);
 	assert(symbol_table_find(inner_name) == inner_sym);
-	symbol_table_leave_scope(&st);
+	symbol_table_leave_scope();
 	assert(symbol_table_find(inner_name) == NULL);
 	assert(symbol_table_find(value_name) == value_sym);
-	symbol_table_free(&st);
+	symbol_table_free();
 
 	// Check that IR emission produces entries with the requested opcode.
 	IR_Cmd* saved_ir = g_ir;
@@ -251,6 +251,61 @@ void unit_test()
 	assert(saw_swizzle[2]);
 	assert(saw_swizzle[3]);
 	assert(saw_swizzle[4]);
+
+	compiler_setup(snippet_control_flow);
+	int saw_pre_inc = 0;
+	int saw_post_inc = 0;
+	int saw_pre_dec = 0;
+	int saw_post_dec = 0;
+	int saw_pre_inc_lvalue = 0;
+	int saw_post_inc_lvalue = 0;
+	int saw_pre_dec_lvalue = 0;
+	int saw_post_dec_lvalue = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_UNARY)
+			continue;
+		if (inst->tok == TOK_PLUS_PLUS)
+		{
+			if (inst->arg1 == 0)
+			{
+				saw_pre_inc = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_pre_inc_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+			else if (inst->arg1 == 1)
+			{
+				saw_post_inc = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_post_inc_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+		}
+		else if (inst->tok == TOK_MINUS_MINUS)
+		{
+			if (inst->arg1 == 0)
+			{
+				saw_pre_dec = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_pre_dec_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+			else if (inst->arg1 == 1)
+			{
+				saw_post_dec = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_post_dec_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+		}
+	}
+	compiler_teardown();
+	assert(saw_pre_inc);
+	assert(saw_post_inc);
+	assert(saw_pre_dec);
+	assert(saw_post_dec);
+	assert(saw_pre_inc_lvalue);
+	assert(saw_post_inc_lvalue);
+	assert(saw_pre_dec_lvalue);
+	assert(saw_post_dec_lvalue);
 
 	compiler_setup(snippet_function_calls);
 	assert(acount(g_ir) > 0);

@@ -50,6 +50,8 @@ typedef enum Tok
 	TOK_STAR,
 	TOK_SLASH,
 	TOK_PERCENT,
+	TOK_PLUS_PLUS,
+	TOK_MINUS_MINUS,
 	TOK_NOT,
 	TOK_TILDE,
 	TOK_LT,
@@ -103,6 +105,9 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_STAR] = "*",
 	[TOK_SLASH] = "/",
 	[TOK_PERCENT] = "%",
+
+	[TOK_PLUS_PLUS] = "++",
+	[TOK_MINUS_MINUS] = "--",
 
 	[TOK_NOT] = "!",
 	[TOK_TILDE] = "~",
@@ -387,6 +392,7 @@ typedef struct IR_Cmd
 	int layout_set;
 	int layout_binding;
 	int layout_location;
+	int is_lvalue;
 } IR_Cmd;
 
 // The global intermediate representation tape.
@@ -410,6 +416,7 @@ Type* type_system_get(const char* name);
 void type_system_free();
 void type_system_init_builtins();
 void type_system_init_builtins();
+Type* type_check_unary(const IR_Cmd* inst, Type* operand);
 void type_check_ir();
 void dump_ir();
 void dump_symbols();
@@ -430,10 +437,19 @@ const char* snippet_control_flow = STR(
 	layout(location = 0) out vec4 out_color;
 	void main() {
 		float accum = 0.0;
-		for (int i = 0; i < 4; i = i + 1)
+		int counter = 0;
+		accum += float(counter++);
+		accum += float(++counter);
+		vec2 adjustments = vec2(0.25, 0.25);
+		adjustments++;
+		--adjustments;
+		accum += adjustments.x;
+		for (int i = 0; i < 4; ++i)
 		{
 			accum += float(i) * 0.25;
 		}
+		counter--;
+		--counter;
 		if (accum > 0.5)
 		{
 			out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);

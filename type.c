@@ -339,12 +339,34 @@ Type* type_bool_type(int components)
 
 void type_check_error(const char* fmt, ...);
 
-Type* type_check_unary(Tok tok, Type* operand)
+Type* type_check_unary(const IR_Cmd* inst, Type* operand)
 {
-	if (!operand)
-		return NULL;
+	if (!inst)
+		return operand;
+	Tok tok = inst->tok;
 	switch (tok)
 	{
+	case TOK_PLUS_PLUS:
+	case TOK_MINUS_MINUS:
+	{
+		if (!operand)
+			return NULL;
+		int idx = inst->arg0;
+		if (idx < 0 || idx >= acount(g_ir) || !g_ir[idx].is_lvalue)
+		{
+			type_check_error("operator %s requires l-value operand", tok_name[tok]);
+		}
+		if (!type_is_scalar(operand) && !type_is_vector(operand))
+		{
+			type_check_error("operator %s requires scalar or vector operand, got %s", tok_name[tok], type_display(operand));
+		}
+		TypeTag base = type_base_type(operand);
+		if (!type_base_is_numeric(base))
+		{
+			type_check_error("operator %s requires integer or float operand, got %s", tok_name[tok], type_display(operand));
+		}
+		return operand;
+	}
 	case TOK_MINUS:
 	case TOK_PLUS:
 		if (!type_is_numeric(operand) && !type_is_matrix(operand))
@@ -816,7 +838,7 @@ void type_check_ir()
 		case IR_UNARY:
 		{
 			Type* operand = type_stack_pop(stack, "unary expression");
-			Type* result = type_check_unary(inst->tok, operand);
+			Type* result = type_check_unary(inst, operand);
 			if (!result)
 				result = operand;
 			inst->type = result;

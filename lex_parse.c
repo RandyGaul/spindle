@@ -809,6 +809,9 @@ void expr_ident()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	Symbol* sym = symbol_table_find(inst->str0);
+	if (sym && (sym->kind == SYM_VAR || sym->kind == SYM_PARAM))
+		inst->is_lvalue = 1;
 	next();
 }
 
@@ -873,9 +876,12 @@ void expr_call()
 
 void expr_index()
 {
+	int base_idx = acount(g_ir) - 1;
 	expr(); // parse index expr
 	expect(TOK_RBRACK);
-	ir_emit(IR_INDEX);
+	IR_Cmd* inst = ir_emit(IR_INDEX);
+	if (base_idx >= 0 && base_idx < acount(g_ir))
+		inst->is_lvalue = g_ir[base_idx].is_lvalue;
 }
 
 int swizzle_set_from_char(char c)
@@ -941,8 +947,31 @@ int swizzle_is_valid(const char* name, int len, int* out_mask)
 	return 1;
 }
 
+int swizzle_is_assignable(const char* name, int len)
+{
+	if (len <= 1)
+		return 1;
+	int set = swizzle_set_from_char(name[0]);
+	if (set < 0)
+		return 0;
+	int seen = 0;
+	for (int i = 0; i < len; ++i)
+	{
+		int comp = swizzle_component_index(set, name[i]);
+		if (comp < 0)
+			return 0;
+		int bit = 1 << comp;
+		if (seen & bit)
+			return 0;
+		seen |= bit;
+	}
+	return 1;
+}
+
 void expr_member()
 {
+	int base_idx = acount(g_ir) - 1;
+	int base_is_lvalue = (base_idx >= 0 && base_idx < acount(g_ir)) ? g_ir[base_idx].is_lvalue : 0;
 	if (tok.kind != TOK_IDENTIFIER)
 		parse_error("expected identifier after '.'");
 	const char* name = tok.lexeme;
@@ -953,11 +982,13 @@ void expr_member()
 		inst->str0 = sintern_range(name, name + tok.len);
 		inst->arg0 = tok.len;
 		inst->arg1 = mask;
+		inst->is_lvalue = base_is_lvalue && swizzle_is_assignable(name, tok.len);
 	}
 	else
 	{
 		IR_Cmd* inst = ir_emit(IR_MEMBER);
 		inst->str0 = sintern_range(name, name + tok.len);
+		inst->is_lvalue = base_is_lvalue;
 	}
 	next();
 }
@@ -984,6 +1015,56 @@ void expr_unary_common(Tok op)
 	expr_binary(PREC_UNARY - 1);
 	IR_Cmd* inst = ir_emit(IR_UNARY);
 	inst->tok = op;
+}
+
+int ir_expect_lvalue_index(const char* error_msg)
+{
+	if (!acount(g_ir))
+		parse_error(error_msg);
+	int idx = acount(g_ir) - 1;
+	if (!g_ir[idx].is_lvalue)
+		parse_error(error_msg);
+	return idx;
+}
+
+void expr_pre_inc()
+{
+	next();
+	expr_binary(PREC_UNARY - 1);
+	int idx = ir_expect_lvalue_index("operand of ++ must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_PLUS_PLUS;
+	inst->arg0 = idx;
+	inst->arg1 = 0;
+}
+
+void expr_post_inc()
+{
+	int idx = ir_expect_lvalue_index("operand of ++ must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_PLUS_PLUS;
+	inst->arg0 = idx;
+	inst->arg1 = 1;
+}
+
+void expr_pre_dec()
+{
+	next();
+	expr_binary(PREC_UNARY - 1);
+	int idx = ir_expect_lvalue_index("operand of -- must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_MINUS_MINUS;
+	inst->arg0 = idx;
+	inst->arg1 = 0;
+}
+
+void expr_post_dec()
+{
+	int idx = ir_expect_lvalue_index("operand of -- must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_MINUS_MINUS;
+	inst->arg0 = idx;
+	inst->arg1 = 1;
 }
 
 // Compact lex-parse technique learned from Per Vognsen
@@ -1379,6 +1460,51 @@ void parse()
 		} \
 		break;
 
+#define TOK_EXPR_OPTION(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch2)) \
+		{ \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
+		} \
+		else \
+		{ \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
+#define TOK_EXPR_OPTION2(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2, ch3, tok3, prec3, lexpr3, rexpr3) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch2)) \
+		{ \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
+		} \
+		else if (match_ch(ch3)) \
+		{ \
+			tok.kind = TOK_##tok3; \
+			tok.prec = PREC_##prec3; \
+			tok.lexpr = expr_##lexpr3; \
+			tok.rexpr = expr_##rexpr3; \
+		} \
+		else \
+		{ \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
 void lex_number()
 {
 	const char* start = at - 1;
@@ -1483,8 +1609,8 @@ void next()
 
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
-		TOK_EXPR_EXPR('+', PLUS, ADD, pos, add, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
-		TOK_EXPR('-', MINUS, ADD, neg, sub)
+		TOK_EXPR_OPTION2('+', PLUS, ADD, pos, add, '+', PLUS_PLUS, POSTFIX, pre_inc, post_inc, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
+		TOK_EXPR_OPTION('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec)
 		TOK_EXPR('*', STAR, MUL, error, mul)
 		TOK_EXPR('/', SLASH, MUL, error, div)
 		TOK_EXPR('%', PERCENT, MUL, error, mod)
