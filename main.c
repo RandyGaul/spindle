@@ -21,9 +21,9 @@ typedef enum SymbolKind
 } SymbolKind;
 
 const char* symbol_kind_name[SYM_KIND_COUNT] = {
-	[SYM_VAR]	= "var",
-	[SYM_FUNC]	= "func",
-	[SYM_PARAM]	= "param",
+	[SYM_VAR]   = "var",
+	[SYM_FUNC]  = "func",
+	[SYM_PARAM] = "param",
 };
 
 typedef enum TypeTag
@@ -71,14 +71,14 @@ typedef struct Symbol
 
 typedef enum SymbolStorage
 {
-	SYM_STORAGE_IN	      = 1 << 0,
-	SYM_STORAGE_OUT	      = 1 << 1,
+	SYM_STORAGE_IN      = 1 << 0,
+	SYM_STORAGE_OUT     = 1 << 1,
 	SYM_STORAGE_UNIFORM = 1 << 2,
 } SymbolStorage;
 
 typedef enum SymbolLayout
 {
-	SYM_LAYOUT_SET	      = 1 << 0,
+	SYM_LAYOUT_SET      = 1 << 0,
 	SYM_LAYOUT_BINDING  = 1 << 1,
 	SYM_LAYOUT_LOCATION = 1 << 2,
 } SymbolLayout;
