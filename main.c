@@ -1843,6 +1843,7 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	func->str1 = name;
 	ir_apply_type_spec(func, &spec);
 	Symbol* sym = symbol_table_add(&g_symbols, func->str1, spec.type_name, spec.type, SYM_FUNC);
+	int sym_index = (int)(sym - g_symbols.symbols);
 	if (sym->type && spec.type && !type_equal(sym->type, spec.type)) {
 		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
 	}
@@ -1854,6 +1855,7 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	expect(TOK_LPAREN);
 	symbol_table_enter_scope(&g_symbols);
 	func_param_list();
+	sym = &g_symbols.symbols[sym_index];
 	symbol_set_function_signature(sym, current_function_params, acount(current_function_params));
 	if (current_function_params) aclear(current_function_params);
 	if (tok.kind == TOK_SEMI) {
@@ -2555,6 +2557,51 @@ void unit_test()
 	if (g_ir) afree(g_ir);
 	g_ir = saved_ir;
 
+	// Validate vector indexing support for arithmetic expressions.
+	const char* vector_source =
+		"layout(location = 0) in vec4 input_vec;"
+		"layout(location = 0) out vec4 output_vec;"
+		"void main()"
+		"{"
+			"float first = input_vec[0];"
+			"float second = input_vec[1];"
+			"output_vec = vec4(first, second, first + second, 1.0);"
+		"}";
+	in = vector_source;
+	at = in;
+	IR_Cmd* prior_ir = g_ir;
+	g_ir = NULL;
+	type_system_init_builtins(&g_types);
+	type_system_cache_builtins(&g_types);
+	symbol_table_init(&g_symbols);
+	next_ch();
+	next();
+	parse();
+	type_check_ir();
+	int saw_index = 0;
+	for (int i = 0; i < acount(g_ir); ++i) {
+		if (g_ir[i].op == IR_INDEX) {
+			saw_index = 1;
+			break;
+		}
+	}
+	assert(saw_index);
+	symbol_table_free(&g_symbols);
+	type_system_free(&g_types);
+	if (g_ir) afree(g_ir);
+	g_ir = prior_ir;
+	in = NULL;
+	at = NULL;
+	ch = 0;
+	tok.kind = TOK_EOF;
+	tok.prec = PREC_EXPR;
+	tok.lexpr = NULL;
+	tok.rexpr = NULL;
+	tok.int_val = 0;
+	tok.float_val = 0.0;
+	tok.lexeme = NULL;
+	tok.len = 0;
+
 	// Parse a representative shader snippet and ensure IR and symbol tables populate.
 	const char* source =
 		"layout(location = 0) in vec2 test_in;"
@@ -2604,63 +2651,45 @@ int main()
 		layout(location = 2) in vec4 in_col;
 		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_texture;
-		layout(set = 1, binding = 0) uniform sampler2DArray u_layers;
-		layout(set = 2, binding = 1) uniform samplerCube u_environment;
-		float weights[1 + 2];
-		float exposure[];
-		vec4 temp_color;
-		void saturate_value(float v);
-		void accumulate_layers(vec4 sample_color, float mods[3], float fallback[], int idx);
-		void saturate_value(float v)
+		layout(set = 1, binding = 0) uniform vec4 u_tint;
+		layout(set = 1, binding = 1) uniform float u_exposure;
+		vec4 fetch_color(sampler2D tex, vec2 uv)
 		{
-			float clamped = clamp(v, 0.0, 1.0);
-			weights[2] = clamped;
+			float offset_x = uv[0] - 0.5;
+			float offset_y = uv[1] - 0.5;
+			return vec4(offset_x, offset_y, 0.0, 1.0);
 		}
-		void accumulate_layers(vec4 sample_color, float mods[3], float fallback[], int idx)
+		vec4 apply_tint(vec4 color, vec4 tint)
 		{
-			float selected = mods[idx];
-			float inverted = -selected;
-			float threshold = selected > 0.5 ? selected : fallback[idx];
-			vec4 tinted = vec4(sample_color.rgb * threshold, sample_color.a);
-			if (tinted.a == 0.0)
+			return color * tint;
+		}
+		float compute_exposure(float value)
+		{
+			if (value < 0.0)
 			{
-				temp_color = vec4(fallback[idx], fallback[idx], fallback[idx], 1.0);
+				return 0.0;
 			}
-			else
+			else if (value > 1.0)
 			{
-				saturate_value(tinted.a);
-				temp_color = vec4(tinted.rgb + vec3(inverted), weights[2]);
+				return 1.0;
 			}
+			return value;
 		}
 		void main()
 		{
-			vec2 uv = in_uv, offset = vec2(0.0);
-			float layer_index = weights[0];
-			vec4 base_sample = texture(u_texture, uv + offset);
-			vec4 layered_slice = texture(u_layers, vec3(uv, layer_index));
-			vec4 env = texture(u_environment, vec3(uv, 0.5));
-			int idx = int(layer_index);
-			float fallback_values[1 + 2];
-			fallback_values[0] = 0.25;
-			fallback_values[1] = 0.5;
-			fallback_values[2] = 0.75;
-			accumulate_layers(base_sample + layered_slice, weights, fallback_values, idx);
-			vec4 layered = temp_color;
-			float exposure_bias = exposure[1];
-			saturate_value(exposure_bias);
-			vec4 combined = layered;
-			combined.rgb = combined.rgb * (weights[2] + env.r);
-			combined.a = combined.a == 0.0 ? env.a : combined.a;
-			temp_color = combined;
-			out_color = combined;
-			temp_color.primary = out_color;
+			vec4 sampled = fetch_color(u_texture, in_uv);
+			vec4 tinted = apply_tint(sampled, u_tint);
+			float exposure = compute_exposure(u_exposure);
+			vec4 scaled = tinted * exposure;
+			vec4 color_mix = in_col * (1.0 - exposure);
+			out_color = scaled + color_mix;
 		}
 	);
 	printf("Input : %s\n\n", input);
 
 	in = input;
 	at = in;
-init_keyword_interns();
+	init_keyword_interns();
 	next_ch();
 	next();
 	type_system_init_builtins(&g_types);
@@ -2668,7 +2697,7 @@ init_keyword_interns();
 	symbol_table_init(&g_symbols);
 	parse();
 	type_check_ir();
-dump_ir();
+	dump_ir();
 	printf("\n");
 	dump_symbols(&g_symbols);
 	symbol_table_free(&g_symbols);
