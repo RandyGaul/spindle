@@ -20,6 +20,8 @@ We're just starting out the implementation with a lex/parse combination that imp
 
 The next steps would be to flesh out IR format as we expect to emit to SPIRV blob or to gles300 shaders. We want 100% functional transpiling and don't really care about optimization. The vendors will compile our SPIRV or gles300 further onto the target GPU anyways, and have thier own optimization passes we can piggy back off of.
 
+Strings passed around the compiler are assumed to be non-null. Don't add defensive null checks for them; if a null string shows up it's fine to crash.
+
 # GLSL 340
 
 Here's a simple vertex shader
