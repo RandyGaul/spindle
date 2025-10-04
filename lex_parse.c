@@ -1606,14 +1606,18 @@ void stmt_switch()
 	ir_emit(IR_SWITCH_SELECTOR_END);
 	expect(TOK_LBRACE);
 	symbol_table_enter_scope();
-	IR_Cmd* last_case = NULL;
+	int last_case_index = -1;
 	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
 	{
 		if (tok.kind == TOK_CASE || tok.kind == TOK_DEFAULT)
 		{
-			if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+			if (last_case_index >= 0)
 			{
-				last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+				IR_Cmd* prev_case = &g_ir[last_case_index];
+				if (!(prev_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+				{
+					prev_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+				}
 			}
 			IR_Cmd* inst = ir_emit(IR_SWITCH_CASE);
 			inst->arg0 = 0;
@@ -1629,22 +1633,26 @@ void stmt_switch()
 				inst->arg1 |= SWITCH_CASE_FLAG_DEFAULT;
 			}
 			expect(TOK_COLON);
-			last_case = inst;
+			last_case_index = acount(g_ir) - 1;
 			continue;
 		}
-		if (!last_case)
+		if (last_case_index < 0)
 		{
 			parse_error("case label expected before statements in switch");
 		}
 		stmt();
-		if (last_case)
+		if (last_case_index >= 0)
 		{
-			last_case->arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
+			g_ir[last_case_index].arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
 		}
 	}
-	if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+	if (last_case_index >= 0)
 	{
-		last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+		IR_Cmd* last_case = &g_ir[last_case_index];
+		if (!(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+		{
+			last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+		}
 	}
 	expect(TOK_RBRACE);
 	symbol_table_leave_scope();
