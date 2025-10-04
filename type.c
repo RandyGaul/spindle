@@ -770,12 +770,12 @@ void type_check_ir()
 			Type* type = NULL;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(&g_symbols, inst->str0);
+				Symbol* sym = symbol_table_find(inst->str0);
 				if (!sym)
 				{
-					for (int j = acount(g_symbols.symbols) - 1; j >= 0; --j)
+					for (int j = acount(st->symbols) - 1; j >= 0; --j)
 					{
-						Symbol* candidate = &g_symbols.symbols[j];
+						Symbol* candidate = &st->symbols[j];
 						if (candidate->name == inst->str0)
 						{
 							sym = candidate;
@@ -836,7 +836,7 @@ void type_check_ir()
 			Type* result = callee;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(&g_symbols, inst->str0);
+				Symbol* sym = symbol_table_find(inst->str0);
 				if (sym && sym->kind == SYM_FUNC)
 				{
 					if (sym->param_signature_set)

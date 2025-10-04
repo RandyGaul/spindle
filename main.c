@@ -384,7 +384,7 @@ void type_system_init_builtins(TypeSystem* ts);
 void type_system_init_builtins(TypeSystem* ts);
 void type_check_ir();
 void dump_ir();
-void dump_symbols(const struct SymbolTable* st);
+void dump_symbols();
 
 const char* snippet_basic_io = STR(
 	layout(location = 0) in vec3 in_pos;
@@ -533,7 +533,7 @@ void transpile(const char* source)
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");
-	dump_symbols(&g_symbols);
+	dump_symbols();
 	compiler_teardown();
 }
 

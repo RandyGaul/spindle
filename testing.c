@@ -105,7 +105,7 @@ void dump_ir()
 	}
 }
 
-void dump_symbols(const SymbolTable* st)
+void dump_symbols()
 {
 	printf("Symbols:\n");
 	for (int i = 0; i < acount(st->symbols); ++i)
@@ -147,12 +147,11 @@ void unit_test()
 	type_system_free(&ts);
 
 	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
-	SymbolTable st = (SymbolTable){ 0 };
-	symbol_table_init(&st);
+	symbol_table_init();
 	Type int_type = (Type){ 0 };
 	int_type.tag = T_INT;
 	const char* value_name = sintern("value");
-	Symbol* value_sym = symbol_table_add(&st, value_name, sintern("int"), &int_type, SYM_VAR);
+	Symbol* value_sym = symbol_table_add(value_name, sintern("int"), &int_type, SYM_VAR);
 	assert(value_sym && value_sym->name == value_name);
 	symbol_add_storage(value_sym, SYM_STORAGE_IN);
 	assert(symbol_has_storage(value_sym, SYM_STORAGE_IN));
@@ -160,13 +159,13 @@ void unit_test()
 	Type float_type_local = (Type){ 0 };
 	float_type_local.tag = T_FLOAT;
 	const char* inner_name = sintern("inner_value");
-	Symbol* inner_sym = symbol_table_add(&st, inner_name, sintern("float"), &float_type_local, SYM_VAR);
+	Symbol* inner_sym = symbol_table_add(inner_name, sintern("float"), &float_type_local, SYM_VAR);
 	symbol_set_layout(inner_sym, SYM_LAYOUT_LOCATION, 3);
 	assert(symbol_get_layout(inner_sym, SYM_LAYOUT_LOCATION) == 3);
-	assert(symbol_table_find(&st, inner_name) == inner_sym);
+	assert(symbol_table_find(inner_name) == inner_sym);
 	symbol_table_leave_scope(&st);
-	assert(symbol_table_find(&st, inner_name) == NULL);
-	assert(symbol_table_find(&st, value_name) == value_sym);
+	assert(symbol_table_find(inner_name) == NULL);
+	assert(symbol_table_find(value_name) == value_sym);
 	symbol_table_free(&st);
 
 	// Check that IR emission produces entries with the requested opcode.
@@ -247,7 +246,7 @@ void unit_test()
 
 	compiler_setup(snippet_function_calls);
 	assert(acount(g_ir) > 0);
-	assert(acount(g_symbols.symbols) > 0);
+	assert(acount(st->symbols) > 0);
 	compiler_teardown();
 
 	compiler_setup(snippet_looping);
