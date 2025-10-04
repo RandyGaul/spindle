@@ -28,45 +28,45 @@ const char* symbol_kind_name[SYM_KIND_COUNT] = {
 
 typedef enum TypeTag
 {
-T_VOID,
-T_BOOL,
-T_INT,
-T_UINT,
-T_FLOAT,
-T_DOUBLE,
-T_VEC,
-T_MAT,
-T_SAMPLER,
-T_IMAGE,
-T_ARRAY,
-T_STRUCT,
-T_TYPE_COUNT
+	T_VOID,
+	T_BOOL,
+	T_INT,
+	T_UINT,
+	T_FLOAT,
+	T_DOUBLE,
+	T_VEC,
+	T_MAT,
+	T_SAMPLER,
+	T_IMAGE,
+	T_ARRAY,
+	T_STRUCT,
+	T_TYPE_COUNT
 } TypeTag;
 
 typedef struct Type
 {
-TypeTag tag;
-uint8_t cols;
-uint8_t rows;
-uint8_t base;
-uint8_t dim;
-int array_len;
-void* user;
-IR_String name;
+	TypeTag tag;
+	uint8_t cols;
+	uint8_t rows;
+	uint8_t base;
+	uint8_t dim;
+	int array_len;
+	void* user;
+	IR_String name;
 } Type;
 
 typedef struct Symbol
 {
-IR_String name;
-IR_String type_name;
-Type* type;
-SymbolKind kind;
-unsigned storage_flags;
-unsigned layout_flags;
-int layout_set;
-int layout_binding;
-int layout_location;
-int scope_depth;
+	IR_String name;
+	IR_String type_name;
+	Type* type;
+	SymbolKind kind;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
+	int scope_depth;
 } Symbol;
 
 typedef enum SymbolStorage
@@ -85,30 +85,30 @@ typedef enum SymbolLayout
 
 typedef struct TypeSpec
 {
-IR_String type_name;
-Type* type;
-unsigned storage_flags;
-unsigned layout_flags;
-int layout_set;
-int layout_binding;
+	IR_String type_name;
+	Type* type;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
 	int layout_location;
 } TypeSpec;
 
 typedef struct SymbolScope
 {
-Map map;
+	Map map;
 } SymbolScope;
 
 typedef struct SymbolTable
 {
-Symbol* symbols;
-SymbolScope* scopes;
+	Symbol* symbols;
+	SymbolScope* scopes;
 } SymbolTable;
 
 typedef struct TypeSystem
 {
-Map map;
-Type* types;
+	Map map;
+	Type* types;
 } TypeSystem;
 
 typedef enum IROp
@@ -308,7 +308,6 @@ void symbol_table_enter_scope(SymbolTable* st)
 	apush(st->scopes, scope);
 }
 
-
 void symbol_table_leave_scope(SymbolTable* st)
 {
 	if (!st || !st->scopes) return;
@@ -320,16 +319,12 @@ void symbol_table_leave_scope(SymbolTable* st)
 	apop(st->scopes);
 }
 
-
-
 void symbol_table_init(SymbolTable* st)
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
 	symbol_table_enter_scope(st);
 }
-
-
 
 Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type_name, Type* type, SymbolKind kind)
 {
@@ -352,8 +347,6 @@ Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type_name, T
 	return &st->symbols[idx - 1];
 }
 
-
-
 Symbol* symbol_table_resolve(SymbolTable* st, IR_String name)
 {
 	if (!st || !name.ptr) return NULL;
@@ -361,11 +354,9 @@ Symbol* symbol_table_resolve(SymbolTable* st, IR_String name)
 		SymbolScope* scope = &st->scopes[i];
 		uint64_t idx = map_get(scope->map, (uint64_t)name.ptr);
 		if (idx) return &st->symbols[(int)idx - 1];
-}
+	}
 	return NULL;
 }
-
-
 
 const char* type_tag_name(TypeTag tag)
 {
@@ -387,16 +378,6 @@ const char* type_tag_name(TypeTag tag)
 	return names[tag] ? names[tag] : "unknown";
 }
 
-
-
-void type_system_init(TypeSystem* ts)
-{
-	ts->map = (Map){ 0 };
-	ts->types = NULL;
-}
-
-
-
 static Type* type_system_add_internal(TypeSystem* ts, IR_String name, Type type)
 {
 	if (!ts || !name.ptr) return NULL;
@@ -410,8 +391,6 @@ static Type* type_system_add_internal(TypeSystem* ts, IR_String name, Type type)
 	return &ts->types[idx - 1];
 }
 
-
-
 Type* type_system_get(TypeSystem* ts, const char* name, int len)
 {
 	if (!ts || !name || len <= 0) return NULL;
@@ -423,8 +402,6 @@ Type* type_system_get(TypeSystem* ts, const char* name, int len)
 	return &ts->types[(int)idx - 1];
 }
 
-
-
 Type* type_system_get_from_string(TypeSystem* ts, IR_String name)
 {
 	if (!ts || !name.ptr) return NULL;
@@ -433,14 +410,10 @@ Type* type_system_get_from_string(TypeSystem* ts, IR_String name)
 	return &ts->types[(int)idx - 1];
 }
 
-
-
 Type* type_system_declare(TypeSystem* ts, IR_String name, Type type)
 {
 	return type_system_add_internal(ts, name, type);
 }
-
-
 
 void type_system_init_builtins(TypeSystem* ts)
 {
@@ -485,10 +458,8 @@ void type_system_init_builtins(TypeSystem* ts)
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i) {
 		IR_String name = ir_string(builtins[i].name, (int)strlen(builtins[i].name));
 		type_system_add_internal(ts, name, builtins[i].type);
+	}
 }
-}
-
-
 
 void type_system_free(TypeSystem* ts)
 {
@@ -498,9 +469,8 @@ void type_system_free(TypeSystem* ts)
 	if (ts->types) {
 		afree(ts->types);
 		ts->types = NULL;
+	}
 }
-}
-
 
 void symbol_add_storage(Symbol* sym, unsigned flags)
 {
@@ -519,17 +489,16 @@ void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
 	sym->layout_flags |= layout_flag;
 	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
-	sym->layout_set = value;
-	break;
+		sym->layout_set = value;
+		break;
 	case SYM_LAYOUT_BINDING:
-	sym->layout_binding = value;
-	break;
+		sym->layout_binding = value;
+		break;
 	case SYM_LAYOUT_LOCATION:
-	sym->layout_location = value;
-	break;
-	default:
-	break;
-}
+		sym->layout_location = value;
+		break;
+	default: break;
+	}
 }
 
 int symbol_has_layout(const Symbol* sym, unsigned layout_flag)
@@ -541,15 +510,11 @@ int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
 {
 	if (!symbol_has_layout(sym, layout_flag)) return -1;
 	switch (layout_flag) {
-	case SYM_LAYOUT_SET:
-	return sym->layout_set;
-	case SYM_LAYOUT_BINDING:
-	return sym->layout_binding;
-	case SYM_LAYOUT_LOCATION:
-	return sym->layout_location;
-	default:
-	break;
-}
+	case SYM_LAYOUT_SET: return sym->layout_set;
+	case SYM_LAYOUT_BINDING: return sym->layout_binding;
+	case SYM_LAYOUT_LOCATION: return sym->layout_location;
+	default: break;
+	}
 	return -1;
 }
 
@@ -562,41 +527,39 @@ void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 	if (spec->layout_flags & SYM_LAYOUT_LOCATION) symbol_set_layout(sym, SYM_LAYOUT_LOCATION, spec->layout_location);
 }
 
-
 void symbol_table_free(SymbolTable* st)
 {
 	if (!st) return;
 	while (st->scopes && acount(st->scopes) > 0) {
 		symbol_table_leave_scope(st);
-}
+	}
 	if (st->scopes) {
 		afree(st->scopes);
 		st->scopes = NULL;
-}
+	}
 	if (st->symbols) {
 		afree(st->symbols);
 		st->symbols = NULL;
+	}
 }
-}
-
 
 void dump_storage_flags(unsigned flags)
 {
-if (!flags) return;
-printf(" storage=");
-int first = 1;
+	if (!flags) return;
+	printf(" storage=");
+	int first = 1;
 	if (flags & SYM_STORAGE_IN) {
 		printf("%sin", first ? "" : "|");
 		first = 0;
-}
+	}
 	if (flags & SYM_STORAGE_OUT) {
 		printf("%sout", first ? "" : "|");
 		first = 0;
-}
+	}
 	if (flags & SYM_STORAGE_UNIFORM) {
 		printf("%suniform", first ? "" : "|");
 		first = 0;
-}
+	}
 }
 
 void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
@@ -607,15 +570,15 @@ void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
 	if (layout_flags & SYM_LAYOUT_SET) {
 		printf("%sset=%d", first ? "" : ", ", set);
 		first = 0;
-}
+	}
 	if (layout_flags & SYM_LAYOUT_BINDING) {
 		printf("%sbinding=%d", first ? "" : ", ", binding);
 		first = 0;
-}
+	}
 	if (layout_flags & SYM_LAYOUT_LOCATION) {
 		printf("%slocation=%d", first ? "" : ", ", location);
 		first = 0;
-}
+	}
 	printf(")");
 }
 
@@ -656,11 +619,10 @@ void dump_ir()
 			break;
 		default:
 			break;
+		}
+		printf("\n");
+	}
 }
-				printf("\n");
-}
-}
-
 
 void dump_symbols(const SymbolTable* st)
 {
@@ -674,9 +636,8 @@ void dump_symbols(const SymbolTable* st)
 		dump_storage_flags(sym->storage_flags);
 		dump_layout_info(sym->layout_flags, sym->layout_set, sym->layout_binding, sym->layout_location);
 		printf("\n");
+	}
 }
-}
-
 
 typedef enum Prec
 {
@@ -715,9 +676,9 @@ void parse_error(const char* msg)
 		fprintf(stderr, " (token %s", tok_name[tok.kind]);
 		if (tok.lexeme && tok.len) {
 			fprintf(stderr, " '%.*s'", tok.len, tok.lexeme);
-}
+		}
 		fprintf(stderr, ")");
-}
+	}
 	fprintf(stderr, "\n");
 	exit(1);
 }
@@ -742,9 +703,9 @@ void skip_ws_comments()
 		if (ch == '/' && at[0] == '/') {
 			while (ch && ch != '\n') {
 				next_ch();
-}
+			}
 			continue;
-}
+		}
 		if (ch == '/' && at[0] == '*') {
 			next_ch();
 			next_ch();
@@ -752,11 +713,11 @@ void skip_ws_comments()
 			if (ch == '*') {
 				next_ch();
 				next_ch();
-}
+			}
 			continue;
-}
+		}
 		break;
-}
+	}
 }
 
 int str_eq_n(const char* s, int n, const char* kw)
@@ -803,13 +764,13 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 		break;
 	default:
 		break;
-}
+	}
 }
 
 int is_type_name(const char* s, int n)
 {
-if (!s || n <= 0) return 0;
-return type_system_get(&g_types, s, n) != NULL;
+	if (!s || n <= 0) return 0;
+	return type_system_get(&g_types, s, n) != NULL;
 }
 
 int is_type_token()
@@ -838,9 +799,9 @@ void parse_layout_block(TypeSpec* spec)
 		if (tok.kind == TOK_COMMA) {
 			next();
 			continue;
-}
+		}
 		break;
-}
+	}
 	expect(TOK_RPAREN);
 }
 
@@ -852,13 +813,13 @@ void parse_type_qualifiers(TypeSpec* spec)
 			type_spec_add_storage(spec, storage_flag);
 			next();
 			continue;
-}
+		}
 		if (str_eq_n(tok.lexeme, tok.len, "layout")) {
 			parse_layout_block(spec);
 			continue;
-}
+		}
 		break;
-}
+	}
 }
 
 
@@ -874,7 +835,6 @@ TypeSpec parse_type_specifier()
 	return spec;
 }
 
-
 void expr_binary(Prec min_prec);
 void expr() { expr_binary(PREC_EXPR); }
 void expr_error() { parse_error("unexpected token in expression"); }
@@ -882,23 +842,23 @@ void expr_error() { parse_error("unexpected token in expression"); }
 void stmt();
 void stmt_decl();
 void stmt_block();
-	void parse();
+void parse();
 
-	void decl_array_suffix()
-	{
-		while (tok.kind == TOK_LBRACK) {
-			next();
-			ir_emit(IR_DECL_ARRAY_BEGIN);
-			if (tok.kind == TOK_RBRACK) {
-				ir_emit(IR_DECL_ARRAY_UNSIZED);
-			} else {
+void decl_array_suffix()
+{
+	while (tok.kind == TOK_LBRACK) {
+		next();
+		ir_emit(IR_DECL_ARRAY_BEGIN);
+		if (tok.kind == TOK_RBRACK) {
+			ir_emit(IR_DECL_ARRAY_UNSIZED);
+		} else {
 			ir_emit(IR_DECL_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_DECL_ARRAY_SIZE_END);
 		}
-	expect(TOK_RBRACK);
-	ir_emit(IR_DECL_ARRAY_END);
-}
+		expect(TOK_RBRACK);
+		ir_emit(IR_DECL_ARRAY_END);
+	}
 }
 
 void func_param_array_suffix()
@@ -912,10 +872,10 @@ void func_param_array_suffix()
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_END);
-}
+		}
 		expect(TOK_RBRACK);
 		ir_emit(IR_FUNC_PARAM_ARRAY_END);
-}
+	}
 }
 
 void func_param()
@@ -953,10 +913,10 @@ void func_param_list()
 				next();
 				ir_emit(IR_FUNC_PARAM_SEPARATOR);
 				continue;
-}
+			}
 			break;
-}
-}
+		}
+	}
 	expect(TOK_RPAREN);
 	ir_emit(IR_FUNC_PARAMS_END);
 }
@@ -985,28 +945,28 @@ void global_var_decl(TypeSpec spec, IR_String first_name)
 		expr();
 		ir_emit(IR_DECL_INIT_END);
 	}
-		while (tok.kind == TOK_COMMA) {
+	while (tok.kind == TOK_COMMA) {
+		next();
+		ir_emit(IR_DECL_SEPARATOR);
+		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+		IR_String name = ir_string(tok.lexeme, tok.len);
+		inst = ir_emit(IR_DECL_VAR);
+		inst->str0 = name;
+		sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
+		symbol_apply_type_spec(sym, &spec);
+		next();
+		decl_array_suffix();
+		if (tok.kind == TOK_ASSIGN) {
 			next();
-			ir_emit(IR_DECL_SEPARATOR);
-			if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-			IR_String name = ir_string(tok.lexeme, tok.len);
-			inst = ir_emit(IR_DECL_VAR);
-			inst->str0 = name;
-			sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
-			symbol_apply_type_spec(sym, &spec);
-			next();
-			decl_array_suffix();
-			if (tok.kind == TOK_ASSIGN) {
-				next();
-				ir_emit(IR_DECL_INIT_BEGIN);
-				expr();
-				ir_emit(IR_DECL_INIT_END);
-}
-}
-		expect(TOK_SEMI);
-		ir_emit(IR_DECL_END);
-		current_decl_type_name = (IR_String){ 0 };
-		current_decl_type_type = NULL;
+			ir_emit(IR_DECL_INIT_BEGIN);
+			expr();
+			ir_emit(IR_DECL_INIT_END);
+		}
+	}
+	expect(TOK_SEMI);
+	ir_emit(IR_DECL_END);
+	current_decl_type_name = (IR_String){ 0 };
+	current_decl_type_type = NULL;
 }
 
 void func_decl_or_def(TypeSpec spec, IR_String name)
@@ -1030,91 +990,90 @@ void func_decl_or_def(TypeSpec spec, IR_String name)
 		ir_emit(IR_FUNC_PROTOTYPE_END);
 		return;
 	}
-		if (tok.kind == TOK_LBRACE) {
-			ir_emit(IR_FUNC_DEFINITION_BEGIN);
-			stmt_block();
-			symbol_table_leave_scope(&g_symbols);
-			ir_emit(IR_FUNC_DEFINITION_END);
-			return;
-}
+	if (tok.kind == TOK_LBRACE) {
+		ir_emit(IR_FUNC_DEFINITION_BEGIN);
+		stmt_block();
 		symbol_table_leave_scope(&g_symbols);
-		parse_error("expected ';' or function body");
+		ir_emit(IR_FUNC_DEFINITION_END);
+		return;
+	}
+	symbol_table_leave_scope(&g_symbols);
+	parse_error("expected ';' or function body");
 }
-
 
 void stmt_decl()
-	{
-		TypeSpec spec = parse_type_specifier();
-		IR_Cmd* inst;
-		IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
-		begin->storage_flags = spec.storage_flags;
-		begin->layout_flags = spec.layout_flags;
-		begin->layout_set = spec.layout_set;
-		begin->layout_binding = spec.layout_binding;
-		begin->layout_location = spec.layout_location;
-		current_decl_type_name = spec.type_name;
-		current_decl_type_type = spec.type;
-		inst = ir_emit(IR_DECL_TYPE);
-		inst->str0 = spec.type_name;
-		while (1) {
-			if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-			IR_String name = ir_string(tok.lexeme, tok.len);
-			inst = ir_emit(IR_DECL_VAR);
-			inst->str0 = name;
-			Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
-			symbol_apply_type_spec(sym, &spec);
+{
+	TypeSpec spec = parse_type_specifier();
+	IR_Cmd* inst;
+	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
+	begin->storage_flags = spec.storage_flags;
+	begin->layout_flags = spec.layout_flags;
+	begin->layout_set = spec.layout_set;
+	begin->layout_binding = spec.layout_binding;
+	begin->layout_location = spec.layout_location;
+	current_decl_type_name = spec.type_name;
+	current_decl_type_type = spec.type;
+	inst = ir_emit(IR_DECL_TYPE);
+	inst->str0 = spec.type_name;
+	while (1) {
+		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+		IR_String name = ir_string(tok.lexeme, tok.len);
+		inst = ir_emit(IR_DECL_VAR);
+		inst->str0 = name;
+		Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
+		symbol_apply_type_spec(sym, &spec);
+		next();
+		decl_array_suffix();
+		if (tok.kind == TOK_ASSIGN) {
 			next();
-			decl_array_suffix();
-			if (tok.kind == TOK_ASSIGN) {
-				next();
-				ir_emit(IR_DECL_INIT_BEGIN);
-				expr();
-				ir_emit(IR_DECL_INIT_END);
-}
-			if (tok.kind == TOK_COMMA) {
-				next();
-				ir_emit(IR_DECL_SEPARATOR);
-				continue;
-}
-			break;
-}
-		expect(TOK_SEMI);
-		ir_emit(IR_DECL_END);
-		current_decl_type_name = (IR_String){ 0 };
-		current_decl_type_type = NULL;
+			ir_emit(IR_DECL_INIT_BEGIN);
+			expr();
+			ir_emit(IR_DECL_INIT_END);
+		}
+		if (tok.kind == TOK_COMMA) {
+			next();
+			ir_emit(IR_DECL_SEPARATOR);
+			continue;
+		}
+		break;
+	}
+	expect(TOK_SEMI);
+	ir_emit(IR_DECL_END);
+	current_decl_type_name = (IR_String){ 0 };
+	current_decl_type_type = NULL;
 }
 
-	void expr_int()
-	{
-		IR_Cmd* inst = ir_emit(IR_PUSH_INT);
-		inst->arg0 = tok.int_val;
-		next();
+void expr_int()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
+	inst->arg0 = tok.int_val;
+	next();
 }
 
-	void expr_ident()
-	{
-		IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
-		inst->str0 = ir_string(tok.lexeme, tok.len);
-		next();
+void expr_ident()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
+	inst->str0 = ir_string(tok.lexeme, tok.len);
+	next();
 }
 
-	void expr_paren()
-	{
-		next(); // consume '('
-		expr();
+void expr_paren()
+{
+	next(); // consume '('
+	expr();
+	expect(TOK_RPAREN);
+}
+
+void expr_call()
+{
+	int argc = 0;
+	if (tok.kind != TOK_RPAREN) {
+		expr(); argc++;
+		while (tok.kind == TOK_COMMA) { next(); expr(); argc++; }
 		expect(TOK_RPAREN);
-}
-
-	void expr_call()
-	{
-		int argc = 0;
-		if (tok.kind != TOK_RPAREN) {
-			expr(); argc++;
-			while (tok.kind == TOK_COMMA) { next(); expr(); argc++; }
-			expect(TOK_RPAREN);
-		} else {
+	} else {
 		next(); // consume ')'
-}
+	}
 	IR_Cmd* inst = ir_emit(IR_CALL);
 	inst->arg0 = argc;
 }
@@ -1193,20 +1152,20 @@ void expr_binary(Prec min_prec)
 		void (*cont)() = tok.rexpr;
 		next(); // consume operator -> next token begins RHS
 		cont(); // parse RHS/args/member and "emit"
-}
+	}
 }
 
 void stmt_block()
 {
-expect(TOK_LBRACE);
-ir_emit(IR_BLOCK_BEGIN);
-symbol_table_enter_scope(&g_symbols);
-while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF) {
-stmt();
-}
-expect(TOK_RBRACE);
-symbol_table_leave_scope(&g_symbols);
-ir_emit(IR_BLOCK_END);
+	expect(TOK_LBRACE);
+	ir_emit(IR_BLOCK_BEGIN);
+	symbol_table_enter_scope(&g_symbols);
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF) {
+		stmt();
+	}
+	expect(TOK_RBRACE);
+	symbol_table_leave_scope(&g_symbols);
+	ir_emit(IR_BLOCK_END);
 }
 
 void stmt_if()
@@ -1222,7 +1181,7 @@ void stmt_if()
 		next();
 		ir_emit(IR_IF_ELSE);
 		stmt();
-}
+	}
 	ir_emit(IR_IF_END);
 }
 
@@ -1238,7 +1197,7 @@ void stmt()
 	if (is_type_token()) {
 		stmt_decl();
 		return;
-}
+	}
 	switch (tok.kind) {
 	case TOK_IF:
 		stmt_if();
@@ -1254,7 +1213,7 @@ void stmt()
 	default:
 		stmt_expr();
 		break;
-}
+	}
 }
 
 void top_level()
@@ -1267,7 +1226,7 @@ void top_level()
 	if (tok.kind == TOK_LPAREN) {
 		func_decl_or_def(type_spec, name);
 		return;
-}
+	}
 	global_var_decl(type_spec, name);
 }
 
@@ -1275,7 +1234,7 @@ void parse()
 {
 	while (tok.kind != TOK_EOF) {
 		top_level();
-}
+	}
 }
 
 #define TOK_CHAR(ch1, tok1) \
@@ -1335,7 +1294,7 @@ void next()
 		TOK_EXPR_EXPR('|', NOT,    UNARY,  error, error,  '|', OR_OR,    OR_OR,   error, lor)
 
 		default: break;
-}
+	}
 
 	if (tok.kind != TOK_EOF) return;
 
@@ -1352,13 +1311,13 @@ void next()
 		if (tok.len == 2 && strncmp(s, "if", 2) == 0) {
 			tok.kind = TOK_IF;
 			tok.lexpr = expr_error;
-}
+			}
 		else if (tok.len == 4 && strncmp(s, "else", 4) == 0) {
 			tok.kind = TOK_ELSE;
 			tok.lexpr = expr_error;
-}
+			}
 		return;
-}
+	}
 
 	// integers (decimal)
 	if (is_digit(ch)) {
@@ -1370,7 +1329,7 @@ void next()
 		tok.rexpr = expr_error;
 		tok.int_val = v;
 		return;
-}
+	}
 
 	// unknown char: consume and retry
 	if (ch) {
@@ -1378,29 +1337,29 @@ void next()
 		next_ch();
 		next();
 		return;
-}
+	}
 }
 
 int main()
 {
 	#define STR(X) #X
 	const char* input = STR(
-	layout(location = 0) in vec2 in_pos;
-	layout(location = 1) in vec2 in_uv;
-	layout(location = 0) out vec2 v_uv;
-	layout(location = 1) out vec4 v_col;
-	layout(set = 0, binding = 0) uniform sampler2D u_texture;
-	layout(set = 1, binding = 0) uniform sampler2D u_fallback;
-	void main_image(layout(location = 0) in vec2 uv, layout(location = 1) in vec4 color)
-	{
-		v_uv = uv;
-		vec4 sample = texture(u_texture, uv);
-		if (sample.a == 0) {
-			v_col = texture(u_fallback, uv);
-		} else {
-		v_col = color;
-	}
-}
+		layout(location = 0) in vec2 in_pos;
+		layout(location = 1) in vec2 in_uv;
+		layout(location = 0) out vec2 v_uv;
+		layout(location = 1) out vec4 v_col;
+		layout(set = 0, binding = 0) uniform sampler2D u_texture;
+		layout(set = 1, binding = 0) uniform sampler2D u_fallback;
+		void main_image(layout(location = 0) in vec2 uv, layout(location = 1) in vec4 color)
+		{
+			v_uv = uv;
+			vec4 sample = texture(u_texture, uv);
+			if (sample.a == 0) {
+				v_col = texture(u_fallback, uv);
+			} else {
+				v_col = color;
+			}
+		}
 	);
 	printf("Input : %s\n\n", input);
 
@@ -1408,16 +1367,15 @@ int main()
 	at = in;
 	next_ch();
 	next();
-	type_system_init(&g_types);
 	type_system_init_builtins(&g_types);
 	symbol_table_init(&g_symbols);
 	parse();
 	dump_ir();
-		printf("\n");
+	printf("\n");
 	dump_symbols(&g_symbols);
 	symbol_table_free(&g_symbols);
 	type_system_free(&g_types);
 	if (g_ir) afree(g_ir);
 
-return 0;
+	return 0;
 }
