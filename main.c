@@ -1,14 +1,14 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
-#include <stddef.h>
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
-typedef struct IRString
+
+typedef struct IR_String
 {
 	const char* ptr;
 	int len;
-} IRString;
+} IR_String;
 
 typedef enum SymbolKind
 {
@@ -26,8 +26,8 @@ const char* symbol_kind_name[SYM_KIND_COUNT] = {
 
 typedef struct Symbol
 {
-	IRString name;
-	IRString type;
+	IR_String name;
+	IR_String type;
 	SymbolKind kind;
 } Symbol;
 
@@ -37,7 +37,7 @@ typedef struct SymbolTable
 	Symbol* symbols;
 } SymbolTable;
 
-typedef enum IROp
+typedef enum IR_Op
 {
 	IR_PUSH_INT,
 	IR_PUSH_IDENT,
@@ -83,7 +83,7 @@ typedef enum IROp
 	IR_FUNC_DEFINITION_BEGIN,
 	IR_FUNC_DEFINITION_END,
 	IR_OP_COUNT
-} IROp;
+} IR_Op;
 
 typedef enum Tok
 {
@@ -145,87 +145,81 @@ const char* tok_name[TOK_COUNT] = {
 };
 
 const char* ir_op_name[IR_OP_COUNT] = {
-	[IR_PUSH_INT]			= "push_int",
-	[IR_PUSH_IDENT]		= "push_ident",
-	[IR_UNARY]			= "unary",
-	[IR_BINARY]			= "binary",
-	[IR_CALL]			= "call",
-	[IR_INDEX]			= "index",
-	[IR_MEMBER]		= "member",
-	[IR_SELECT]		= "select",
-	[IR_IF_BEGIN]		= "if_begin",
-	[IR_IF_THEN]		= "if_then",
-	[IR_IF_ELSE]		= "if_else",
-	[IR_IF_END]			= "if_end",
-	[IR_BLOCK_BEGIN]		= "block_begin",
-	[IR_BLOCK_END]		= "block_end",
-	[IR_STMT_EXPR]		= "stmt_expr",
-	[IR_DECL_BEGIN]		= "decl_begin",
-	[IR_DECL_TYPE]		= "decl_type",
-	[IR_DECL_VAR]		= "decl_var",
-	[IR_DECL_ARRAY_BEGIN]	= "decl_array_begin",
-	[IR_DECL_ARRAY_UNSIZED]	= "decl_array_unsized",
-	[IR_DECL_ARRAY_SIZE_BEGIN]	= "decl_array_size_begin",
-	[IR_DECL_ARRAY_SIZE_END]	= "decl_array_size_end",
-	[IR_DECL_ARRAY_END]		= "decl_array_end",
-	[IR_DECL_INIT_BEGIN]	= "decl_init_begin",
-	[IR_DECL_INIT_END]		= "decl_init_end",
-	[IR_DECL_SEPARATOR]	= "decl_separator",
-	[IR_DECL_END]		= "decl_end",
-	[IR_FUNC_BEGIN]		= "func_begin",
-	[IR_FUNC_PARAMS_BEGIN]	= "func_params_begin",
-	[IR_FUNC_PARAM_BEGIN]	= "func_param_begin",
-	[IR_FUNC_PARAM_TYPE]	= "func_param_type",
-	[IR_FUNC_PARAM_NAME]	= "func_param_name",
-	[IR_FUNC_PARAM_ARRAY_BEGIN]	= "func_param_array_begin",
-	[IR_FUNC_PARAM_ARRAY_UNSIZED] = "func_param_array_unsized",
+	[IR_PUSH_INT]                    = "push_int",
+	[IR_PUSH_IDENT]                  = "push_ident",
+	[IR_UNARY]                       = "unary",
+	[IR_BINARY]                      = "binary",
+	[IR_CALL]                        = "call",
+	[IR_INDEX]                       = "index",
+	[IR_MEMBER]                      = "member",
+	[IR_SELECT]                      = "select",
+	[IR_IF_BEGIN]                    = "if_begin",
+	[IR_IF_THEN]                     = "if_then",
+	[IR_IF_ELSE]                     = "if_else",
+	[IR_IF_END]                      = "if_end",
+	[IR_BLOCK_BEGIN]                 = "block_begin",
+	[IR_BLOCK_END]                   = "block_end",
+	[IR_STMT_EXPR]                   = "stmt_expr",
+	[IR_DECL_BEGIN]                  = "decl_begin",
+	[IR_DECL_TYPE]                   = "decl_type",
+	[IR_DECL_VAR]                    = "decl_var",
+	[IR_DECL_ARRAY_BEGIN]            = "decl_array_begin",
+	[IR_DECL_ARRAY_UNSIZED]          = "decl_array_unsized",
+	[IR_DECL_ARRAY_SIZE_BEGIN]       = "decl_array_size_begin",
+	[IR_DECL_ARRAY_SIZE_END]         = "decl_array_size_end",
+	[IR_DECL_ARRAY_END]              = "decl_array_end",
+	[IR_DECL_INIT_BEGIN]             = "decl_init_begin",
+	[IR_DECL_INIT_END]               = "decl_init_end",
+	[IR_DECL_SEPARATOR]              = "decl_separator",
+	[IR_DECL_END]                    = "decl_end",
+	[IR_FUNC_BEGIN]                  = "func_begin",
+	[IR_FUNC_PARAMS_BEGIN]           = "func_params_begin",
+	[IR_FUNC_PARAM_BEGIN]            = "func_param_begin",
+	[IR_FUNC_PARAM_TYPE]             = "func_param_type",
+	[IR_FUNC_PARAM_NAME]             = "func_param_name",
+	[IR_FUNC_PARAM_ARRAY_BEGIN]      = "func_param_array_begin",
+	[IR_FUNC_PARAM_ARRAY_UNSIZED]    = "func_param_array_unsized",
 	[IR_FUNC_PARAM_ARRAY_SIZE_BEGIN] = "func_param_array_size_begin",
-	[IR_FUNC_PARAM_ARRAY_SIZE_END]	= "func_param_array_size_end",
-	[IR_FUNC_PARAM_ARRAY_END]	= "func_param_array_end",
-	[IR_FUNC_PARAM_END]		= "func_param_end",
-	[IR_FUNC_PARAM_SEPARATOR]	= "func_param_separator",
-	[IR_FUNC_PARAMS_END]	= "func_params_end",
-	[IR_FUNC_PROTOTYPE_END]	= "func_prototype_end",
-	[IR_FUNC_DEFINITION_BEGIN]	= "func_definition_begin",
-	[IR_FUNC_DEFINITION_END]	= "func_definition_end",
+	[IR_FUNC_PARAM_ARRAY_SIZE_END]   = "func_param_array_size_end",
+	[IR_FUNC_PARAM_ARRAY_END]        = "func_param_array_end",
+	[IR_FUNC_PARAM_END]              = "func_param_end",
+	[IR_FUNC_PARAM_SEPARATOR]        = "func_param_separator",
+	[IR_FUNC_PARAMS_END]             = "func_params_end",
+	[IR_FUNC_PROTOTYPE_END]          = "func_prototype_end",
+	[IR_FUNC_DEFINITION_BEGIN]       = "func_definition_begin",
+	[IR_FUNC_DEFINITION_END]         = "func_definition_end",
 };
 
-typedef struct IRInstr
+typedef struct IR_Cmd
 {
-	IROp op;
-	IRString str0;
-	IRString str1;
+	IR_Op op;
+	IR_String str0;
+	IR_String str1;
 	int arg0;
 	int arg1;
 	Tok tok;
-} IRInstr;
+} IR_Cmd;
 
-SymbolTable g_symbols = (SymbolTable){ 0 };
-IRInstr* g_ir = NULL;
-IRString current_decl_type = (IRString){ 0 };
-IRString current_param_type = (IRString){ 0 };
+SymbolTable g_symbols;
+IR_Cmd* g_ir;
+IR_String current_decl_type;
+IR_String current_param_type;
 
-IRString ir_string(const char* s, int len)
+IR_String ir_string(const char* s, int len)
 {
-	if (!s || len <= 0) return (IRString){ 0 };
-	return (IRString){ sintern_range(s, s + len), len };
+	if (!s || len <= 0) return (IR_String){ 0 };
+	return (IR_String){ sintern_range(s, s + len), len };
 }
 
-IRInstr* ir_emit(IROp op)
+IR_Cmd* ir_emit(IR_Op op)
 {
-	IRInstr inst = (IRInstr){ 0 };
+	IR_Cmd inst = (IR_Cmd){ 0 };
 	inst.op = op;
 	apush(g_ir, inst);
 	return &g_ir[acount(g_ir) - 1];
 }
 
-void symbol_table_init(SymbolTable* st)
-{
-	st->map = (Map){ 0 };
-	st->symbols = NULL;
-}
-
-Symbol* symbol_table_add(SymbolTable* st, IRString name, IRString type, SymbolKind kind)
+Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type, SymbolKind kind)
 {
 	if (!name.ptr) return NULL;
 	uint64_t key = (uint64_t)name.ptr;
@@ -253,7 +247,7 @@ void dump_ir()
 {
 	printf("IR:\n");
 	for (int i = 0; i < acount(g_ir); ++i) {
-		IRInstr* inst = &g_ir[i];
+		IR_Cmd* inst = &g_ir[i];
 		printf("  %s", ir_op_name[inst->op]);
 		switch (inst->op) {
 		case IR_PUSH_INT:
@@ -293,8 +287,6 @@ void dump_symbols(const SymbolTable* st)
 	}
 }
 
-
-
 typedef enum Prec
 {
 	PREC_EXPR    = 0,
@@ -327,31 +319,31 @@ struct
 
 void emit_int(int v)
 {
-	IRInstr* inst = ir_emit(IR_PUSH_INT);
+	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
 	inst->arg0 = v;
 }
 
 void emit_ident(const char* s, int n)
 {
-	IRInstr* inst = ir_emit(IR_PUSH_IDENT);
+	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = ir_string(s, n);
 }
 
 void emit_unary(Tok op)
 {
-	IRInstr* inst = ir_emit(IR_UNARY);
+	IR_Cmd* inst = ir_emit(IR_UNARY);
 	inst->tok = op;
 }
 
 void emit_binary(Tok op)
 {
-	IRInstr* inst = ir_emit(IR_BINARY);
+	IR_Cmd* inst = ir_emit(IR_BINARY);
 	inst->tok = op;
 }
 
 void emit_call(int argc)
 {
-	IRInstr* inst = ir_emit(IR_CALL);
+	IR_Cmd* inst = ir_emit(IR_CALL);
 	inst->arg0 = argc;
 }
 
@@ -362,7 +354,7 @@ void emit_index()
 
 void emit_member(const char* s, int n)
 {
-	IRInstr* inst = ir_emit(IR_MEMBER);
+	IR_Cmd* inst = ir_emit(IR_MEMBER);
 	inst->str0 = ir_string(s, n);
 }
 
@@ -409,21 +401,21 @@ void emit_stmt_expr()
 void emit_decl_begin()
 {
 	ir_emit(IR_DECL_BEGIN);
-	current_decl_type = (IRString){ 0 };
+	current_decl_type = (IR_String){ 0 };
 }
 
 void emit_decl_type(const char* s, int n)
 {
-	IRString type = ir_string(s, n);
+	IR_String type = ir_string(s, n);
 	current_decl_type = type;
-	IRInstr* inst = ir_emit(IR_DECL_TYPE);
+	IR_Cmd* inst = ir_emit(IR_DECL_TYPE);
 	inst->str0 = type;
 }
 
 void emit_decl_var(const char* s, int n)
 {
-	IRString name = ir_string(s, n);
-	IRInstr* inst = ir_emit(IR_DECL_VAR);
+	IR_String name = ir_string(s, n);
+	IR_Cmd* inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = name;
 	symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
 }
@@ -471,12 +463,12 @@ void emit_decl_separator()
 void emit_decl_end()
 {
 	ir_emit(IR_DECL_END);
-	current_decl_type = (IRString){ 0 };
+	current_decl_type = (IR_String){ 0 };
 }
 
 void emit_func_begin(const char* rt, int rn, const char* name, int nn)
 {
-	IRInstr* inst = ir_emit(IR_FUNC_BEGIN);
+	IR_Cmd* inst = ir_emit(IR_FUNC_BEGIN);
 	inst->str0 = ir_string(rt, rn);
 	inst->str1 = ir_string(name, nn);
 	symbol_table_add(&g_symbols, inst->str1, inst->str0, SYM_FUNC);
@@ -490,21 +482,21 @@ void emit_func_params_begin()
 void emit_func_param_begin()
 {
 	ir_emit(IR_FUNC_PARAM_BEGIN);
-	current_param_type = (IRString){ 0 };
+	current_param_type = (IR_String){ 0 };
 }
 
 void emit_func_param_type(const char* s, int n)
 {
-	IRString type = ir_string(s, n);
+	IR_String type = ir_string(s, n);
 	current_param_type = type;
-	IRInstr* inst = ir_emit(IR_FUNC_PARAM_TYPE);
+	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = type;
 }
 
 void emit_func_param_name(const char* s, int n)
 {
-	IRString name = ir_string(s, n);
-	IRInstr* inst = ir_emit(IR_FUNC_PARAM_NAME);
+	IR_String name = ir_string(s, n);
+	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
 	symbol_table_add(&g_symbols, name, current_param_type, SYM_PARAM);
 }
@@ -1109,7 +1101,6 @@ int main()
 	at = in;
 	next_ch();
 	next();
-	symbol_table_init(&g_symbols);
 	parse();
 	dump_ir();
 	printf("\n");
