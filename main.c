@@ -169,24 +169,73 @@ typedef struct Type
 	const char* name;
 } Type;
 
+typedef enum BuiltinFuncKind
+{
+        BUILTIN_NONE,
+        BUILTIN_TEXTURE,
+        BUILTIN_TEXTURE_LOD,
+        BUILTIN_TEXTURE_PROJ,
+        BUILTIN_TEXTURE_GRAD,
+        BUILTIN_MIN,
+        BUILTIN_MAX,
+        BUILTIN_CLAMP,
+        BUILTIN_ABS,
+        BUILTIN_FLOOR,
+        BUILTIN_CEIL,
+        BUILTIN_FRACT,
+        BUILTIN_MIX,
+        BUILTIN_STEP,
+        BUILTIN_SMOOTHSTEP,
+        BUILTIN_DOT,
+        BUILTIN_CROSS,
+        BUILTIN_NORMALIZE,
+        BUILTIN_LENGTH,
+        BUILTIN_DISTANCE,
+        BUILTIN_REFLECT,
+        BUILTIN_REFRACT,
+        BUILTIN_POW,
+        BUILTIN_EXP,
+        BUILTIN_EXP2,
+        BUILTIN_LOG,
+        BUILTIN_LOG2,
+        BUILTIN_SQRT,
+        BUILTIN_INVERSE_SQRT,
+        BUILTIN_MOD,
+        BUILTIN_SIN,
+        BUILTIN_COS,
+        BUILTIN_TAN,
+        BUILTIN_ASIN,
+        BUILTIN_ACOS,
+        BUILTIN_ATAN,
+        BUILTIN_SIGN,
+        BUILTIN_TRUNC,
+        BUILTIN_ROUND,
+        BUILTIN_ROUND_EVEN,
+        BUILTIN_DFDX,
+        BUILTIN_DFDY,
+        BUILTIN_FWIDTH
+} BuiltinFuncKind;
+
 typedef struct Symbol
 {
-	const char* name;
-	const char* type_name;
-	Type* type;
-	SymbolKind kind;
-	unsigned storage_flags;
-	unsigned layout_flags;
-	int layout_set;
-	int layout_binding;
-	int layout_location;
-	int scope_depth;
-	dyna Type** params;
-	int param_count;
-	int param_signature_set;
-	Type array_type;
-	Type* array_element_type;
-	int array_dimensions;
+        const char* name;
+        const char* type_name;
+        Type* type;
+        SymbolKind kind;
+        unsigned storage_flags;
+        unsigned layout_flags;
+        int layout_set;
+        int layout_binding;
+        int layout_location;
+        int scope_depth;
+        dyna Type** params;
+        int param_count;
+        int param_signature_set;
+        Type array_type;
+        Type* array_element_type;
+        int array_dimensions;
+        BuiltinFuncKind builtin_kind;
+        int builtin_param_count;
 } Symbol;
 
 typedef struct TypeSpec
@@ -418,6 +467,7 @@ void type_system_init_builtins();
 void type_system_init_builtins();
 Type* type_check_unary(const IR_Cmd* inst, Type* operand);
 void type_check_ir();
+Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc);
 void dump_ir();
 void dump_symbols();
 
@@ -579,16 +629,30 @@ const char* snippet_switch_stmt = STR(
 );
 
 const char* snippet_discard = STR(
-	layout(location = 0) in vec4 in_color;
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		vec4 color = in_color;
-		if (color.a == 0.0)
-		{
-			discard;
-		}
-		out_color = color;
-	}
+        layout(location = 0) in vec4 in_color;
+        layout(location = 0) out vec4 out_color;
+        void main() {
+                vec4 color = in_color;
+                if (color.a == 0.0)
+                {
+                        discard;
+                }
+                out_color = color;
+        }
+);
+
+const char* snippet_builtin_funcs = STR(
+        layout(location = 0) out vec4 out_color;
+        layout(set = 0, binding = 0) uniform sampler2D u_tex;
+        void main() {
+                vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
+                vec4 sampled = texture(u_tex, uv);
+                float m = max(sampled.x, sampled.y);
+                float f = frac(m);
+                float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
+                vec3 unit = normalize(sampled.rgb);
+                out_color = vec4(unit * (f + shade), sampled.a);
+        }
 );
 
 // Directly include all of our source for a unity build.
@@ -616,16 +680,18 @@ int main()
 		const char* source;
 	} ShaderSnippet;
 
-	const ShaderSnippet snippets[] = {
-	{ "basic_io", snippet_basic_io },
-	{ "control_flow", snippet_control_flow },
-	{ "array_indexing", snippet_array_indexing },
-	{ "swizzle_usage", snippet_swizzle },
-	{ "function_calls", snippet_function_calls },
-	{ "matrix_ops", snippet_matrix_ops },
-	{ "looping", snippet_looping },
-	{ "switch", snippet_switch_stmt },
-	{ "discard", snippet_discard }
+        const ShaderSnippet snippets[] = {
+                { "basic_io", snippet_basic_io },
+                { "control_flow", snippet_control_flow },
+                { "array_indexing", snippet_array_indexing },
+                { "swizzle_usage", snippet_swizzle },
+                { "function_calls", snippet_function_calls },
+                { "matrix_ops", snippet_matrix_ops },
+                { "looping", snippet_looping },
+                { "discard", snippet_discard },
+                { "switch", snippet_switch_stmt },
+                { "builtin_funcs", snippet_builtin_funcs }
+        };
 };
 
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
