@@ -2,6 +2,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <stddef.h>
+#include <stdlib.h>
 
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
@@ -115,6 +116,7 @@ typedef enum IROp
 {
 	IR_PUSH_INT,
 	IR_PUSH_IDENT,
+	IR_PUSH_FLOAT,
 	IR_UNARY,
 	IR_BINARY,
 	IR_CALL,
@@ -161,7 +163,7 @@ typedef enum IROp
 
 typedef enum Tok
 {
-	TOK_EOF, TOK_IDENTIFIER, TOK_INT,
+        TOK_EOF, TOK_IDENTIFIER, TOK_INT, TOK_FLOAT,
 
 	TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
 
@@ -180,6 +182,7 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_EOF]        = "EOF",
 	[TOK_IDENTIFIER] = "IDENT",
 	[TOK_INT]        = "INT",
+	[TOK_FLOAT]      = "FLOAT",
 
 	[TOK_LPAREN]     = "(",
 	[TOK_RPAREN]     = ")",
@@ -221,6 +224,7 @@ const char* tok_name[TOK_COUNT] = {
 const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_PUSH_INT] = "push_int",
 	[IR_PUSH_IDENT] = "push_ident",
+	[IR_PUSH_FLOAT] = "push_float",
 	[IR_UNARY] = "unary",
 	[IR_BINARY] = "binary",
 	[IR_CALL] = "call",
@@ -271,6 +275,7 @@ typedef struct IR_Cmd
 	IR_String str1;
 	int arg0;
 	int arg1;
+	double float_val;
 	Tok tok;
 	unsigned storage_flags;
 	unsigned layout_flags;
@@ -597,6 +602,9 @@ void dump_ir()
 		case IR_PUSH_INT:
 			printf(" %d", inst->arg0);
 			break;
+		case IR_PUSH_FLOAT:
+			printf(" %g", inst->float_val);
+			break;
 		case IR_PUSH_IDENT:
 		case IR_MEMBER:
 		case IR_DECL_TYPE:
@@ -665,6 +673,7 @@ struct
 	void (*lexpr)(); // Start an expression.
 	void (*rexpr)(); // Continue an expression (binary/postfix/etc).
 	int int_val;
+	double float_val;
 	const char* lexeme;
 	int len;
 } tok;
@@ -1050,6 +1059,13 @@ void expr_int()
 	next();
 }
 
+void expr_float()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_FLOAT);
+	inst->float_val = tok.float_val;
+	next();
+}
+
 void expr_ident()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
@@ -1249,16 +1265,78 @@ void parse()
 		else               { tok.kind = TOK_##tok1; tok.prec = PREC_##prec1; tok.lexpr = expr_##lexpr1; tok.rexpr = expr_##rexpr1; } \
 		break;
 
+void lex_number()
+{
+	const char* start = at ? at - 1 : NULL;
+	char* endptr = NULL;
+	double val = start ? strtod(start, &endptr) : 0.0;
+	const char* end = endptr ? endptr : start;
+	const char* suffix = end;
+	int is_float = 0;
+	if (start && end) {
+		for (const char* p = start; p < end; ++p) {
+			if (*p == '.' || *p == 'e' || *p == 'E') {
+				is_float = 1;
+				break;
+			}
+		}
+	}
+	if (suffix && (*suffix == 'f' || *suffix == 'F')) {
+		is_float = 1;
+		++suffix;
+	}
+	if (suffix && (*suffix == 'l' || *suffix == 'L')) {
+		is_float = 1;
+		++suffix;
+	}
+	if (start) {
+		tok.lexeme = start;
+		tok.len = (int)(suffix - start);
+	}
+	tok.prec = 0;
+	tok.rexpr = expr_error;
+	if (is_float) {
+		tok.kind = TOK_FLOAT;
+		tok.lexpr = expr_float;
+		tok.float_val = val;
+	} else {
+		tok.kind = TOK_INT;
+		tok.lexpr = expr_int;
+		tok.int_val = 0;
+		if (start && end) {
+			for (const char* p = start; p < end; ++p) {
+				if (*p >= '0' && *p <= '9') {
+					tok.int_val = tok.int_val * 10 + (*p - '0');
+				}
+			}
+		}
+	}
+	if (suffix && *suffix) {
+		ch = (unsigned char)*suffix;
+		at = suffix + 1;
+	} else {
+		ch = 0;
+		at = suffix;
+	}
+}
+
 void next()
 {
 	tok.kind = TOK_EOF;
 	tok.prec = 0;
 	tok.lexpr = expr_error;
 	tok.rexpr = expr_error;
+	tok.int_val = 0;
+	tok.float_val = 0.0;
 	tok.lexeme = at ? at - 1 : NULL;
 	tok.len = 0;
 
 	skip_ws_comments();
+
+	if (ch == '.' && is_digit(at[0])) {
+		lex_number();
+		return;
+	}
 
 	switch (ch) {
 		// single-char punctuation
@@ -1319,15 +1397,9 @@ void next()
 		return;
 	}
 
-	// integers (decimal)
+	// numbers
 	if (is_digit(ch)) {
-		int v = (ch - '0'); next_ch();
-		while (is_digit(ch)) { v = v * 10 + (ch - '0'); next_ch(); }
-		tok.kind = TOK_INT;
-		tok.prec = 0;
-		tok.lexpr = expr_int;
-		tok.rexpr = expr_error;
-		tok.int_val = v;
+		lex_number();
 		return;
 	}
 
