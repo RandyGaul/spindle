@@ -70,6 +70,9 @@ typedef struct Symbol
 	Type** params;
 	int param_count;
 	int param_signature_set;
+	Type array_type;
+	Type* array_element_type;
+	int array_dimensions;
 } Symbol;
 
 typedef enum SymbolStorage
@@ -236,6 +239,7 @@ typedef enum Tok
 	TOK_AND_AND,
 	TOK_OR_OR,
 	TOK_ASSIGN,
+	TOK_PLUS_ASSIGN,
 
 	TOK_COUNT
 } Tok;
@@ -288,6 +292,7 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_OR_OR] = "||",
 
 	[TOK_ASSIGN] = "=",
+	[TOK_PLUS_ASSIGN] = "+=",
 };
 
 const char* ir_op_name[IR_OP_COUNT] = {
@@ -396,6 +401,8 @@ Type* current_decl_type_type;
 const char* current_param_type_name;
 Type* current_param_type_type;
 Type** current_function_params;
+Symbol* current_decl_symbol;
+Symbol* current_param_symbol;
 const char* kw_in;
 const char* kw_out;
 const char* kw_uniform;
@@ -455,7 +462,7 @@ void symbol_table_leave_scope(SymbolTable* st)
 	SymbolScope* scope = &st->scopes[count - 1];
 	map_free(scope->map);
 	scope->map = (Map){ 0 };
-	apop(st->scopes);
+	(void)apop(st->scopes);
 }
 
 void symbol_table_init(SymbolTable* st)
@@ -1120,6 +1127,11 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 		return type_binary_logical(tok, lhs, rhs);
 	case TOK_ASSIGN:
 		return type_binary_assign(lhs, rhs);
+	case TOK_PLUS_ASSIGN:
+	{
+		Type* sum = type_binary_add_sub(TOK_PLUS, lhs, rhs);
+		return type_binary_assign(lhs, sum);
+	}
 	default:
 		type_check_error("unsupported binary operator %s", tok_name[tok]);
 	}
@@ -1179,7 +1191,11 @@ void type_check_constructor(Type* target, Type** args, int argc)
 		}
 		if (count != needed)
 		{
-			type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
+			int allow_scalar_replication = (needed > 1 && count == 1 && argc == 1 && type_is_scalar(args[0]));
+			if (!allow_scalar_replication)
+			{
+				type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
+			}
 		}
 		break;
 	}
@@ -1213,7 +1229,11 @@ void type_check_constructor(Type* target, Type** args, int argc)
 		}
 		if (count != needed)
 		{
-			type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
+			int allow_scalar_replication = (needed > 1 && count == 1 && argc == 1 && type_is_scalar(args[0]));
+			if (!allow_scalar_replication)
+			{
+				type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
+			}
 		}
 		break;
 	}
@@ -1271,6 +1291,18 @@ void type_check_ir()
 			if (inst->str0)
 			{
 				Symbol* sym = symbol_table_resolve(&g_symbols, inst->str0);
+				if (!sym)
+				{
+					for (int j = acount(g_symbols.symbols) - 1; j >= 0; --j)
+					{
+						Symbol* candidate = &g_symbols.symbols[j];
+						if (candidate->name == inst->str0)
+						{
+							sym = candidate;
+							break;
+						}
+					}
+				}
 				if (sym && sym->type)
 				{
 					type = sym->type;
@@ -1399,6 +1431,10 @@ void type_check_ir()
 				else if (type_is_matrix(base))
 				{
 					result = type_get_vector(type_base_type(base), base->rows);
+				}
+				else if (base->tag == T_ARRAY)
+				{
+					result = base->user ? (Type*)base->user : NULL;
 				}
 				else
 				{
@@ -1529,7 +1565,7 @@ void type_check_ir()
 		case IR_FUNC_PROTOTYPE_END:
 		case IR_FUNC_DEFINITION_END:
 			if (acount(func_stack) > 0)
-				apop(func_stack);
+				(void)apop(func_stack);
 			break;
 		default:
 			break;
@@ -1603,6 +1639,23 @@ void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 	if (spec->layout_flags & SYM_LAYOUT_LOCATION)
 		symbol_set_layout(sym, SYM_LAYOUT_LOCATION, spec->layout_location);
 }
+void symbol_mark_array(Symbol* sym, Type* element_type)
+{
+	if (!sym)
+		return;
+	sym->array_element_type = element_type;
+	sym->array_dimensions += 1;
+	sym->array_type = (Type){ 0 };
+	sym->array_type.tag = T_ARRAY;
+	sym->array_type.base = element_type ? element_type->tag : T_VOID;
+	sym->array_type.cols = element_type ? element_type->cols : 1;
+	sym->array_type.rows = element_type ? element_type->rows : 1;
+	sym->array_type.array_len = -1;
+	sym->array_type.user = element_type;
+	sym->array_type.name = NULL;
+	sym->type = &sym->array_type;
+}
+
 
 void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 {
@@ -2204,10 +2257,18 @@ void parse();
 
 void decl_array_suffix()
 {
+	Symbol* sym = current_decl_symbol;
+	Type* element_type = current_decl_type_type;
 	while (tok.kind == TOK_LBRACK)
 	{
 		next();
 		ir_emit(IR_DECL_ARRAY_BEGIN);
+		if (sym)
+		{
+			symbol_mark_array(sym, element_type);
+			element_type = sym->type;
+		}
+
 		if (tok.kind == TOK_RBRACK)
 		{
 			ir_emit(IR_DECL_ARRAY_UNSIZED);
@@ -2225,10 +2286,17 @@ void decl_array_suffix()
 
 void func_param_array_suffix()
 {
+	Symbol* sym = current_param_symbol;
+	Type* element_type = current_param_type_type;
 	while (tok.kind == TOK_LBRACK)
 	{
 		next();
 		ir_emit(IR_FUNC_PARAM_ARRAY_BEGIN);
+		if (sym)
+		{
+			symbol_mark_array(sym, element_type);
+			element_type = sym->type;
+		}
 		if (tok.kind == TOK_RBRACK)
 		{
 			ir_emit(IR_FUNC_PARAM_ARRAY_UNSIZED);
@@ -2263,8 +2331,10 @@ void func_param()
 	inst->str0 = name;
 	Symbol* sym = symbol_table_add(&g_symbols, name, current_param_type_name, current_param_type_type, SYM_PARAM);
 	symbol_apply_type_spec(sym, &spec);
+	current_param_symbol = sym;
 	next();
 	func_param_array_suffix();
+	current_param_symbol = NULL;
 	ir_emit(IR_FUNC_PARAM_END);
 }
 
@@ -2297,7 +2367,9 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 	inst->str0 = first_name;
 	Symbol* sym = symbol_table_add(&g_symbols, first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 	symbol_apply_type_spec(sym, &spec);
+	current_decl_symbol = sym;
 	decl_array_suffix();
+	current_decl_symbol = NULL;
 	if (tok.kind == TOK_ASSIGN)
 	{
 		next();
@@ -2316,8 +2388,10 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 		inst->str0 = name;
 		sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
+		current_decl_symbol = sym;
 		next();
 		decl_array_suffix();
+		current_decl_symbol = NULL;
 		if (tok.kind == TOK_ASSIGN)
 		{
 			next();
@@ -2391,8 +2465,10 @@ void stmt_decl()
 		inst->str0 = name;
 		Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
+		current_decl_symbol = sym;
 		next();
 		decl_array_suffix();
+		current_decl_symbol = NULL;
 		if (tok.kind == TOK_ASSIGN)
 		{
 			next();
@@ -2643,6 +2719,7 @@ EXPR_BINARY(ne, EQ, NE);
 EXPR_BINARY(land, AND_AND, AND_AND);
 EXPR_BINARY(lor, OR_OR, OR_OR);
 EXPR_BINARY(assign, ASSIGN, ASSIGN);
+EXPR_BINARY(plus_assign, ASSIGN, PLUS_ASSIGN);
 
 void expr_binary(Prec min_prec)
 {
@@ -2950,6 +3027,13 @@ void lex_number()
 		is_float = 1;
 		++suffix;
 	}
+	if (!is_float)
+	{
+		while (*suffix == 'u' || *suffix == 'U' || *suffix == 'l' || *suffix == 'L')
+		{
+			++suffix;
+		}
+	}
 	tok.lexeme = start;
 	tok.len = (int)(suffix - start);
 	tok.prec = 0;
@@ -3021,7 +3105,7 @@ void next()
 
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
-		TOK_EXPR('+', PLUS, ADD, pos, add)
+		TOK_EXPR_EXPR('+', PLUS, ADD, pos, add, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
 		TOK_EXPR('-', MINUS, ADD, neg, sub)
 		TOK_EXPR('*', STAR, MUL, error, mul)
 		TOK_EXPR('/', SLASH, MUL, error, div)
