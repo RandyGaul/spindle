@@ -106,7 +106,7 @@ typedef struct TypeSystem
 	Type* types;
 } TypeSystem;
 
-typedef enum IROp
+typedef enum IR_Op
 {
 	IR_PUSH_INT,
 	IR_PUSH_IDENT,
@@ -153,7 +153,7 @@ typedef enum IROp
 	IR_FUNC_DEFINITION_BEGIN,
 	IR_FUNC_DEFINITION_END,
 	IR_OP_COUNT
-} IROp;
+} IR_Op;
 
 typedef enum Tok
 {
@@ -264,7 +264,7 @@ const char* ir_op_name[IR_OP_COUNT] = {
 
 typedef struct IR_Cmd
 {
-	IROp op;
+	IR_Op op;
 	const char* str0;
 	const char* str1;
 	int arg0;
@@ -314,7 +314,7 @@ void init_keyword_interns()
 	kw_else = ir_string("else", 4);
 }
 
-IR_Cmd* ir_emit(IROp op)
+IR_Cmd* ir_emit(IR_Op op)
 {
 	IR_Cmd inst = (IR_Cmd){ 0 };
 	inst.op = op;
