@@ -295,25 +295,6 @@ const char* kw_location;
 const char* kw_if;
 const char* kw_else;
 
-const char* ir_string(const char* s, int len)
-{
-	if (!s || len <= 0) return NULL;
-	return sintern_range(s, s + len);
-}
-
-void init_keyword_interns()
-{
-	kw_in = ir_string("in", 2);
-	kw_out = ir_string("out", 3);
-	kw_uniform = ir_string("uniform", 7);
-	kw_layout = ir_string("layout", 6);
-	kw_set = ir_string("set", 3);
-	kw_binding = ir_string("binding", 7);
-	kw_location = ir_string("location", 8);
-	kw_if = ir_string("if", 2);
-	kw_else = ir_string("else", 4);
-}
-
 IR_Cmd* ir_emit(IROp op)
 {
 	IR_Cmd inst = (IR_Cmd){ 0 };
@@ -349,7 +330,7 @@ void symbol_table_init(SymbolTable* st)
 
 Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_name, Type* type, SymbolKind kind)
 {
-	if (!st || !name) return NULL;
+	if (!st) return NULL;
 	int depth = acount(st->scopes);
 	if (!depth) return NULL;
 	SymbolScope* scope = &st->scopes[depth - 1];
@@ -370,7 +351,7 @@ Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_nam
 
 Symbol* symbol_table_resolve(SymbolTable* st, const char* name)
 {
-	if (!st || !name) return NULL;
+	if (!st) return NULL;
 	for (int i = acount(st->scopes) - 1; i >= 0; --i) {
 		SymbolScope* scope = &st->scopes[i];
 		uint64_t idx = map_get(scope->map, (uint64_t)name);
@@ -401,7 +382,7 @@ const char* type_tag_name(TypeTag tag)
 
 static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type type)
 {
-	if (!ts || !name) return NULL;
+	if (!ts) return NULL;
 	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(ts->map, key);
 	if (existing) return &ts->types[(int)existing - 1];
@@ -414,9 +395,8 @@ static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type typ
 
 Type* type_system_get(TypeSystem* ts, const char* name, int len)
 {
-	if (!ts || !name || len <= 0) return NULL;
+	if (!ts || len <= 0) return NULL;
 	const char* interned = sintern_range(name, name + len);
-	if (!interned) return NULL;
 	uint64_t key = (uint64_t)interned;
 	uint64_t idx = map_get(ts->map, key);
 	if (!idx) return NULL;
@@ -425,7 +405,7 @@ Type* type_system_get(TypeSystem* ts, const char* name, int len)
 
 Type* type_system_get_from_string(TypeSystem* ts, const char* name)
 {
-	if (!ts || !name) return NULL;
+	if (!ts) return NULL;
 	uint64_t idx = map_get(ts->map, (uint64_t)name);
 	if (!idx) return NULL;
 	return &ts->types[(int)idx - 1];
@@ -477,9 +457,9 @@ void type_system_init_builtins(TypeSystem* ts)
 		{ "sampler2DArray",{ .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = T_FLOAT, .dim = 5, .array_len = 0 } },
 	};
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i) {
-const char* name = ir_string(builtins[i].name, (int)strlen(builtins[i].name));
-type_system_add_internal(ts, name, builtins[i].type);
-}
+		const char* name = sintern_range(builtins[i].name, builtins[i].name + strlen(builtins[i].name));
+		type_system_add_internal(ts, name, builtins[i].type);
+	}
 }
 
 void type_system_free(TypeSystem* ts)
@@ -627,7 +607,7 @@ void dump_ir()
 		case IR_DECL_VAR:
 		case IR_FUNC_PARAM_TYPE:
 		case IR_FUNC_PARAM_NAME:
-			if (inst->str0) printf(" %s", inst->str0);
+			printf(" %s", inst->str0);
 			break;
 		case IR_UNARY:
 		case IR_BINARY:
@@ -637,7 +617,7 @@ void dump_ir()
 			printf(" argc=%d", inst->arg0);
 			break;
 		case IR_FUNC_BEGIN:
-			printf(" return=%s name=%s", inst->str0 ? inst->str0 : "<null>", inst->str1 ? inst->str1 : "<null>");
+			printf(" return=%s name=%s", inst->str0, inst->str1);
 			dump_storage_flags(inst->storage_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
@@ -653,7 +633,7 @@ void dump_symbols(const SymbolTable* st)
 	printf("Symbols:\n");
 	for (int i = 0; i < acount(st->symbols); ++i) {
 		const Symbol* sym = &st->symbols[i];
-		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name ? sym->name : "<null>", sym->type_name ? sym->type_name : "<null>");
+		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name, sym->type_name);
 		if (sym->type) {
 			printf(" (tag=%s)", type_tag_name(sym->type->tag));
 		}
@@ -699,7 +679,7 @@ void parse_error(const char* msg)
 	fprintf(stderr, "Parse error: %s", msg);
 	if (tok.kind < TOK_COUNT) {
 		fprintf(stderr, " (token %s", tok_name[tok.kind]);
-		if (tok.lexeme && tok.len) {
+		if (tok.len) {
 			fprintf(stderr, " '%.*s'", tok.len, tok.lexeme);
 		}
 		fprintf(stderr, ")");
@@ -848,7 +828,7 @@ TypeSpec parse_type_specifier()
 	TypeSpec spec = (TypeSpec){ 0 };
 	parse_type_qualifiers(&spec);
 	if (tok.kind != TOK_IDENTIFIER || !is_type_name(tok.lexeme, tok.len)) parse_error("expected type");
-	spec.type_name = ir_string(tok.lexeme, tok.len);
+	spec.type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	spec.type = type_system_get_from_string(&g_types, spec.type_name);
 	if (!spec.type) parse_error("unknown type");
 	next();
@@ -929,7 +909,7 @@ void func_param()
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = spec.type_name;
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
-	const char* name = ir_string(tok.lexeme, tok.len);
+	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
 	Symbol* sym = symbol_table_add(&g_symbols, name, current_param_type_name, current_param_type_type, SYM_PARAM);
@@ -976,7 +956,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 		next();
 		ir_emit(IR_DECL_SEPARATOR);
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		const char* name = ir_string(tok.lexeme, tok.len);
+		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -1031,7 +1011,7 @@ void stmt_decl()
 	decl_emit_begin(&spec);
 	while (1) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		const char* name = ir_string(tok.lexeme, tok.len);
+		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -1074,7 +1054,7 @@ void expr_float()
 void expr_ident()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
-	inst->str0 = ir_string(tok.lexeme, tok.len);
+	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	next();
 }
 
@@ -1110,7 +1090,7 @@ void expr_member()
 {
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after '.'");
 	IR_Cmd* inst = ir_emit(IR_MEMBER);
-	inst->str0 = ir_string(tok.lexeme, tok.len);
+	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	next();
 }
 
@@ -1242,7 +1222,7 @@ void top_level()
 	if (!is_type_token()) parse_error("expected type at top level");
 	TypeSpec type_spec = parse_type_specifier();
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
-const char* name = ir_string(tok.lexeme, tok.len);
+	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	next();
 	if (tok.kind == TOK_LPAREN) {
 		func_decl_or_def(type_spec, name);
@@ -1272,32 +1252,28 @@ void parse()
 
 void lex_number()
 {
-	const char* start = at ? at - 1 : NULL;
+	const char* start = at - 1;
 	char* endptr = NULL;
-	double val = start ? strtod(start, &endptr) : 0.0;
-	const char* end = endptr ? endptr : start;
+	double val = strtod(start, &endptr);
+	const char* end = endptr;
 	const char* suffix = end;
 	int is_float = 0;
-	if (start && end) {
-		for (const char* p = start; p < end; ++p) {
-			if (*p == '.' || *p == 'e' || *p == 'E') {
-				is_float = 1;
-				break;
-			}
+	for (const char* p = start; p < end; ++p) {
+		if (*p == '.' || *p == 'e' || *p == 'E') {
+			is_float = 1;
+			break;
 		}
 	}
-	if (suffix && (*suffix == 'f' || *suffix == 'F')) {
+	if (*suffix == 'f' || *suffix == 'F') {
 		is_float = 1;
 		++suffix;
 	}
-	if (suffix && (*suffix == 'l' || *suffix == 'L')) {
+	if (*suffix == 'l' || *suffix == 'L') {
 		is_float = 1;
 		++suffix;
 	}
-	if (start) {
-		tok.lexeme = start;
-		tok.len = (int)(suffix - start);
-	}
+	tok.lexeme = start;
+	tok.len = (int)(suffix - start);
 	tok.prec = 0;
 	tok.rexpr = expr_error;
 	if (is_float) {
@@ -1308,15 +1284,13 @@ void lex_number()
 		tok.kind = TOK_INT;
 		tok.lexpr = expr_int;
 		tok.int_val = 0;
-		if (start && end) {
-			for (const char* p = start; p < end; ++p) {
-				if (*p >= '0' && *p <= '9') {
-					tok.int_val = tok.int_val * 10 + (*p - '0');
-				}
+		for (const char* p = start; p < end; ++p) {
+			if (*p >= '0' && *p <= '9') {
+				tok.int_val = tok.int_val * 10 + (*p - '0');
 			}
 		}
 	}
-	if (suffix && *suffix) {
+	if (*suffix) {
 		ch = (unsigned char)*suffix;
 		at = suffix + 1;
 	} else {
@@ -1333,7 +1307,7 @@ void next()
 	tok.rexpr = expr_error;
 	tok.int_val = 0;
 	tok.float_val = 0.0;
-	tok.lexeme = at ? at - 1 : NULL;
+	tok.lexeme = at - 1;
 	tok.len = 0;
 
 	skip_ws_comments();
