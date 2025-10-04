@@ -126,6 +126,10 @@ typedef enum IR_Op
 	IR_BLOCK_BEGIN,
 	IR_BLOCK_END,
 	IR_STMT_EXPR,
+	IR_RETURN,
+	IR_BREAK,
+	IR_CONTINUE,
+	IR_DISCARD,
 	IR_DECL_BEGIN,
 	IR_DECL_TYPE,
 	IR_DECL_VAR,
@@ -163,7 +167,7 @@ typedef enum Tok
 
 	TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
 
-	TOK_IF, TOK_ELSE,
+	TOK_IF, TOK_ELSE, TOK_RETURN, TOK_BREAK, TOK_CONTINUE, TOK_DISCARD,
 
 	TOK_PLUS, TOK_MINUS, TOK_STAR, TOK_SLASH, TOK_PERCENT,
 	TOK_NOT, TOK_TILDE,
@@ -194,6 +198,10 @@ const char* tok_name[TOK_COUNT] = {
 
 	[TOK_IF]         = "if",
 	[TOK_ELSE]       = "else",
+	[TOK_RETURN]     = "return",
+	[TOK_BREAK]      = "break",
+	[TOK_CONTINUE]   = "continue",
+	[TOK_DISCARD]    = "discard",
 
 	[TOK_PLUS]       = "+",
 	[TOK_MINUS]      = "-",
@@ -236,6 +244,10 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_BLOCK_BEGIN] = "block_begin",
 	[IR_BLOCK_END] = "block_end",
 	[IR_STMT_EXPR] = "stmt_expr",
+	[IR_RETURN] = "return",
+	[IR_BREAK] = "break",
+	[IR_CONTINUE] = "continue",
+	[IR_DISCARD] = "discard",
 	[IR_DECL_BEGIN] = "decl_begin",
 	[IR_DECL_TYPE] = "decl_type",
 	[IR_DECL_VAR] = "decl_var",
@@ -299,6 +311,10 @@ const char* kw_binding;
 const char* kw_location;
 const char* kw_if;
 const char* kw_else;
+const char* kw_return;
+const char* kw_break;
+const char* kw_continue;
+const char* kw_discard;
 
 void init_keyword_interns()
 {
@@ -311,6 +327,10 @@ void init_keyword_interns()
 	kw_location = sintern("location");
 	kw_if = sintern("if");
 	kw_else = sintern("else");
+	kw_return = sintern("return");
+	kw_break = sintern("break");
+	kw_continue = sintern("continue");
+	kw_discard = sintern("discard");
 }
 
 IR_Cmd* ir_emit(IR_Op op)
@@ -617,6 +637,13 @@ void dump_ir()
 			printf(" return=%s name=%s", inst->str0, inst->str1);
 			dump_storage_flags(inst->storage_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_RETURN:
+			printf(" has_value=%d", inst->arg0);
+			break;
+		case IR_BREAK:
+		case IR_CONTINUE:
+		case IR_DISCARD:
 			break;
 		default:
 			break;
@@ -1260,6 +1287,39 @@ void stmt_expr()
 	ir_emit(IR_STMT_EXPR);
 }
 
+void stmt_return()
+{
+	expect(TOK_RETURN);
+	int has_value = tok.kind != TOK_SEMI;
+	if (has_value) {
+		expr();
+	}
+	expect(TOK_SEMI);
+	IR_Cmd* inst = ir_emit(IR_RETURN);
+	inst->arg0 = has_value;
+}
+
+void stmt_break()
+{
+	expect(TOK_BREAK);
+	expect(TOK_SEMI);
+	ir_emit(IR_BREAK);
+}
+
+void stmt_continue()
+{
+	expect(TOK_CONTINUE);
+	expect(TOK_SEMI);
+	ir_emit(IR_CONTINUE);
+}
+
+void stmt_discard()
+{
+	expect(TOK_DISCARD);
+	expect(TOK_SEMI);
+	ir_emit(IR_DISCARD);
+}
+
 void stmt()
 {
 	if (is_type_token()) {
@@ -1272,6 +1332,18 @@ void stmt()
 		break;
 	case TOK_LBRACE:
 		stmt_block();
+		break;
+	case TOK_RETURN:
+		stmt_return();
+		break;
+	case TOK_BREAK:
+		stmt_break();
+		break;
+	case TOK_CONTINUE:
+		stmt_continue();
+		break;
+	case TOK_DISCARD:
+		stmt_discard();
 		break;
 	case TOK_SEMI:
 		next();
@@ -1439,6 +1511,22 @@ void next()
 			}
 		else if (tok.lexeme == kw_else) {
 			tok.kind = TOK_ELSE;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_return) {
+			tok.kind = TOK_RETURN;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_break) {
+			tok.kind = TOK_BREAK;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_continue) {
+			tok.kind = TOK_CONTINUE;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_discard) {
+			tok.kind = TOK_DISCARD;
 			tok.lexpr = expr_error;
 			}
 		return;
