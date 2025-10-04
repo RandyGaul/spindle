@@ -18,6 +18,7 @@ typedef enum Tok
 	TOK_IDENTIFIER,
 	TOK_INT,
 	TOK_FLOAT,
+	TOK_BOOL,
 
 	TOK_LPAREN,
 	TOK_RPAREN,
@@ -40,12 +41,17 @@ typedef enum Tok
 	TOK_BREAK,
 	TOK_CONTINUE,
 	TOK_DISCARD,
+	TOK_SWITCH,
+	TOK_CASE,
+	TOK_DEFAULT,
 
 	TOK_PLUS,
 	TOK_MINUS,
 	TOK_STAR,
 	TOK_SLASH,
 	TOK_PERCENT,
+	TOK_PLUS_PLUS,
+	TOK_MINUS_MINUS,
 	TOK_NOT,
 	TOK_TILDE,
 	TOK_LT,
@@ -77,6 +83,7 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_IDENTIFIER] = "IDENT",
 	[TOK_INT] = "INT",
 	[TOK_FLOAT] = "FLOAT",
+	[TOK_BOOL] = "BOOL",
 
 	[TOK_LPAREN] = "(",
 	[TOK_RPAREN] = ")",
@@ -99,12 +106,18 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_BREAK] = "break",
 	[TOK_CONTINUE] = "continue",
 	[TOK_DISCARD] = "discard",
+	[TOK_SWITCH] = "switch",
+	[TOK_CASE] = "case",
+	[TOK_DEFAULT] = "default",
 
 	[TOK_PLUS] = "+",
 	[TOK_MINUS] = "-",
 	[TOK_STAR] = "*",
 	[TOK_SLASH] = "/",
 	[TOK_PERCENT] = "%",
+
+	[TOK_PLUS_PLUS] = "++",
+	[TOK_MINUS_MINUS] = "--",
 
 	[TOK_NOT] = "!",
 	[TOK_TILDE] = "~",
@@ -176,24 +189,73 @@ typedef struct Type
 	const char* name;
 } Type;
 
+typedef enum BuiltinFuncKind
+{
+        BUILTIN_NONE,
+        BUILTIN_TEXTURE,
+        BUILTIN_TEXTURE_LOD,
+        BUILTIN_TEXTURE_PROJ,
+        BUILTIN_TEXTURE_GRAD,
+        BUILTIN_MIN,
+        BUILTIN_MAX,
+        BUILTIN_CLAMP,
+        BUILTIN_ABS,
+        BUILTIN_FLOOR,
+        BUILTIN_CEIL,
+        BUILTIN_FRACT,
+        BUILTIN_MIX,
+        BUILTIN_STEP,
+        BUILTIN_SMOOTHSTEP,
+        BUILTIN_DOT,
+        BUILTIN_CROSS,
+        BUILTIN_NORMALIZE,
+        BUILTIN_LENGTH,
+        BUILTIN_DISTANCE,
+        BUILTIN_REFLECT,
+        BUILTIN_REFRACT,
+        BUILTIN_POW,
+        BUILTIN_EXP,
+        BUILTIN_EXP2,
+        BUILTIN_LOG,
+        BUILTIN_LOG2,
+        BUILTIN_SQRT,
+        BUILTIN_INVERSE_SQRT,
+        BUILTIN_MOD,
+        BUILTIN_SIN,
+        BUILTIN_COS,
+        BUILTIN_TAN,
+        BUILTIN_ASIN,
+        BUILTIN_ACOS,
+        BUILTIN_ATAN,
+        BUILTIN_SIGN,
+        BUILTIN_TRUNC,
+        BUILTIN_ROUND,
+        BUILTIN_ROUND_EVEN,
+        BUILTIN_DFDX,
+        BUILTIN_DFDY,
+        BUILTIN_FWIDTH
+} BuiltinFuncKind;
+
 typedef struct Symbol
 {
-	const char* name;
-	const char* type_name;
-	Type* type;
-	SymbolKind kind;
-	unsigned storage_flags;
-	unsigned layout_flags;
-	int layout_set;
-	int layout_binding;
-	int layout_location;
-	int scope_depth;
-	dyna Type** params;
-	int param_count;
-	int param_signature_set;
-	Type array_type;
-	Type* array_element_type;
-	int array_dimensions;
+        const char* name;
+        const char* type_name;
+        Type* type;
+        SymbolKind kind;
+        unsigned storage_flags;
+        unsigned layout_flags;
+        int layout_set;
+        int layout_binding;
+        int layout_location;
+        int scope_depth;
+        dyna Type** params;
+        int param_count;
+        int param_signature_set;
+        Type array_type;
+        Type* array_element_type;
+        int array_dimensions;
+        BuiltinFuncKind builtin_kind;
+        int builtin_param_count;
 } Symbol;
 
 typedef struct TypeSpec
@@ -218,6 +280,7 @@ typedef enum IR_Op
 	IR_PUSH_INT,
 	IR_PUSH_IDENT,
 	IR_PUSH_FLOAT,
+	IR_PUSH_BOOL,
 	IR_UNARY,
 	IR_BINARY,
 	IR_CALL,
@@ -252,6 +315,11 @@ typedef enum IR_Op
 	IR_DO_COND_BEGIN,
 	IR_DO_COND_END,
 	IR_DO_END,
+	IR_SWITCH_BEGIN,
+	IR_SWITCH_SELECTOR_BEGIN,
+	IR_SWITCH_SELECTOR_END,
+	IR_SWITCH_CASE,
+	IR_SWITCH_END,
 	IR_BLOCK_BEGIN,
 	IR_BLOCK_END,
 	IR_STMT_EXPR,
@@ -290,10 +358,18 @@ typedef enum IR_Op
 	IR_OP_COUNT
 } IR_Op;
 
+enum
+{
+	SWITCH_CASE_FLAG_DEFAULT = 1 << 0,
+	SWITCH_CASE_FLAG_FALLTHROUGH = 1 << 1,
+	SWITCH_CASE_FLAG_HAS_BODY = 1 << 2,
+};
+
 const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_PUSH_INT] = "push_int",
 	[IR_PUSH_IDENT] = "push_ident",
 	[IR_PUSH_FLOAT] = "push_float",
+	[IR_PUSH_BOOL] = "push_bool",
 	[IR_UNARY] = "unary",
 	[IR_BINARY] = "binary",
 	[IR_CALL] = "call",
@@ -328,6 +404,11 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_DO_COND_BEGIN] = "do_cond_begin",
 	[IR_DO_COND_END] = "do_cond_end",
 	[IR_DO_END] = "do_end",
+	[IR_SWITCH_BEGIN] = "switch_begin",
+	[IR_SWITCH_SELECTOR_BEGIN] = "switch_selector_begin",
+	[IR_SWITCH_SELECTOR_END] = "switch_selector_end",
+	[IR_SWITCH_CASE] = "switch_case",
+	[IR_SWITCH_END] = "switch_end",
 	[IR_BLOCK_BEGIN] = "block_begin",
 	[IR_BLOCK_END] = "block_end",
 	[IR_STMT_EXPR] = "stmt_expr",
@@ -380,6 +461,7 @@ typedef struct IR_Cmd
 	int layout_set;
 	int layout_binding;
 	int layout_location;
+	int is_lvalue;
 } IR_Cmd;
 
 // The global intermediate representation tape.
@@ -403,7 +485,9 @@ Type* type_system_get(const char* name);
 void type_system_free();
 void type_system_init_builtins();
 void type_system_init_builtins();
+Type* type_check_unary(const IR_Cmd* inst, Type* operand);
 void type_check_ir();
+Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc);
 void dump_ir();
 void dump_symbols();
 
@@ -423,10 +507,19 @@ const char* snippet_control_flow = STR(
 	layout(location = 0) out vec4 out_color;
 	void main() {
 		float accum = 0.0;
-		for (int i = 0; i < 4; i = i + 1)
+		int counter = 0;
+		accum += float(counter++);
+		accum += float(++counter);
+		vec2 adjustments = vec2(0.25, 0.25);
+		adjustments++;
+		--adjustments;
+		accum += adjustments.x;
+		for (int i = 0; i < 4; ++i)
 		{
 			accum += float(i) * 0.25;
 		}
+		counter--;
+		--counter;
 		if (accum > 0.5)
 		{
 			out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);
@@ -448,6 +541,7 @@ const char* snippet_array_indexing = STR(
 		uint uints[3];
 		uints[2] = 3u;
 		bool flags[2];
+		flags[0] = false;
 		flags[1] = ints[1] > 0;
 		vec4 vectors[2];
 		vec4 v = vectors[1];
@@ -457,8 +551,9 @@ const char* snippet_array_indexing = STR(
 		float element = column[2];
 		out_color = vec4(scalars[0], float(ints[1]), v.x, element);
 		bool flag = flags[1];
+		bool literal_true = true;
 		uint value = uints[2];
-		if (flag)
+		if (literal_true && flag)
 		{
 			out_color.xy += vec2(float(value));
 		}
@@ -549,18 +644,56 @@ const char* snippet_bitwise = STR(
 	}
 );
 
-const char* snippet_discard = STR(
-	layout(location = 0) in vec4 in_color;
+const char* snippet_switch_stmt = STR(
+	layout(location = 0) in int in_mode;
 	layout(location = 0) out vec4 out_color;
 	void main() {
-		vec4 color = in_color;
-		if (color.a == 0.0)
+		int mode = in_mode;
+		vec4 color = vec4(0.0);
+		switch (mode)
 		{
-			discard;
+		case 0:
+			color = vec4(1.0, 0.0, 0.0, 1.0);
+			break;
+		case 1:
+		case 2:
+			color = vec4(float(mode));
+			break;
+		default:
+			color = vec4(0.0, 0.0, 1.0, 1.0);
+			break;
 		}
 		out_color = color;
 	}
 );
+
+const char* snippet_discard = STR(
+        layout(location = 0) in vec4 in_color;
+        layout(location = 0) out vec4 out_color;
+        void main() {
+                vec4 color = in_color;
+                if (color.a == 0.0)
+                {
+                        discard;
+                }
+                out_color = color;
+        }
+);
+
+const char* snippet_builtin_funcs = STR(
+        layout(location = 0) out vec4 out_color;
+        layout(set = 0, binding = 0) uniform sampler2D u_tex;
+        void main() {
+                vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
+                vec4 sampled = texture(u_tex, uv);
+                float m = max(sampled.x, sampled.y);
+                float f = frac(m);
+                float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
+                vec3 unit = normalize(sampled.rgb);
+                out_color = vec4(unit * (f + shade), sampled.a);
+        }
+);
+
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -597,7 +730,11 @@ int main()
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },
 		{ "discard", snippet_discard }
+              { "switch", snippet_switch_stmt },
+              { "builtin_funcs", snippet_builtin_funcs }
 	};
+};
+
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);

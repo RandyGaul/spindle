@@ -39,6 +39,11 @@ const char* kw_discard;
 const char* kw_for;
 const char* kw_while;
 const char* kw_do;
+const char* kw_switch;
+const char* kw_case;
+const char* kw_default;
+const char* kw_true;
+const char* kw_false;
 
 void init_keyword_interns()
 {
@@ -58,6 +63,11 @@ void init_keyword_interns()
 	kw_for = sintern("for");
 	kw_while = sintern("while");
 	kw_do = sintern("do");
+	kw_switch = sintern("switch");
+	kw_case = sintern("case");
+	kw_default = sintern("default");
+	kw_true = sintern("true");
+	kw_false = sintern("false");
 }
 
 SymbolTable g_symbol_table;
@@ -69,6 +79,8 @@ Type* current_param_type_type;
 Type** current_function_params;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
+
+Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
 
 void symbol_table_enter_scope()
 {
@@ -82,7 +94,78 @@ void symbol_table_leave_scope()
 		return;
 	SymbolScope* scope = &st->scopes[count - 1];
 	map_free(scope->map);
-	apop(st->scopes);
+	(void)apop(st->scopes);
+}
+
+typedef struct BuiltinFunctionInit
+{
+	const char* name;
+	BuiltinFuncKind kind;
+	const char* return_type_name;
+	int param_count;
+} BuiltinFunctionInit;
+
+static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
+{
+	const char* name = sintern(init->name);
+	const char* return_type = init->return_type_name ? sintern(init->return_type_name) : NULL;
+	Type* type = return_type ? type_system_get(return_type) : NULL;
+	Symbol* sym = symbol_table_add(name, return_type, type, SYM_FUNC);
+	sym->builtin_kind = init->kind;
+	sym->builtin_param_count = init->param_count;
+}
+
+static void symbol_table_register_builtins()
+{
+	const BuiltinFunctionInit builtins[] = {
+		{ "texture", BUILTIN_TEXTURE, "vec4", 2 },
+		{ "textureLod", BUILTIN_TEXTURE_LOD, "vec4", 3 },
+		{ "textureProj", BUILTIN_TEXTURE_PROJ, "vec4", -1 },
+		{ "textureGrad", BUILTIN_TEXTURE_GRAD, "vec4", 4 },
+		{ "min", BUILTIN_MIN, NULL, 2 },
+		{ "max", BUILTIN_MAX, NULL, 2 },
+		{ "clamp", BUILTIN_CLAMP, NULL, 3 },
+		{ "abs", BUILTIN_ABS, NULL, 1 },
+		{ "floor", BUILTIN_FLOOR, NULL, 1 },
+		{ "ceil", BUILTIN_CEIL, NULL, 1 },
+		{ "fract", BUILTIN_FRACT, NULL, 1 },
+		{ "frac", BUILTIN_FRACT, NULL, 1 },
+		{ "mix", BUILTIN_MIX, NULL, 3 },
+		{ "step", BUILTIN_STEP, NULL, 2 },
+		{ "smoothstep", BUILTIN_SMOOTHSTEP, NULL, 3 },
+		{ "dot", BUILTIN_DOT, NULL, 2 },
+		{ "cross", BUILTIN_CROSS, NULL, 2 },
+		{ "normalize", BUILTIN_NORMALIZE, NULL, 1 },
+		{ "length", BUILTIN_LENGTH, "float", 1 },
+		{ "distance", BUILTIN_DISTANCE, "float", 2 },
+		{ "reflect", BUILTIN_REFLECT, NULL, 2 },
+		{ "refract", BUILTIN_REFRACT, NULL, 3 },
+		{ "pow", BUILTIN_POW, NULL, 2 },
+		{ "exp", BUILTIN_EXP, NULL, 1 },
+		{ "exp2", BUILTIN_EXP2, NULL, 1 },
+		{ "log", BUILTIN_LOG, NULL, 1 },
+		{ "log2", BUILTIN_LOG2, NULL, 1 },
+		{ "sqrt", BUILTIN_SQRT, NULL, 1 },
+		{ "inversesqrt", BUILTIN_INVERSE_SQRT, NULL, 1 },
+		{ "mod", BUILTIN_MOD, NULL, 2 },
+		{ "sin", BUILTIN_SIN, NULL, 1 },
+		{ "cos", BUILTIN_COS, NULL, 1 },
+		{ "tan", BUILTIN_TAN, NULL, 1 },
+		{ "asin", BUILTIN_ASIN, NULL, 1 },
+		{ "acos", BUILTIN_ACOS, NULL, 1 },
+		{ "atan", BUILTIN_ATAN, NULL, -1 },
+		{ "sign", BUILTIN_SIGN, NULL, 1 },
+		{ "trunc", BUILTIN_TRUNC, NULL, 1 },
+		{ "round", BUILTIN_ROUND, NULL, 1 },
+		{ "roundEven", BUILTIN_ROUND_EVEN, NULL, 1 },
+		{ "dFdx", BUILTIN_DFDX, NULL, 1 },
+		{ "dFdy", BUILTIN_DFDY, NULL, 1 },
+		{ "fwidth", BUILTIN_FWIDTH, NULL, 1 }
+	};
+	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
+	{
+		symbol_table_register_builtin(&builtins[i]);
+	}
 }
 
 void symbol_table_init()
@@ -90,6 +173,7 @@ void symbol_table_init()
 	st->symbols = NULL;
 	st->scopes = NULL;
 	symbol_table_enter_scope(st);
+	symbol_table_register_builtins();
 }
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
@@ -105,6 +189,7 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 	sym.type = type;
 	sym.kind = kind;
 	sym.scope_depth = acount(st->scopes) - 1;
+	sym.builtin_param_count = -1;
 	apush(st->symbols, sym);
 	int idx = acount(st->symbols);
 	map_add(scope->map, key, (uint64_t)idx);
@@ -785,6 +870,13 @@ void expr_int()
 	next();
 }
 
+void expr_bool()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_BOOL);
+	inst->arg0 = tok.int_val;
+	next();
+}
+
 void expr_float()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_FLOAT);
@@ -796,6 +888,9 @@ void expr_ident()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	Symbol* sym = symbol_table_find(inst->str0);
+	if (sym && (sym->kind == SYM_VAR || sym->kind == SYM_PARAM))
+		inst->is_lvalue = 1;
 	next();
 }
 
@@ -860,9 +955,12 @@ void expr_call()
 
 void expr_index()
 {
+	int base_idx = acount(g_ir) - 1;
 	expr(); // parse index expr
 	expect(TOK_RBRACK);
-	ir_emit(IR_INDEX);
+	IR_Cmd* inst = ir_emit(IR_INDEX);
+	if (base_idx >= 0 && base_idx < acount(g_ir))
+		inst->is_lvalue = g_ir[base_idx].is_lvalue;
 }
 
 int swizzle_set_from_char(char c)
@@ -928,8 +1026,31 @@ int swizzle_is_valid(const char* name, int len, int* out_mask)
 	return 1;
 }
 
+int swizzle_is_assignable(const char* name, int len)
+{
+	if (len <= 1)
+		return 1;
+	int set = swizzle_set_from_char(name[0]);
+	if (set < 0)
+		return 0;
+	int seen = 0;
+	for (int i = 0; i < len; ++i)
+	{
+		int comp = swizzle_component_index(set, name[i]);
+		if (comp < 0)
+			return 0;
+		int bit = 1 << comp;
+		if (seen & bit)
+			return 0;
+		seen |= bit;
+	}
+	return 1;
+}
+
 void expr_member()
 {
+	int base_idx = acount(g_ir) - 1;
+	int base_is_lvalue = (base_idx >= 0 && base_idx < acount(g_ir)) ? g_ir[base_idx].is_lvalue : 0;
 	if (tok.kind != TOK_IDENTIFIER)
 		parse_error("expected identifier after '.'");
 	const char* name = tok.lexeme;
@@ -940,11 +1061,13 @@ void expr_member()
 		inst->str0 = sintern_range(name, name + tok.len);
 		inst->arg0 = tok.len;
 		inst->arg1 = mask;
+		inst->is_lvalue = base_is_lvalue && swizzle_is_assignable(name, tok.len);
 	}
 	else
 	{
 		IR_Cmd* inst = ir_emit(IR_MEMBER);
 		inst->str0 = sintern_range(name, name + tok.len);
+		inst->is_lvalue = base_is_lvalue;
 	}
 	next();
 }
@@ -973,18 +1096,68 @@ void expr_unary_common(Tok op)
 	inst->tok = op;
 }
 
+int ir_expect_lvalue_index(const char* error_msg)
+{
+	if (!acount(g_ir))
+		parse_error(error_msg);
+	int idx = acount(g_ir) - 1;
+	if (!g_ir[idx].is_lvalue)
+		parse_error(error_msg);
+	return idx;
+}
+
+void expr_pre_inc()
+{
+	next();
+	expr_binary(PREC_UNARY - 1);
+	int idx = ir_expect_lvalue_index("operand of ++ must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_PLUS_PLUS;
+	inst->arg0 = idx;
+	inst->arg1 = 0;
+}
+
+void expr_post_inc()
+{
+	int idx = ir_expect_lvalue_index("operand of ++ must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_PLUS_PLUS;
+	inst->arg0 = idx;
+	inst->arg1 = 1;
+}
+
+void expr_pre_dec()
+{
+	next();
+	expr_binary(PREC_UNARY - 1);
+	int idx = ir_expect_lvalue_index("operand of -- must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_MINUS_MINUS;
+	inst->arg0 = idx;
+	inst->arg1 = 0;
+}
+
+void expr_post_dec()
+{
+	int idx = ir_expect_lvalue_index("operand of -- must be an l-value");
+	IR_Cmd* inst = ir_emit(IR_UNARY);
+	inst->tok = TOK_MINUS_MINUS;
+	inst->arg0 = idx;
+	inst->arg1 = 1;
+}
+
 // Compact lex-parse technique learned from Per Vognsen
 // https://gist.github.com/pervognsen/e61c6b91fca7275d90692831e2a55c9a
 // https://gist.github.com/pervognsen/372aa279e48d58012825a66564757c40
 
 #define EXPR_UNARY(name, token_enum) \
 	void expr_##name() \
-	{ \
+		{ \
 		expr_unary_common(TOK_##token_enum); \
 	}
 #define EXPR_BINARY(name, precname, token_enum) \
 	void expr_##name() \
-	{ \
+		{ \
 		expr_binary_left(TOK_##token_enum, PREC_##precname); \
 	}
 
@@ -1148,6 +1321,80 @@ void stmt_do()
 	ir_emit(IR_DO_END);
 }
 
+int parse_switch_case_value()
+{
+	int sign = 1;
+	if (tok.kind == TOK_PLUS || tok.kind == TOK_MINUS)
+	{
+		if (tok.kind == TOK_MINUS)
+			sign = -1;
+		next();
+	}
+	if (tok.kind != TOK_INT)
+	{
+		parse_error("expected integer literal in case label");
+	}
+	int value = tok.int_val;
+	next();
+	return sign * value;
+}
+
+void stmt_switch()
+{
+	expect(TOK_SWITCH);
+	ir_emit(IR_SWITCH_BEGIN);
+	expect(TOK_LPAREN);
+	ir_emit(IR_SWITCH_SELECTOR_BEGIN);
+	expr();
+	expect(TOK_RPAREN);
+	ir_emit(IR_SWITCH_SELECTOR_END);
+	expect(TOK_LBRACE);
+	symbol_table_enter_scope();
+	IR_Cmd* last_case = NULL;
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
+	{
+		if (tok.kind == TOK_CASE || tok.kind == TOK_DEFAULT)
+		{
+			if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+			{
+				last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+			}
+			IR_Cmd* inst = ir_emit(IR_SWITCH_CASE);
+			inst->arg0 = 0;
+			inst->arg1 = 0;
+			if (tok.kind == TOK_CASE)
+			{
+				next();
+				inst->arg0 = parse_switch_case_value();
+			}
+			else
+			{
+				next();
+				inst->arg1 |= SWITCH_CASE_FLAG_DEFAULT;
+			}
+			expect(TOK_COLON);
+			last_case = inst;
+			continue;
+		}
+		if (!last_case)
+		{
+			parse_error("case label expected before statements in switch");
+		}
+		stmt();
+		if (last_case)
+		{
+			last_case->arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
+		}
+	}
+	if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+	{
+		last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+	}
+	expect(TOK_RBRACE);
+	symbol_table_leave_scope();
+	ir_emit(IR_SWITCH_END);
+}
+
 void stmt_for()
 {
 	expect(TOK_FOR);
@@ -1204,6 +1451,9 @@ void stmt()
 		break;
 	case TOK_FOR:
 		stmt_for();
+		break;
+	case TOK_SWITCH:
+		stmt_switch();
 		break;
 	case TOK_WHILE:
 		stmt_while();
@@ -1380,6 +1630,51 @@ void parse()
 		} \
 		break;
 
+#define TOK_EXPR_OPTION(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch2)) \
+		{ \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
+		} \
+		else \
+		{ \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
+#define TOK_EXPR_OPTION2(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2, ch3, tok3, prec3, lexpr3, rexpr3) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch2)) \
+		{ \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
+		} \
+		else if (match_ch(ch3)) \
+		{ \
+			tok.kind = TOK_##tok3; \
+			tok.prec = PREC_##prec3; \
+			tok.lexpr = expr_##lexpr3; \
+			tok.rexpr = expr_##rexpr3; \
+		} \
+		else \
+		{ \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
 void lex_number()
 {
 	const char* start = at - 1;
@@ -1484,8 +1779,8 @@ void next()
 
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
-		TOK_EXPR_EXPR('+', PLUS, ADD, pos, add, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
-		TOK_EXPR('-', MINUS, ADD, neg, sub)
+		TOK_EXPR_OPTION2('+', PLUS, ADD, pos, add, '+', PLUS_PLUS, POSTFIX, pre_inc, post_inc, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
+		TOK_EXPR_OPTION('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec)
 		TOK_EXPR('*', STAR, MUL, error, mul)
 		TOK_EXPR('/', SLASH, MUL, error, div)
 		TOK_EXPR('%', PERCENT, MUL, error, mod)
@@ -1563,6 +1858,26 @@ void next()
 		{
 			tok.kind = TOK_DISCARD;
 			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_switch)
+		{
+			tok.kind = TOK_SWITCH;
+			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_case)
+		{
+			tok.kind = TOK_CASE;
+			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_default)
+		{
+			tok.kind = TOK_DEFAULT;
+			tok.lexpr = expr_error;
+		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
+		{
+			tok.kind = TOK_BOOL;
+			tok.lexpr = expr_bool;
+			tok.int_val = tok.lexeme == kw_true;
 		}
 		return;
 	}
