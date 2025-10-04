@@ -1,0 +1,58 @@
+# .clang-format — Cute Framework style C
+BasedOnStyle: LLVM
+Language: Cpp           # clang-format uses "Cpp" for C/C++
+
+# Indentation / tabs
+UseTab: Always          # tabs for indentation
+IndentWidth: 4
+TabWidth: 4
+ContinuationIndentWidth: 8
+IndentCaseLabels: false
+IndentGotoLabels: false
+
+# Line wrapping
+ColumnLimit: 0          # never hard-wrap; keep author-chosen breaks
+
+# Braces & layout
+BreakBeforeBraces: Allman   # opening brace on its own line
+AllowShortIfStatementsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+
+# Spacing
+SpaceBeforeParens: ControlStatements   # "if (" but "func("
+SpaceAroundPointerQualifiers: Default
+PointerAlignment: Left                 # "int* p"
+DerivePointerAlignment: false
+SpaceAfterCStyleCast: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceBeforeSquareBrackets: false
+SpaceBeforeRangeBasedForLoopColon: false
+SpaceInEmptyBlock: false
+SpaceBeforeAssignmentOperators: true
+
+# Don’t try to vertically align things
+AlignAfterOpenBracket: DontAlign
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros: false
+AlignEscapedNewlines: DontAlign
+AlignOperands: false
+AlignTrailingComments: false
+
+# Calls/initializers (prefer compact, no forced one-per-line)
+BinPackArguments: true
+BinPackParameters: true
+Cpp11BracedListStyle: false
+
+# Includes
+SortIncludes: false
+IncludeBlocks: Preserve
+
+# Misc
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+InsertTrailingCommas: None
