@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
@@ -1459,31 +1460,160 @@ void next()
 	}
 }
 
+void unit_test()
+{
+	init_keyword_interns();
+
+	// Validate that builtin scalar and vector types are registered and queryable.
+	TypeSystem ts = (TypeSystem){ 0 };
+	type_system_init_builtins(&ts);
+	const char* float_name = sintern("float");
+	Type* float_type = type_system_get(&ts, float_name);
+	assert(float_type && float_type->tag == T_FLOAT);
+	Type* vec4_type = type_system_get(&ts, sintern("vec4"));
+	assert(vec4_type && vec4_type->tag == T_VEC && vec4_type->cols == 4);
+	// Ensure user-declared struct types are interned and retrievable.
+	Type custom_type = (Type){ 0 };
+	custom_type.tag = T_STRUCT;
+	custom_type.cols = 1;
+	custom_type.rows = 1;
+	custom_type.base = T_FLOAT;
+	custom_type.array_len = 0;
+	const char* custom_name = sintern("test_struct");
+	Type* declared_type = type_system_declare(&ts, custom_name, custom_type);
+	assert(declared_type == type_system_get(&ts, custom_name));
+	type_system_free(&ts);
+
+	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
+	SymbolTable st = (SymbolTable){ 0 };
+	symbol_table_init(&st);
+	Type int_type = (Type){ 0 };
+	int_type.tag = T_INT;
+	const char* value_name = sintern("value");
+	Symbol* value_sym = symbol_table_add(&st, value_name, sintern("int"), &int_type, SYM_VAR);
+	assert(value_sym && value_sym->name == value_name);
+	symbol_add_storage(value_sym, SYM_STORAGE_IN);
+	assert(symbol_has_storage(value_sym, SYM_STORAGE_IN));
+	symbol_table_enter_scope(&st);
+	Type float_type_local = (Type){ 0 };
+	float_type_local.tag = T_FLOAT;
+	const char* inner_name = sintern("inner_value");
+	Symbol* inner_sym = symbol_table_add(&st, inner_name, sintern("float"), &float_type_local, SYM_VAR);
+	symbol_set_layout(inner_sym, SYM_LAYOUT_LOCATION, 3);
+	assert(symbol_get_layout(inner_sym, SYM_LAYOUT_LOCATION) == 3);
+	assert(symbol_table_resolve(&st, inner_name) == inner_sym);
+	symbol_table_leave_scope(&st);
+	assert(symbol_table_resolve(&st, inner_name) == NULL);
+	assert(symbol_table_resolve(&st, value_name) == value_sym);
+	symbol_table_free(&st);
+
+	// Check that IR emission produces entries with the requested opcode.
+	IR_Cmd* saved_ir = g_ir;
+	g_ir = NULL;
+	IR_Cmd* emitted = ir_emit(IR_PUSH_INT);
+	assert(emitted);
+	assert(acount(g_ir) == 1);
+	assert(g_ir[0].op == IR_PUSH_INT);
+	if (g_ir) afree(g_ir);
+	g_ir = saved_ir;
+
+	// Parse a representative shader snippet and ensure IR and symbol tables populate.
+	const char* source =
+		"layout(location = 0) in vec2 test_in;"
+		"layout(location = 0) out vec4 test_out;"
+		"void helper(float a, float b);"
+		"void helper(float a, float b)"
+		"{"
+			"float local = a + b;"
+			"if (local > 0.0) { test_out = vec4(local); } else { test_out = vec4(-local); }"
+		"}";
+	in = source;
+	at = in;
+	g_ir = NULL;
+	type_system_init_builtins(&g_types);
+	symbol_table_init(&g_symbols);
+	next_ch();
+	next();
+	parse();
+	assert(acount(g_ir) > 0);
+	assert(acount(g_symbols.symbols) > 0);
+	symbol_table_free(&g_symbols);
+	type_system_free(&g_types);
+	if (g_ir) afree(g_ir);
+	g_ir = NULL;
+	in = NULL;
+	at = NULL;
+	ch = 0;
+	tok.kind = TOK_EOF;
+	tok.prec = PREC_EXPR;
+	tok.lexpr = NULL;
+	tok.rexpr = NULL;
+	tok.int_val = 0;
+	tok.float_val = 0.0;
+	tok.lexeme = NULL;
+	tok.len = 0;
+}
+
 int main()
 {
-	#define STR(X) #X
+	#define STR(...) #__VA_ARGS__
+	unit_test();
 	const char* input = STR(
-		layout(location = 0) in vec2 in_pos;
+		layout(location = 0) in vec4 in_pos;
 		layout(location = 1) in vec2 in_uv;
-		layout(location = 0) out vec2 v_uv;
-		layout(location = 1) out vec4 v_col;
+		layout(location = 2) in vec4 in_col;
+		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_texture;
-		layout(set = 1, binding = 0) uniform sampler2D u_fallback;
-		void main_image(layout(location = 0) in vec2 uv, layout(location = 1) in vec4 color)
+		layout(set = 1, binding = 0) uniform sampler2DArray u_layers;
+		layout(set = 2, binding = 1) uniform samplerCube u_environment;
+		float weights[1 + 2];
+		float exposure[];
+		vec4 temp_color;
+		void saturate_value(float v);
+		void accumulate_layers(vec4 sample_color, float mods[3], float fallback[], int idx);
+		void saturate_value(float v)
 		{
-			v_uv = uv;
-			vec4 sample = texture(u_texture, uv);
-			float fade = 0.5;
-			float bias = .25;
-			float epsilon = 1e-3;
-			float scale = 2.0f;
-			sample.rgb = sample.rgb * fade * scale;
-			sample.a = clamp(sample.a + bias + epsilon, 0.0, 1.0);
-			if (sample.a == 0) {
-				v_col = texture(u_fallback, uv);
-			} else {
-				v_col = color;
+			float clamped = clamp(v, 0.0, 1.0);
+			weights[2] = clamped;
+		}
+		void accumulate_layers(vec4 sample_color, float mods[3], float fallback[], int idx)
+		{
+			float selected = mods[idx];
+			float inverted = -selected;
+			float threshold = selected > 0.5 ? selected : fallback[idx];
+			vec4 tinted = vec4(sample_color.rgb * threshold, sample_color.a);
+			if (tinted.a == 0.0)
+			{
+				temp_color = vec4(fallback[idx], fallback[idx], fallback[idx], 1.0);
 			}
+			else
+			{
+				saturate_value(tinted.a);
+				temp_color = vec4(tinted.rgb + vec3(inverted), weights[2]);
+			}
+		}
+		void main()
+		{
+			vec2 uv = in_uv, offset = vec2(0.0);
+			float layer_index = weights[0];
+			vec4 base_sample = texture(u_texture, uv + offset);
+			vec4 layered_slice = texture(u_layers, vec3(uv, layer_index));
+			vec4 env = texture(u_environment, vec3(uv, 0.5));
+			int idx = int(layer_index);
+			float fallback_values[1 + 2];
+			fallback_values[0] = 0.25;
+			fallback_values[1] = 0.5;
+			fallback_values[2] = 0.75;
+			accumulate_layers(base_sample + layered_slice, weights, fallback_values, idx);
+			vec4 layered = temp_color;
+			float exposure_bias = exposure[1];
+			saturate_value(exposure_bias);
+			vec4 combined = layered;
+			combined.rgb = combined.rgb * (weights[2] + env.r);
+			combined.a = combined.a == 0.0 ? env.a : combined.a;
+			temp_color = combined;
+			out_color = combined;
+			temp_color.primary = out_color;
 		}
 	);
 	printf("Input : %s\n\n", input);
