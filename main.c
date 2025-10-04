@@ -285,11 +285,33 @@ const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
 Type* current_param_type_type;
+const char* kw_in;
+const char* kw_out;
+const char* kw_uniform;
+const char* kw_layout;
+const char* kw_set;
+const char* kw_binding;
+const char* kw_location;
+const char* kw_if;
+const char* kw_else;
 
 const char* ir_string(const char* s, int len)
 {
 	if (!s || len <= 0) return NULL;
 	return sintern_range(s, s + len);
+}
+
+void init_keyword_interns()
+{
+	kw_in = ir_string("in", 2);
+	kw_out = ir_string("out", 3);
+	kw_uniform = ir_string("uniform", 7);
+	kw_layout = ir_string("layout", 6);
+	kw_set = ir_string("set", 3);
+	kw_binding = ir_string("binding", 7);
+	kw_location = ir_string("location", 8);
+	kw_if = ir_string("if", 2);
+	kw_else = ir_string("else", 4);
 }
 
 IR_Cmd* ir_emit(IROp op)
@@ -723,25 +745,21 @@ void skip_ws_comments()
 	}
 }
 
-int str_eq_n(const char* s, int n, const char* kw)
+unsigned storage_flag_from_keyword(const char* s)
 {
-	size_t klen = strlen(kw);
-	return n == (int)klen && strncmp(s, kw, n) == 0;
-}
-
-unsigned storage_flag_from_keyword(const char* s, int n)
-{
-	if (str_eq_n(s, n, "in")) return SYM_STORAGE_IN;
-	if (str_eq_n(s, n, "out")) return SYM_STORAGE_OUT;
-	if (str_eq_n(s, n, "uniform")) return SYM_STORAGE_UNIFORM;
+	if (!s) return 0;
+	if (s == kw_in) return SYM_STORAGE_IN;
+	if (s == kw_out) return SYM_STORAGE_OUT;
+	if (s == kw_uniform) return SYM_STORAGE_UNIFORM;
 	return 0;
 }
 
-unsigned layout_flag_from_keyword(const char* s, int n)
+unsigned layout_flag_from_keyword(const char* s)
 {
-	if (str_eq_n(s, n, "set")) return SYM_LAYOUT_SET;
-	if (str_eq_n(s, n, "binding")) return SYM_LAYOUT_BINDING;
-	if (str_eq_n(s, n, "location")) return SYM_LAYOUT_LOCATION;
+	if (!s) return 0;
+	if (s == kw_set) return SYM_LAYOUT_SET;
+	if (s == kw_binding) return SYM_LAYOUT_BINDING;
+	if (s == kw_location) return SYM_LAYOUT_LOCATION;
 	return 0;
 }
 
@@ -780,8 +798,8 @@ int is_type_token()
 {
 	if (tok.kind != TOK_IDENTIFIER) return 0;
 	if (is_type_name(tok.lexeme, tok.len)) return 1;
-	if (storage_flag_from_keyword(tok.lexeme, tok.len)) return 1;
-	if (str_eq_n(tok.lexeme, tok.len, "layout")) return 1;
+	if (storage_flag_from_keyword(tok.lexeme)) return 1;
+	if (tok.lexeme == kw_layout) return 1;
 	return 0;
 }
 
@@ -792,7 +810,7 @@ void parse_layout_block(TypeSpec* spec)
 	expect(TOK_LPAREN);
 	while (tok.kind != TOK_RPAREN) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in layout");
-		unsigned layout_flag = layout_flag_from_keyword(tok.lexeme, tok.len);
+		unsigned layout_flag = layout_flag_from_keyword(tok.lexeme);
 		if (!layout_flag) parse_error("unknown layout identifier");
 		next();
 		expect(TOK_ASSIGN);
@@ -811,13 +829,13 @@ void parse_layout_block(TypeSpec* spec)
 void parse_type_qualifiers(TypeSpec* spec)
 {
 	while (tok.kind == TOK_IDENTIFIER) {
-		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme, tok.len);
+		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme);
 		if (storage_flag) {
 			type_spec_add_storage(spec, storage_flag);
 			next();
 			continue;
 		}
-		if (str_eq_n(tok.lexeme, tok.len, "layout")) {
+		if (tok.lexeme == kw_layout) {
 			parse_layout_block(spec);
 			continue;
 		}
@@ -1368,16 +1386,17 @@ void next()
 		const char* s = at - 1;
 		while (is_alpha(ch) || is_digit(ch)) next_ch();
 		tok.len = (int)((at - 1) - s);
-		tok.lexeme = s;
+		const char* interned = sintern_range(s, s + tok.len);
+		tok.lexeme = interned;
 		tok.kind = TOK_IDENTIFIER;
 		tok.prec = 0;
 		tok.lexpr = expr_ident;
 		tok.rexpr = expr_error;
-		if (tok.len == 2 && strncmp(s, "if", 2) == 0) {
+		if (tok.lexeme == kw_if) {
 			tok.kind = TOK_IF;
 			tok.lexpr = expr_error;
 			}
-		else if (tok.len == 4 && strncmp(s, "else", 4) == 0) {
+		else if (tok.lexeme == kw_else) {
 			tok.kind = TOK_ELSE;
 			tok.lexpr = expr_error;
 			}
@@ -1430,6 +1449,7 @@ int main()
 
 	in = input;
 	at = in;
+	init_keyword_interns();
 	next_ch();
 	next();
 	type_system_init_builtins(&g_types);
