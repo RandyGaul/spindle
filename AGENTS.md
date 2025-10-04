@@ -108,3 +108,5 @@ Don't worry about format. You may run clang-format on the code before the commit
 # Process
 
 For each major change I should see if a unit test is appropriate and add it to the unit tests, documenting what the test purpose is and expectations of the test. We must also update main to include a test shader to try out any new features we're working on, and inspect the output of stdout to ensure it matches expectations given the input shader.
+
+Make sure to run the output executable of main.c and make sure all the unit tests pass, and that stdout is printing expected output for the given snippets we are running.
