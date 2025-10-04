@@ -39,6 +39,9 @@ const char* kw_discard;
 const char* kw_for;
 const char* kw_while;
 const char* kw_do;
+const char* kw_switch;
+const char* kw_case;
+const char* kw_default;
 const char* kw_true;
 const char* kw_false;
 
@@ -60,6 +63,9 @@ void init_keyword_interns()
 	kw_for = sintern("for");
 	kw_while = sintern("while");
 	kw_do = sintern("do");
+	kw_switch = sintern("switch");
+	kw_case = sintern("case");
+	kw_default = sintern("default");
 	kw_true = sintern("true");
 	kw_false = sintern("false");
 }
@@ -86,7 +92,7 @@ void symbol_table_leave_scope()
 		return;
 	SymbolScope* scope = &st->scopes[count - 1];
 	map_free(scope->map);
-	apop(st->scopes);
+	(void)apop(st->scopes);
 }
 
 void symbol_table_init()
@@ -1145,6 +1151,80 @@ void stmt_do()
 	ir_emit(IR_DO_END);
 }
 
+int parse_switch_case_value()
+{
+	int sign = 1;
+	if (tok.kind == TOK_PLUS || tok.kind == TOK_MINUS)
+	{
+		if (tok.kind == TOK_MINUS)
+			sign = -1;
+		next();
+	}
+	if (tok.kind != TOK_INT)
+	{
+		parse_error("expected integer literal in case label");
+	}
+	int value = tok.int_val;
+	next();
+	return sign * value;
+}
+
+void stmt_switch()
+{
+	expect(TOK_SWITCH);
+	ir_emit(IR_SWITCH_BEGIN);
+	expect(TOK_LPAREN);
+	ir_emit(IR_SWITCH_SELECTOR_BEGIN);
+	expr();
+	expect(TOK_RPAREN);
+	ir_emit(IR_SWITCH_SELECTOR_END);
+	expect(TOK_LBRACE);
+	symbol_table_enter_scope();
+	IR_Cmd* last_case = NULL;
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
+	{
+		if (tok.kind == TOK_CASE || tok.kind == TOK_DEFAULT)
+		{
+			if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+			{
+				last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+			}
+			IR_Cmd* inst = ir_emit(IR_SWITCH_CASE);
+			inst->arg0 = 0;
+			inst->arg1 = 0;
+			if (tok.kind == TOK_CASE)
+			{
+				next();
+				inst->arg0 = parse_switch_case_value();
+			}
+			else
+			{
+				next();
+				inst->arg1 |= SWITCH_CASE_FLAG_DEFAULT;
+			}
+			expect(TOK_COLON);
+			last_case = inst;
+			continue;
+		}
+		if (!last_case)
+		{
+			parse_error("case label expected before statements in switch");
+		}
+		stmt();
+		if (last_case)
+		{
+			last_case->arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
+		}
+	}
+	if (last_case && !(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
+	{
+		last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
+	}
+	expect(TOK_RBRACE);
+	symbol_table_leave_scope();
+	ir_emit(IR_SWITCH_END);
+}
+
 void stmt_for()
 {
 	expect(TOK_FOR);
@@ -1201,6 +1281,9 @@ void stmt()
 		break;
 	case TOK_FOR:
 		stmt_for();
+		break;
+	case TOK_SWITCH:
+		stmt_switch();
 		break;
 	case TOK_WHILE:
 		stmt_while();
@@ -1482,6 +1565,20 @@ void next()
 			tok.kind = TOK_DISCARD;
 			tok.lexpr = expr_error;
 		}
+		else if (tok.lexeme == kw_switch)
+		{
+			tok.kind = TOK_SWITCH;
+			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_case)
+		{
+			tok.kind = TOK_CASE;
+			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_default)
+		{
+			tok.kind = TOK_DEFAULT;
+			tok.lexpr = expr_error;
 		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
 		{
 			tok.kind = TOK_BOOL;

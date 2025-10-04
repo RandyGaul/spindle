@@ -747,10 +747,23 @@ void type_check_error(const char* fmt, ...)
 
 #define type_stack_pop(stack, context) (((acount(stack) == 0) ? type_check_error("missing operand for %s", context) : (void)0), apop(stack))
 
+typedef struct TypeCheckSwitchCase
+{
+	int value;
+	int flags;
+	int has_value;
+} TypeCheckSwitchCase;
+
+typedef struct TypeCheckSwitch
+{
+	dyna TypeCheckSwitchCase* cases;
+} TypeCheckSwitch;
+
 void type_check_ir()
 {
 	dyna Type** stack = NULL;
 	dyna Type** func_stack = NULL;
+	dyna TypeCheckSwitch* switch_stack = NULL;
 	Type* current_decl_type = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
@@ -1005,11 +1018,91 @@ void type_check_ir()
 			if (acount(stack) > 0)
 				aclear(stack);
 			break;
-		case IR_STMT_EXPR:
-			if (acount(stack) > 0)
-				type_stack_pop(stack, "expression result");
-			if (acount(stack) > 0)
-				aclear(stack);
+		case IR_SWITCH_BEGIN:
+			apush(switch_stack, (TypeCheckSwitch){ 0 });
+			break;
+		case IR_SWITCH_SELECTOR_BEGIN:
+			break;
+		case IR_SWITCH_SELECTOR_END:
+		{
+			Type* selector = type_stack_pop(stack, "switch selector");
+			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector)))
+			{
+				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
+			}
+			break;
+		}
+		case IR_SWITCH_CASE:
+		{
+			if (!acount(switch_stack))
+			{
+				type_check_error("switch case outside of switch");
+			}
+			TypeCheckSwitch* ctx = &switch_stack[acount(switch_stack) - 1];
+			TypeCheckSwitchCase label = (TypeCheckSwitchCase){ 0 };
+			label.flags = inst->arg1;
+			if (!(inst->arg1 & SWITCH_CASE_FLAG_DEFAULT))
+			{
+				label.value = inst->arg0;
+				label.has_value = 1;
+			}
+			apush(ctx->cases, label);
+			break;
+		}
+		case IR_SWITCH_END:
+		{
+			if (!acount(switch_stack))
+			{
+				type_check_error("mismatched switch end");
+			}
+			TypeCheckSwitch* ctx = &switch_stack[acount(switch_stack) - 1];
+			int default_count = 0;
+			for (int idx = 0; idx < acount(ctx->cases); ++idx)
+			{
+				TypeCheckSwitchCase* label = &ctx->cases[idx];
+				if (label->flags & SWITCH_CASE_FLAG_DEFAULT)
+				{
+					default_count++;
+				}
+				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) == 0)
+				{
+					if (!(label->flags & SWITCH_CASE_FLAG_FALLTHROUGH))
+					{
+						type_check_error("case label with no statements must fall through to another label");
+					}
+				}
+				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) && (label->flags & SWITCH_CASE_FLAG_FALLTHROUGH))
+				{
+					type_check_error("case label with statements cannot be marked as fallthrough");
+				}
+			}
+			if (default_count > 1)
+			{
+				type_check_error("multiple default labels in switch");
+			}
+			for (int i = 0; i < acount(ctx->cases); ++i)
+			{
+				TypeCheckSwitchCase* a = &ctx->cases[i];
+				if (!a->has_value)
+					continue;
+				for (int j = i + 1; j < acount(ctx->cases); ++j)
+				{
+					TypeCheckSwitchCase* b = &ctx->cases[j];
+					if (b->has_value && a->value == b->value)
+					{
+						type_check_error("duplicate case label value %d in switch", a->value);
+					}
+				}
+			}
+afree(ctx->cases);
+(void)apop(switch_stack);
+break;
+}
+case IR_STMT_EXPR:
+if (acount(stack) > 0)
+type_stack_pop(stack, "expression result");
+if (acount(stack) > 0)
+aclear(stack);
 			break;
 		case IR_IF_THEN:
 		{
@@ -1053,6 +1146,11 @@ void type_check_ir()
 			break;
 		}
 	}
+	for (int i = 0; i < acount(switch_stack); ++i)
+	{
+		afree(switch_stack[i].cases);
+	}
+	afree(switch_stack);
 	afree(stack);
 	afree(func_stack);
 }
