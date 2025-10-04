@@ -194,6 +194,7 @@ const char* str_intern_range(const char* start, const char* end);
 #include <stddef.h>
 
 #ifndef _MSC_VER
+#	include <strings.h>
 #	ifndef _stricmp
 #		define _stricmp strcasecmp
 #	endif
@@ -202,10 +203,10 @@ const char* str_intern_range(const char* start, const char* end);
 void* agrow(const void* a, int new_size, size_t element_size)
 {
 	ACANARY(a);
-	assert(acap(a) <= (SIZE_MAX - 1)/2);
+	assert((size_t)acap(a) <= (SIZE_MAX - 1) / 2);
 	int new_capacity = ((2 * acap(a)) > ((new_size > 16) ? new_size : 16) ? (2 * acap(a)) : ((new_size > 16) ? new_size : 16));
 	assert(new_size <= new_capacity);
-	assert(new_capacity <= (SIZE_MAX - sizeof(ArrayHeader)) / element_size);
+	assert((size_t)new_capacity <= (SIZE_MAX - sizeof(ArrayHeader)) / element_size);
 	size_t total_size = sizeof(ArrayHeader) + new_capacity * element_size;
 	ArrayHeader* hdr;
 	if (a) {
