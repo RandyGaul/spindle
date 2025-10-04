@@ -115,16 +115,18 @@ const char* tok_name[TOK_COUNT] = {
 
 typedef enum SymbolKind
 {
-	SYM_VAR,
-	SYM_FUNC,
-	SYM_PARAM,
-	SYM_KIND_COUNT
+        SYM_VAR,
+        SYM_FUNC,
+        SYM_PARAM,
+        SYM_BLOCK,
+        SYM_KIND_COUNT
 } SymbolKind;
 
 const char* symbol_kind_name[SYM_KIND_COUNT] = {
-	[SYM_VAR] = "var",
-	[SYM_FUNC] = "func",
-	[SYM_PARAM] = "param",
+        [SYM_VAR] = "var",
+        [SYM_FUNC] = "func",
+        [SYM_PARAM] = "param",
+        [SYM_BLOCK] = "block",
 };
 
 typedef enum TypeTag
@@ -144,17 +146,50 @@ typedef enum TypeTag
 	T_TYPE_COUNT
 } TypeTag;
 
-typedef struct Type
+typedef struct Type Type;
+
+struct Type
 {
-	TypeTag tag;
-	uint8_t cols;
-	uint8_t rows;
-	uint8_t base;
-	uint8_t dim;
-	int array_len;
-	void* user;
-	const char* name;
-} Type;
+        TypeTag tag;
+        uint8_t cols;
+        uint8_t rows;
+        uint8_t base;
+        uint8_t dim;
+        int array_len;
+        void* user;
+        const char* name;
+};
+
+typedef struct StructMember
+{
+        const char* name;
+        Type* declared_type;
+        Type* type;
+        Type array_type;
+        int has_array;
+        int array_len;
+        int array_unsized;
+        unsigned layout_flags;
+        int layout_set;
+        int layout_binding;
+        int layout_location;
+} StructMember;
+
+typedef struct StructInfo
+{
+        const char* name;
+        dyna StructMember* members;
+        dyna const char** layout_identifiers;
+} StructInfo;
+
+Type* type_system_declare_struct(const char* name);
+StructInfo* type_struct_info(Type* type);
+void type_struct_clear(Type* type);
+StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type);
+void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location);
+void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized);
+void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count);
+StructMember* type_struct_find_member(Type* type, const char* name);
 
 typedef struct Symbol
 {
@@ -178,13 +213,17 @@ typedef struct Symbol
 
 typedef struct TypeSpec
 {
-	const char* type_name;
-	Type* type;
-	unsigned storage_flags;
-	unsigned layout_flags;
-	int layout_set;
-	int layout_binding;
-	int layout_location;
+        const char* type_name;
+        Type* type;
+        unsigned storage_flags;
+        unsigned layout_flags;
+        int layout_set;
+        int layout_binding;
+        int layout_location;
+        dyna const char** layout_identifiers;
+        StructInfo* struct_info;
+        int has_struct_definition;
+        int is_interface_block;
 } TypeSpec;
 
 typedef struct TypeSystem
@@ -264,10 +303,18 @@ typedef enum IR_Op
 	IR_FUNC_PARAM_END,
 	IR_FUNC_PARAM_SEPARATOR,
 	IR_FUNC_PARAMS_END,
-	IR_FUNC_PROTOTYPE_END,
-	IR_FUNC_DEFINITION_BEGIN,
-	IR_FUNC_DEFINITION_END,
-	IR_OP_COUNT
+        IR_FUNC_PROTOTYPE_END,
+        IR_FUNC_DEFINITION_BEGIN,
+        IR_FUNC_DEFINITION_END,
+        IR_STRUCT_BEGIN,
+        IR_STRUCT_MEMBER,
+        IR_STRUCT_END,
+        IR_BLOCK_DECL_BEGIN,
+        IR_BLOCK_DECL_LAYOUT,
+        IR_BLOCK_DECL_MEMBER,
+        IR_BLOCK_DECL_INSTANCE,
+        IR_BLOCK_DECL_END,
+        IR_OP_COUNT
 } IR_Op;
 
 const char* ir_op_name[IR_OP_COUNT] = {
@@ -338,11 +385,19 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_FUNC_PARAM_ARRAY_SIZE_END] = "func_param_array_size_end",
 	[IR_FUNC_PARAM_ARRAY_END] = "func_param_array_end",
 	[IR_FUNC_PARAM_END] = "func_param_end",
-	[IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
-	[IR_FUNC_PARAMS_END] = "func_params_end",
-	[IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
-	[IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
-	[IR_FUNC_DEFINITION_END] = "func_definition_end",
+        [IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
+        [IR_FUNC_PARAMS_END] = "func_params_end",
+        [IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
+        [IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
+        [IR_FUNC_DEFINITION_END] = "func_definition_end",
+        [IR_STRUCT_BEGIN] = "struct_begin",
+        [IR_STRUCT_MEMBER] = "struct_member",
+        [IR_STRUCT_END] = "struct_end",
+        [IR_BLOCK_DECL_BEGIN] = "block_decl_begin",
+        [IR_BLOCK_DECL_LAYOUT] = "block_decl_layout",
+        [IR_BLOCK_DECL_MEMBER] = "block_decl_member",
+        [IR_BLOCK_DECL_INSTANCE] = "block_decl_instance",
+        [IR_BLOCK_DECL_END] = "block_decl_end",
 };
 
 typedef struct IR_Cmd
@@ -478,20 +533,34 @@ const char* snippet_function_calls = STR(
 );
 
 const char* snippet_matrix_ops = STR(
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		mat3 rotation = mat3(1.0);
-		vec3 column = rotation[1];
-		float diagonal = rotation[2][2];
-		out_color = vec4(column, diagonal);
-	}
+        layout(location = 0) out vec4 out_color;
+        void main() {
+                mat3 rotation = mat3(1.0);
+                vec3 column = rotation[1];
+                float diagonal = rotation[2][2];
+                out_color = vec4(column, diagonal);
+        }
+);
+
+const char* snippet_struct_block = STR(
+        struct Light {
+                vec3 position;
+                float intensity;
+        };
+        layout(std140, set = 1, binding = 0) uniform LightBlock {
+                Light lights[2];
+        } u_light_data;
+        layout(location = 0) out vec4 out_color;
+        void main() {
+                out_color = vec4(u_light_data.lights[0].position, u_light_data.lights[0].intensity);
+        }
 );
 
 const char* snippet_looping = STR(
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		int counter = 0;
-		float total = 0.0;
+        layout(location = 0) out vec4 out_color;
+        void main() {
+                int counter = 0;
+                float total = 0.0;
 		while (counter < 4)
 		{
 			total += float(counter);
@@ -548,16 +617,17 @@ int main()
 		const char* source;
 	} ShaderSnippet;
 
-	const ShaderSnippet snippets[] = {
-		{ "basic_io", snippet_basic_io },
-		{ "control_flow", snippet_control_flow },
-		{ "array_indexing", snippet_array_indexing },
-		{ "swizzle_usage", snippet_swizzle },
-		{ "function_calls", snippet_function_calls },
-		{ "matrix_ops", snippet_matrix_ops },
-		{ "looping", snippet_looping },
-		{ "discard", snippet_discard }
-	};
+        const ShaderSnippet snippets[] = {
+                { "basic_io", snippet_basic_io },
+                { "control_flow", snippet_control_flow },
+                { "array_indexing", snippet_array_indexing },
+                { "swizzle_usage", snippet_swizzle },
+                { "function_calls", snippet_function_calls },
+                { "matrix_ops", snippet_matrix_ops },
+                { "struct_block", snippet_struct_block },
+                { "looping", snippet_looping },
+                { "discard", snippet_discard }
+        };
 
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
