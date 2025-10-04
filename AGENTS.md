@@ -16,6 +16,8 @@ Transpiler will simply be like a "front end" compiler, except it will have scope
 
 We're using ckit.h to power our C fundamentals with dynamic array (such as apush, apop, etc.), and a Map such as map_add, map_get, etc. We also have `sintern` for string interning to be used by the transpiler.
 
+When interning compile-time string literals or any nul-terminated strings, call `sintern` directly. Reserve `sintern_range` for substrings that don't have an existing terminator.
+
 We're just starting out the implementation with a lex/parse combination that implements a pratt expression parser by the lexer setting up function pointers and passing to a tiny generic pratt handler.
 
 The next steps would be to flesh out IR format as we expect to emit to SPIRV blob or to gles300 shaders. We want 100% functional transpiling and don't really care about optimization. The vendors will compile our SPIRV or gles300 further onto the target GPU anyways, and have thier own optimization passes we can piggy back off of.

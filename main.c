@@ -114,6 +114,7 @@ typedef enum IR_Op
 	IR_UNARY,
 	IR_BINARY,
 	IR_CALL,
+	IR_CONSTRUCT,
 	IR_INDEX,
 	IR_MEMBER,
 	IR_SELECT,
@@ -222,6 +223,7 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_UNARY] = "unary",
 	[IR_BINARY] = "binary",
 	[IR_CALL] = "call",
+	[IR_CONSTRUCT] = "construct",
 	[IR_INDEX] = "index",
 	[IR_MEMBER] = "member",
 	[IR_SELECT] = "select",
@@ -267,6 +269,7 @@ typedef struct IR_Cmd
 	IR_Op op;
 	const char* str0;
 	const char* str1;
+	Type* type;
 	int arg0;
 	int arg1;
 	double float_val;
@@ -294,6 +297,19 @@ const char* kw_binding;
 const char* kw_location;
 const char* kw_if;
 const char* kw_else;
+
+void init_keyword_interns()
+{
+	kw_in = sintern("in");
+	kw_out = sintern("out");
+	kw_uniform = sintern("uniform");
+	kw_layout = sintern("layout");
+	kw_set = sintern("set");
+	kw_binding = sintern("binding");
+	kw_location = sintern("location");
+	kw_if = sintern("if");
+	kw_else = sintern("else");
+}
 
 IR_Cmd* ir_emit(IR_Op op)
 {
@@ -592,6 +608,9 @@ void dump_ir()
 			break;
 		case IR_CALL:
 			printf(" argc=%d", inst->arg0);
+			break;
+		case IR_CONSTRUCT:
+			printf(" type=%s argc=%d", inst->str0 ? inst->str0 : "<null>", inst->arg0);
 			break;
 		case IR_FUNC_BEGIN:
 			printf(" return=%s name=%s", inst->str0, inst->str1);
@@ -1045,16 +1064,43 @@ void expr_paren()
 
 void expr_call()
 {
+	int callee_idx = acount(g_ir) - 1;
 	int argc = 0;
 	if (tok.kind != TOK_RPAREN) {
-		expr(); argc++;
-		while (tok.kind == TOK_COMMA) { next(); expr(); argc++; }
+		expr();
+		argc++;
+		while (tok.kind == TOK_COMMA) {
+			next();
+			expr();
+			argc++;
+		}
 		expect(TOK_RPAREN);
 	} else {
 		next(); // consume ')'
 	}
-	IR_Cmd* inst = ir_emit(IR_CALL);
+	Type* ctor_type = NULL;
+	const char* ctor_name = NULL;
+	if (callee_idx >= 0) {
+		IR_Cmd* callee = &g_ir[callee_idx];
+		if (callee->op == IR_PUSH_IDENT && callee->str0) {
+			Type* type = type_system_get(&g_types, callee->str0);
+			if (type) {
+				Symbol* sym = symbol_table_resolve(&g_symbols, callee->str0);
+				if (!sym || sym->kind != SYM_FUNC) {
+					callee->type = type;
+					ctor_type = type;
+					ctor_name = callee->str0;
+				}
+			}
+		}
+	}
+	IR_Cmd* inst = ir_emit(ctor_type ? IR_CONSTRUCT : IR_CALL);
 	inst->arg0 = argc;
+	if (ctor_type) {
+		inst->str0 = ctor_name;
+		inst->type = ctor_type;
+	}
+
 }
 
 void expr_index()
