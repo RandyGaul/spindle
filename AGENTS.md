@@ -104,3 +104,7 @@ These above are some examples of things we expect to be able to parse, not fully
 # Format
 
 We expect tabs as regular /t tabs no spaces, except when aligning text at the end of a line we use spaces. Just look at main.cpp for aesthetic style and make any new patches in the same style. For C functions do not use void in the parameter list just leave it empty.
+
+# Process
+
+For each major change I should see if a unit test is appropriate and add it to the unit tests, documenting what the test purpose is and expectations of the test. We must also update main to include a test shader to try out any new features we're working on, and inspect the output of stdout to ensure it matches expectations given the input shader.
