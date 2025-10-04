@@ -65,6 +65,9 @@ typedef struct Symbol
 	int layout_binding;
 	int layout_location;
 	int scope_depth;
+	Type** params;
+	int param_count;
+	int param_signature_set;
 } Symbol;
 
 typedef enum SymbolStorage
@@ -358,6 +361,7 @@ const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
 Type* current_param_type_type;
+Type** current_function_params;
 const char* kw_in;
 const char* kw_out;
 const char* kw_uniform;
@@ -1129,9 +1133,30 @@ void type_check_ir()
 				args[r] = tmp;
 			}
 			Type* callee = type_stack_pop(&stack, "call target");
-			inst->type = callee;
+			Type* result = callee;
+			if (inst->str0) {
+				Symbol* sym = symbol_table_resolve(&g_symbols, inst->str0);
+				if (sym && sym->kind == SYM_FUNC) {
+					if (sym->param_signature_set) {
+						if (sym->param_count != argc) {
+							type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->param_count, argc);
+						}
+						for (int i = 0; i < sym->param_count; ++i) {
+							Type* param_type = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
+							Type* arg_type = args ? args[i] : NULL;
+							if (param_type && arg_type) {
+								if (!type_can_assign(param_type, arg_type)) {
+									type_check_error("argument %d to %s expects %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
+								}
+							}
+						}
+					}
+					if (sym->type) result = sym->type;
+				}
+			}
+			inst->type = result;
 			if (args) afree(args);
-			type_stack_push(&stack, callee);
+			type_stack_push(&stack, result);
 			break;
 		}
 		case IR_CONSTRUCT: {
@@ -1329,15 +1354,55 @@ void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 	if (spec->layout_flags & SYM_LAYOUT_LOCATION) symbol_set_layout(sym, SYM_LAYOUT_LOCATION, spec->layout_location);
 }
 
+void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
+{
+	if (!sym || sym->kind != SYM_FUNC) return;
+	if (sym->param_signature_set) {
+		if (sym->param_count != param_count) {
+			type_check_error("function %s redeclared with %d parameters but previously had %d", sym->name, param_count, sym->param_count);
+		}
+		for (int i = 0; i < param_count; ++i) {
+			Type* existing = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
+			Type* incoming = (params && i < acount(params)) ? params[i] : NULL;
+			if (existing && incoming) {
+				if (!type_equal(existing, incoming)) {
+					type_check_error("function %s parameter %d type mismatch (%s vs %s)", sym->name, i + 1, type_display(existing), type_display(incoming));
+				}
+			} else if (existing != incoming) {
+				type_check_error("function %s parameter %d type mismatch", sym->name, i + 1);
+			}
+		}
+		return;
+	}
+	aclear(sym->params);
+	for (int i = 0; i < param_count; ++i) {
+		Type* incoming = params ? params[i] : NULL;
+		apush(sym->params, incoming);
+	}
+	sym->param_count = param_count;
+	sym->param_signature_set = 1;
+}
+
 void symbol_table_free(SymbolTable* st)
 {
 	while (acount(st->scopes) > 0) {
 		symbol_table_leave_scope(st);
 	}
-	afree(st->scopes);
-	st->scopes = NULL;
-	afree(st->symbols);
-	st->symbols = NULL;
+	if (st->symbols) {
+		for (int i = 0; i < acount(st->symbols); ++i) {
+			Symbol* sym = &st->symbols[i];
+			if (sym->params) {
+				afree(sym->params);
+				sym->params = NULL;
+			}
+		}
+		afree(st->symbols);
+		st->symbols = NULL;
+	}
+	if (st->scopes) {
+		afree(st->scopes);
+		st->scopes = NULL;
+	}
 }
 
 void dump_storage_flags(unsigned flags)
@@ -1711,6 +1776,7 @@ void func_param()
 	ir_apply_type_spec(param, &spec);
 	current_param_type_name = spec.type_name;
 	current_param_type_type = spec.type;
+	apush(current_function_params, spec.type);
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = spec.type_name;
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
@@ -1788,10 +1854,19 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	func->str1 = name;
 	ir_apply_type_spec(func, &spec);
 	Symbol* sym = symbol_table_add(&g_symbols, func->str1, spec.type_name, spec.type, SYM_FUNC);
+	if (sym->type && spec.type && !type_equal(sym->type, spec.type)) {
+		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
+	}
+	if (!sym->type && spec.type) {
+		sym->type = spec.type;
+	}
 	symbol_apply_type_spec(sym, &spec);
+	if (current_function_params) aclear(current_function_params);
 	expect(TOK_LPAREN);
 	symbol_table_enter_scope(&g_symbols);
 	func_param_list();
+	symbol_set_function_signature(sym, current_function_params, acount(current_function_params));
+	if (current_function_params) aclear(current_function_params);
 	if (tok.kind == TOK_SEMI) {
 	next();
 		symbol_table_leave_scope(&g_symbols);
@@ -1888,17 +1963,17 @@ void expr_call()
 	}
 	Type* ctor_type = NULL;
 	const char* ctor_name = NULL;
+	const char* callee_name = NULL;
 	if (callee_idx >= 0) {
 		IR_Cmd* callee = &g_ir[callee_idx];
 		if (callee->op == IR_PUSH_IDENT && callee->str0) {
+			callee_name = callee->str0;
+			Symbol* sym = symbol_table_resolve(&g_symbols, callee->str0);
 			Type* type = type_system_get(&g_types, callee->str0);
-			if (type) {
-				Symbol* sym = symbol_table_resolve(&g_symbols, callee->str0);
-				if (!sym || sym->kind != SYM_FUNC) {
-					callee->type = type;
-					ctor_type = type;
-					ctor_name = callee->str0;
-				}
+			if (type && (!sym || sym->kind != SYM_FUNC)) {
+				callee->type = type;
+				ctor_type = type;
+				ctor_name = callee->str0;
 			}
 		}
 	}
@@ -1907,6 +1982,8 @@ void expr_call()
 	if (ctor_type) {
 		inst->str0 = ctor_name;
 		inst->type = ctor_type;
+	} else if (callee_name) {
+		inst->str0 = callee_name;
 	}
 
 }
