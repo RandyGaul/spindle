@@ -7,12 +7,6 @@
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
 
-typedef struct IR_String
-{
-	const char* ptr;
-	int len;
-} IR_String;
-
 typedef enum SymbolKind
 {
 	SYM_VAR,
@@ -53,13 +47,13 @@ typedef struct Type
 	uint8_t dim;
 	int array_len;
 	void* user;
-	IR_String name;
+	const char* name;
 } Type;
 
 typedef struct Symbol
 {
-	IR_String name;
-	IR_String type_name;
+	const char* name;
+	const char* type_name;
 	Type* type;
 	SymbolKind kind;
 	unsigned storage_flags;
@@ -86,7 +80,7 @@ typedef enum SymbolLayout
 
 typedef struct TypeSpec
 {
-	IR_String type_name;
+	const char* type_name;
 	Type* type;
 	unsigned storage_flags;
 	unsigned layout_flags;
@@ -271,8 +265,8 @@ const char* ir_op_name[IR_OP_COUNT] = {
 typedef struct IR_Cmd
 {
 	IROp op;
-	IR_String str0;
-	IR_String str1;
+	const char* str0;
+	const char* str1;
 	int arg0;
 	int arg1;
 	double float_val;
@@ -287,15 +281,15 @@ typedef struct IR_Cmd
 TypeSystem g_types;
 SymbolTable g_symbols;
 IR_Cmd* g_ir;
-IR_String current_decl_type_name;
+const char* current_decl_type_name;
 Type* current_decl_type_type;
-IR_String current_param_type_name;
+const char* current_param_type_name;
 Type* current_param_type_type;
 
-IR_String ir_string(const char* s, int len)
+const char* ir_string(const char* s, int len)
 {
-	if (!s || len <= 0) return (IR_String){ 0 };
-	return (IR_String){ sintern_range(s, s + len), len };
+	if (!s || len <= 0) return NULL;
+	return sintern_range(s, s + len);
 }
 
 IR_Cmd* ir_emit(IROp op)
@@ -331,13 +325,13 @@ void symbol_table_init(SymbolTable* st)
 	symbol_table_enter_scope(st);
 }
 
-Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type_name, Type* type, SymbolKind kind)
+Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_name, Type* type, SymbolKind kind)
 {
-	if (!st || !name.ptr) return NULL;
+	if (!st || !name) return NULL;
 	int depth = acount(st->scopes);
 	if (!depth) return NULL;
 	SymbolScope* scope = &st->scopes[depth - 1];
-	uint64_t key = (uint64_t)name.ptr;
+	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(scope->map, key);
 	if (existing) return &st->symbols[(int)existing - 1];
 	Symbol sym = (Symbol){ 0 };
@@ -352,12 +346,12 @@ Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type_name, T
 	return &st->symbols[idx - 1];
 }
 
-Symbol* symbol_table_resolve(SymbolTable* st, IR_String name)
+Symbol* symbol_table_resolve(SymbolTable* st, const char* name)
 {
-	if (!st || !name.ptr) return NULL;
+	if (!st || !name) return NULL;
 	for (int i = acount(st->scopes) - 1; i >= 0; --i) {
 		SymbolScope* scope = &st->scopes[i];
-		uint64_t idx = map_get(scope->map, (uint64_t)name.ptr);
+		uint64_t idx = map_get(scope->map, (uint64_t)name);
 		if (idx) return &st->symbols[(int)idx - 1];
 	}
 	return NULL;
@@ -383,10 +377,10 @@ const char* type_tag_name(TypeTag tag)
 	return names[tag] ? names[tag] : "unknown";
 }
 
-static Type* type_system_add_internal(TypeSystem* ts, IR_String name, Type type)
+static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type type)
 {
-	if (!ts || !name.ptr) return NULL;
-	uint64_t key = (uint64_t)name.ptr;
+	if (!ts || !name) return NULL;
+	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(ts->map, key);
 	if (existing) return &ts->types[(int)existing - 1];
 	type.name = name;
@@ -407,15 +401,15 @@ Type* type_system_get(TypeSystem* ts, const char* name, int len)
 	return &ts->types[(int)idx - 1];
 }
 
-Type* type_system_get_from_string(TypeSystem* ts, IR_String name)
+Type* type_system_get_from_string(TypeSystem* ts, const char* name)
 {
-	if (!ts || !name.ptr) return NULL;
-	uint64_t idx = map_get(ts->map, (uint64_t)name.ptr);
+	if (!ts || !name) return NULL;
+	uint64_t idx = map_get(ts->map, (uint64_t)name);
 	if (!idx) return NULL;
 	return &ts->types[(int)idx - 1];
 }
 
-Type* type_system_declare(TypeSystem* ts, IR_String name, Type type)
+Type* type_system_declare(TypeSystem* ts, const char* name, Type type)
 {
 	return type_system_add_internal(ts, name, type);
 }
@@ -461,9 +455,9 @@ void type_system_init_builtins(TypeSystem* ts)
 		{ "sampler2DArray",{ .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = T_FLOAT, .dim = 5, .array_len = 0 } },
 	};
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i) {
-		IR_String name = ir_string(builtins[i].name, (int)strlen(builtins[i].name));
-		type_system_add_internal(ts, name, builtins[i].type);
-	}
+const char* name = ir_string(builtins[i].name, (int)strlen(builtins[i].name));
+type_system_add_internal(ts, name, builtins[i].type);
+}
 }
 
 void type_system_free(TypeSystem* ts)
@@ -611,7 +605,7 @@ void dump_ir()
 		case IR_DECL_VAR:
 		case IR_FUNC_PARAM_TYPE:
 		case IR_FUNC_PARAM_NAME:
-			printf(" %.*s", inst->str0.len, inst->str0.ptr);
+			if (inst->str0) printf(" %s", inst->str0);
 			break;
 		case IR_UNARY:
 		case IR_BINARY:
@@ -621,7 +615,7 @@ void dump_ir()
 			printf(" argc=%d", inst->arg0);
 			break;
 		case IR_FUNC_BEGIN:
-			printf(" return=%.*s name=%.*s", inst->str0.len, inst->str0.ptr, inst->str1.len, inst->str1.ptr);
+			printf(" return=%s name=%s", inst->str0 ? inst->str0 : "<null>", inst->str1 ? inst->str1 : "<null>");
 			dump_storage_flags(inst->storage_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
@@ -637,7 +631,7 @@ void dump_symbols(const SymbolTable* st)
 	printf("Symbols:\n");
 	for (int i = 0; i < acount(st->symbols); ++i) {
 		const Symbol* sym = &st->symbols[i];
-		printf("  scope[%d] %s %.*s : %.*s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name.len, sym->name.ptr, sym->type_name.len, sym->type_name.ptr);
+		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name ? sym->name : "<null>", sym->type_name ? sym->type_name : "<null>");
 		if (sym->type) {
 			printf(" (tag=%s)", type_tag_name(sym->type->tag));
 		}
@@ -831,7 +825,6 @@ void parse_type_qualifiers(TypeSpec* spec)
 	}
 }
 
-
 TypeSpec parse_type_specifier()
 {
 	TypeSpec spec = (TypeSpec){ 0 };
@@ -902,7 +895,7 @@ void func_param()
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = spec.type_name;
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
-	IR_String name = ir_string(tok.lexeme, tok.len);
+	const char* name = ir_string(tok.lexeme, tok.len);
 	inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
 	Symbol* sym = symbol_table_add(&g_symbols, name, current_param_type_name, current_param_type_type, SYM_PARAM);
@@ -930,7 +923,7 @@ void func_param_list()
 	ir_emit(IR_FUNC_PARAMS_END);
 }
 
-void global_var_decl(TypeSpec spec, IR_String first_name)
+void global_var_decl(TypeSpec spec, const char* first_name)
 {
 	IR_Cmd* inst;
 	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
@@ -958,7 +951,7 @@ void global_var_decl(TypeSpec spec, IR_String first_name)
 		next();
 		ir_emit(IR_DECL_SEPARATOR);
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IR_String name = ir_string(tok.lexeme, tok.len);
+		const char* name = ir_string(tok.lexeme, tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -974,11 +967,11 @@ void global_var_decl(TypeSpec spec, IR_String first_name)
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
-	current_decl_type_name = (IR_String){ 0 };
+	current_decl_type_name = NULL;
 	current_decl_type_type = NULL;
 }
 
-void func_decl_or_def(TypeSpec spec, IR_String name)
+void func_decl_or_def(TypeSpec spec, const char* name)
 {
 	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
 	func->str0 = spec.type_name;
@@ -1026,7 +1019,7 @@ void stmt_decl()
 	inst->str0 = spec.type_name;
 	while (1) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IR_String name = ir_string(tok.lexeme, tok.len);
+		const char* name = ir_string(tok.lexeme, tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -1048,7 +1041,7 @@ void stmt_decl()
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
-	current_decl_type_name = (IR_String){ 0 };
+	current_decl_type_name = NULL;
 	current_decl_type_type = NULL;
 }
 
@@ -1237,7 +1230,7 @@ void top_level()
 	if (!is_type_token()) parse_error("expected type at top level");
 	TypeSpec type_spec = parse_type_specifier();
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
-	IR_String name = ir_string(tok.lexeme, tok.len);
+const char* name = ir_string(tok.lexeme, tok.len);
 	next();
 	if (tok.kind == TOK_LPAREN) {
 		func_decl_or_def(type_spec, name);
@@ -1426,6 +1419,12 @@ int main()
 		{
 			v_uv = uv;
 			vec4 sample = texture(u_texture, uv);
+			float fade = 0.5;
+			float bias = .25;
+			float epsilon = 1e-3;
+			float scale = 2.0f;
+			sample.rgb = sample.rgb * fade * scale;
+			sample.a = clamp(sample.a + bias + epsilon, 0.0, 1.0);
 			if (sample.a == 0) {
 				v_col = texture(u_fallback, uv);
 			} else {
