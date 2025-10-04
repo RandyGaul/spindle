@@ -56,6 +56,7 @@
 //    printf("len=%d cap=%d\n", acount(a), acap(a));
 //    afree(a);
 
+#define dyna          // Empty macro used to markup declarations as a dynamic array.
 #define asize(a)      (a ? AHDR(a)->size : 0)
 #define acount(a)     asize(a)
 #define acap(a)       ((a) ? AHDR(a)->capacity : 0)
@@ -66,7 +67,7 @@
 #define alast(a)      (a[asize(a) - 1])
 #define aclear(a)     (ACANARY(a), (a) ? AHDR(a)->size = 0 : 0)
 #define adel(a, i)    (a[i] = a[--AHDR(a)->size])
-#define afree(a)      do { ACANARY(a); free(AHDR(a)); (a) = NULL; } while (0)
+#define afree(a)      do { ACANARY(a); if (a) free(AHDR(a)); (a) = NULL; } while (0)
 
 //--------------------------------------------------------------------------------------------------
 // Map (hashtable) for uint64_t key <-> val mapping.
