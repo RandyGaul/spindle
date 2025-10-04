@@ -42,6 +42,8 @@ const char* kw_do;
 const char* kw_switch;
 const char* kw_case;
 const char* kw_default;
+const char* kw_true;
+const char* kw_false;
 
 void init_keyword_interns()
 {
@@ -64,6 +66,8 @@ void init_keyword_interns()
 	kw_switch = sintern("switch");
 	kw_case = sintern("case");
 	kw_default = sintern("default");
+	kw_true = sintern("true");
+	kw_false = sintern("false");
 }
 
 SymbolTable g_symbol_table;
@@ -783,6 +787,13 @@ void stmt_decl()
 void expr_int()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
+	inst->arg0 = tok.int_val;
+	next();
+}
+
+void expr_bool()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_BOOL);
 	inst->arg0 = tok.int_val;
 	next();
 }
@@ -1568,6 +1579,11 @@ void next()
 		{
 			tok.kind = TOK_DEFAULT;
 			tok.lexpr = expr_error;
+		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
+		{
+			tok.kind = TOK_BOOL;
+			tok.lexpr = expr_bool;
+			tok.int_val = tok.lexeme == kw_true;
 		}
 		return;
 	}

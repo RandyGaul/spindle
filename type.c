@@ -778,6 +778,10 @@ void type_check_ir()
 			inst->type = g_type_float;
 			apush(stack, inst->type);
 			break;
+		case IR_PUSH_BOOL:
+			inst->type = g_type_bool;
+			apush(stack, inst->type);
+			break;
 		case IR_PUSH_IDENT:
 		{
 			Type* type = NULL;

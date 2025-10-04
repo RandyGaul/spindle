@@ -18,6 +18,7 @@ typedef enum Tok
 	TOK_IDENTIFIER,
 	TOK_INT,
 	TOK_FLOAT,
+	TOK_BOOL,
 
 	TOK_LPAREN,
 	TOK_RPAREN,
@@ -70,6 +71,7 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_IDENTIFIER] = "IDENT",
 	[TOK_INT] = "INT",
 	[TOK_FLOAT] = "FLOAT",
+	[TOK_BOOL] = "BOOL",
 
 	[TOK_LPAREN] = "(",
 	[TOK_RPAREN] = ")",
@@ -204,6 +206,7 @@ typedef enum IR_Op
 	IR_PUSH_INT,
 	IR_PUSH_IDENT,
 	IR_PUSH_FLOAT,
+	IR_PUSH_BOOL,
 	IR_UNARY,
 	IR_BINARY,
 	IR_CALL,
@@ -292,6 +295,7 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_PUSH_INT] = "push_int",
 	[IR_PUSH_IDENT] = "push_ident",
 	[IR_PUSH_FLOAT] = "push_float",
+	[IR_PUSH_BOOL] = "push_bool",
 	[IR_UNARY] = "unary",
 	[IR_BINARY] = "binary",
 	[IR_CALL] = "call",
@@ -451,6 +455,7 @@ const char* snippet_array_indexing = STR(
 		uint uints[3];
 		uints[2] = 3u;
 		bool flags[2];
+		flags[0] = false;
 		flags[1] = ints[1] > 0;
 		vec4 vectors[2];
 		vec4 v = vectors[1];
@@ -460,8 +465,9 @@ const char* snippet_array_indexing = STR(
 		float element = column[2];
 		out_color = vec4(scalars[0], float(ints[1]), v.x, element);
 		bool flag = flags[1];
+		bool literal_true = true;
 		uint value = uints[2];
-		if (flag)
+		if (literal_true && flag)
 		{
 			out_color.xy += vec2(float(value));
 		}

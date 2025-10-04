@@ -65,6 +65,9 @@ void dump_ir()
 		case IR_PUSH_FLOAT:
 			printf(" %g", inst->float_val);
 			break;
+		case IR_PUSH_BOOL:
+			printf(" %s", inst->arg0 ? "true" : "false");
+			break;
 		case IR_PUSH_IDENT:
 		case IR_MEMBER:
 		case IR_DECL_TYPE:
@@ -185,8 +188,13 @@ void unit_test()
 	int saw_bool_index = 0;
 	int saw_vec_index = 0;
 	int saw_mat_index = 0;
+	int saw_bool_literal = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
+		if (g_ir[i].op == IR_PUSH_BOOL)
+		{
+			saw_bool_literal = 1;
+		}
 		if (g_ir[i].op != IR_INDEX)
 			continue;
 		saw_index = 1;
@@ -224,6 +232,7 @@ void unit_test()
 	assert(saw_int_index);
 	assert(saw_uint_index);
 	assert(saw_bool_index);
+	assert(saw_bool_literal);
 	assert(saw_vec_index);
 	assert(saw_mat_index);
 
