@@ -10,6 +10,8 @@
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
 
+#define STR(...) #__VA_ARGS__
+
 typedef enum SymbolKind
 {
 	SYM_VAR,
@@ -1717,6 +1719,219 @@ void expr_binary(Prec min_prec);
 void expr() { expr_binary(PREC_EXPR); }
 void expr_error() { parse_error("unexpected token in expression"); }
 
+void reset_parser_state()
+	{
+	in = NULL;
+	at = NULL;
+	ch = 0;
+	tok.kind = TOK_EOF;
+	tok.prec = PREC_EXPR;
+	tok.lexpr = expr_error;
+	tok.rexpr = expr_error;
+	tok.int_val = 0;
+	tok.float_val = 0.0;
+	tok.lexeme = NULL;
+	tok.len = 0;
+}
+
+void compiler_teardown()
+{
+	symbol_table_free(&g_symbols);
+	type_system_free(&g_types);
+	if (g_ir) {
+		afree(g_ir);
+		g_ir = NULL;
+	}
+	if (current_function_params) {
+		afree(current_function_params);
+		current_function_params = NULL;
+	}
+	current_decl_type_name = NULL;
+	current_decl_type_type = NULL;
+	current_param_type_name = NULL;
+	current_param_type_type = NULL;
+	reset_parser_state();
+}
+
+void compiler_setup(const char* source)
+	{
+	compiler_teardown();
+	reset_parser_state();
+	init_keyword_interns();
+	in = source;
+	at = in;
+	next_ch();
+	next();
+	type_system_init_builtins(&g_types);
+	type_system_cache_builtins(&g_types);
+	symbol_table_init(&g_symbols);
+	parse();
+	type_check_ir();
+}
+
+void transpile(const char* source)
+	{
+	printf("Input : %s\n\n", source);
+	compiler_setup(source);
+	dump_ir();
+	printf("\n");
+	dump_symbols(&g_symbols);
+	compiler_teardown();
+}
+
+typedef struct ShaderSnippet
+	{
+	const char* name;
+	const char* source;
+} ShaderSnippet;
+
+const char* snippet_basic_io = STR(
+layout(location = 0) in vec3 in_pos;
+layout(location = 1) in vec2 in_uv;
+layout(location = 0) out vec4 out_color;
+layout(set = 0, binding = 0) uniform sampler2D u_texture;
+layout(set = 1, binding = 0) uniform vec4 u_tint;
+void main()
+{
+vec4 sampled = texture(u_texture, in_uv);
+out_color = sampled * u_tint;
+}
+);
+
+const char* snippet_control_flow = STR(
+layout(location = 0) out vec4 out_color;
+void main()
+{
+float accum = 0.0;
+for (int i = 0; i < 4; i = i + 1)
+{
+accum += float(i) * 0.25;
+}
+if (accum > 0.5)
+{
+out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);
+}
+else
+{
+out_color = vec4(1.0 - accum);
+}
+}
+);
+
+const char* snippet_array_indexing = STR(
+layout(location = 0) out vec4 out_color;
+void main()
+{
+float scalars[4];
+scalars[0] = 1.0;
+int ints[3];
+ints[1] = 2;
+uint uints[3];
+uints[2] = 3u;
+bool flags[2];
+flags[1] = ints[1] > 0;
+vec4 vectors[2];
+vec4 v = vectors[1];
+mat3 matrices[2];
+mat3 m = matrices[0];
+vec3 column = m[1];
+float element = column[2];
+out_color = vec4(scalars[0], float(ints[1]), v.x, element);
+bool flag = flags[1];
+uint value = uints[2];
+if (flag)
+{
+out_color.xy += vec2(float(value));
+}
+}
+);
+
+const char* snippet_swizzle = STR(
+layout(location = 0) in vec4 input_vec;
+layout(location = 0) out vec4 out_vec;
+void main()
+{
+float single = input_vec.x;
+vec3 rgb = input_vec.rgb;
+vec2 ba = input_vec.ba;
+vec4 assembled = vec4(rgb, 1.0);
+vec4 full = input_vec.xyzw;
+out_vec = vec4(ba, assembled.gr);
+out_vec += vec4(single, full.wzy);
+}
+);
+
+const char* snippet_function_calls = STR(
+layout(location = 0) in vec2 in_uv;
+layout(location = 0) out vec4 out_color;
+float saturate(float value)
+{
+if (value < 0.0) return 0.0;
+if (value > 1.0) return 1.0;
+return value;
+}
+vec4 apply_gain(vec4 color, float gain)
+{
+return vec4(color.rgb * gain, color.a);
+}
+void main()
+{
+vec4 base = vec4(in_uv, 0.5, 1.0);
+float gain = saturate(base.x + base.y);
+out_color = apply_gain(base, gain);
+}
+);
+
+const char* snippet_matrix_ops = STR(
+layout(location = 0) out vec4 out_color;
+void main()
+{
+mat3 rotation = mat3(1.0);
+vec3 column = rotation[1];
+float diagonal = rotation[2][2];
+out_color = vec4(column, diagonal);
+}
+);
+
+const char* snippet_looping = STR(
+layout(location = 0) out vec4 out_color;
+void main()
+{
+int counter = 0;
+float total = 0.0;
+while (counter < 4)
+{
+total += float(counter);
+counter = counter + 1;
+}
+do
+{
+total = total + 0.5;
+counter = counter - 1;
+if (counter == 1)
+{
+continue;
+}
+}
+while (counter > 0);
+out_color = vec4(total);
+}
+);
+
+const char* snippet_discard = STR(
+layout(location = 0) in vec4 in_color;
+layout(location = 0) out vec4 out_color;
+void main()
+{
+vec4 color = in_color;
+if (color.a == 0.0)
+{
+discard;
+}
+out_color = color;
+}
+);
+
 void stmt();
 void stmt_decl();
 void stmt_block();
@@ -2004,7 +2219,7 @@ int swizzle_component_index(int set, char c)
 	if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
 	if (set < 0 || set >= (int)(sizeof(sets) / sizeof(sets[0]))) return -1;
 	const char* names = sets[set];
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < 4; i = i + 1) {
 		if (c == names[i]) return i;
 	}
 	return -1;
@@ -2557,152 +2772,92 @@ void unit_test()
 	if (g_ir) afree(g_ir);
 	g_ir = saved_ir;
 
-	// Validate vector indexing support for arithmetic expressions.
-	const char* vector_source =
-		"layout(location = 0) in vec4 input_vec;"
-		"layout(location = 0) out vec4 output_vec;"
-		"void main()"
-		"{"
-			"float first = input_vec[0];"
-			"float second = input_vec[1];"
-			"output_vec = vec4(first, second, first + second, 1.0);"
-		"}";
-	in = vector_source;
-	at = in;
-	IR_Cmd* prior_ir = g_ir;
-	g_ir = NULL;
-	type_system_init_builtins(&g_types);
-	type_system_cache_builtins(&g_types);
-	symbol_table_init(&g_symbols);
-	next_ch();
-	next();
-	parse();
-	type_check_ir();
+	compiler_setup(snippet_array_indexing);
 	int saw_index = 0;
+	int saw_float_index = 0;
+	int saw_int_index = 0;
+	int saw_uint_index = 0;
+	int saw_bool_index = 0;
+	int saw_vec_index = 0;
+	int saw_mat_index = 0;
 	for (int i = 0; i < acount(g_ir); ++i) {
-		if (g_ir[i].op == IR_INDEX) {
-			saw_index = 1;
-			break;
-		}
+	if (g_ir[i].op != IR_INDEX) continue;
+	saw_index = 1;
+	Type* type = g_ir[i].type;
+	if (!type) continue;
+	if (type_is_scalar(type)) {
+	switch (type_base_type(type)) {
+	case T_FLOAT: saw_float_index = 1; break;
+	case T_INT: saw_int_index = 1; break;
+	case T_UINT: saw_uint_index = 1; break;
+	case T_BOOL: saw_bool_index = 1; break;
+	default: break;
 	}
+	}
+	if (type_is_vector(type)) saw_vec_index = 1;
+	if (type_is_matrix(type)) saw_mat_index = 1;
+	}
+	compiler_teardown();
 	assert(saw_index);
-	symbol_table_free(&g_symbols);
-	type_system_free(&g_types);
-	if (g_ir) afree(g_ir);
-	g_ir = prior_ir;
-	in = NULL;
-	at = NULL;
-	ch = 0;
-	tok.kind = TOK_EOF;
-	tok.prec = PREC_EXPR;
-	tok.lexpr = NULL;
-	tok.rexpr = NULL;
-	tok.int_val = 0;
-	tok.float_val = 0.0;
-	tok.lexeme = NULL;
-	tok.len = 0;
+	assert(saw_float_index);
+	assert(saw_int_index);
+	assert(saw_uint_index);
+	assert(saw_bool_index);
+	assert(saw_vec_index);
+	assert(saw_mat_index);
 
-	// Parse a representative shader snippet and ensure IR and symbol tables populate.
-	const char* source =
-		"layout(location = 0) in vec2 test_in;"
-		"layout(location = 0) out vec4 test_out;"
-		"void helper(float a, float b);"
-		"void helper(float a, float b)"
-		"{"
-			"float local = a + b;"
-			"if (local > 0.0) { test_out = vec4(local); } else { test_out = vec4(-local); }"
-		"}";
-	in = source;
-	at = in;
-	g_ir = NULL;
-	type_system_init_builtins(&g_types);
-	type_system_cache_builtins(&g_types);
-	symbol_table_init(&g_symbols);
-	next_ch();
-	next();
-	parse();
-	type_check_ir();
+	compiler_setup(snippet_swizzle);
+	int saw_swizzle[5] = { 0 };
+	for (int i = 0; i < acount(g_ir); ++i) {
+	if (g_ir[i].op != IR_SWIZZLE) continue;
+	int count = g_ir[i].arg0;
+	if (count >= 1 && count <= 4) saw_swizzle[count] = 1;
+	}
+	compiler_teardown();
+	assert(saw_swizzle[1]);
+	assert(saw_swizzle[2]);
+	assert(saw_swizzle[3]);
+	assert(saw_swizzle[4]);
+
+	compiler_setup(snippet_function_calls);
 	assert(acount(g_ir) > 0);
 	assert(acount(g_symbols.symbols) > 0);
-	symbol_table_free(&g_symbols);
-	type_system_free(&g_types);
-	if (g_ir) afree(g_ir);
-	g_ir = NULL;
-	in = NULL;
-	at = NULL;
-	ch = 0;
-	tok.kind = TOK_EOF;
-	tok.prec = PREC_EXPR;
-	tok.lexpr = NULL;
-	tok.rexpr = NULL;
-	tok.int_val = 0;
-	tok.float_val = 0.0;
-	tok.lexeme = NULL;
-	tok.len = 0;
+	compiler_teardown();
+
+	compiler_setup(snippet_looping);
+	assert(acount(g_ir) > 0);
+	compiler_teardown();
+
+	compiler_setup(snippet_discard);
+	int saw_discard = 0;
+	for (int i = 0; i < acount(g_ir); ++i) {
+	if (g_ir[i].op == IR_DISCARD) {
+	saw_discard = 1;
+	break;
+	}
+	}
+	compiler_teardown();
+	assert(saw_discard);
 }
 
 int main()
-{
-	#define STR(...) #__VA_ARGS__
+	{
 	unit_test();
-	const char* input = STR(
-		layout(location = 0) in vec4 in_pos;
-		layout(location = 1) in vec2 in_uv;
-		layout(location = 2) in vec4 in_col;
-		layout(location = 0) out vec4 out_color;
-		layout(set = 0, binding = 0) uniform sampler2D u_texture;
-		layout(set = 1, binding = 0) uniform vec4 u_tint;
-		layout(set = 1, binding = 1) uniform float u_exposure;
-		vec4 fetch_color(sampler2D tex, vec2 uv)
-		{
-			float offset_x = uv[0] - 0.5;
-			float offset_y = uv[1] - 0.5;
-			return vec4(offset_x, offset_y, 0.0, 1.0);
-		}
-		vec4 apply_tint(vec4 color, vec4 tint)
-		{
-			return color * tint;
-		}
-		float compute_exposure(float value)
-		{
-			if (value < 0.0)
-			{
-				return 0.0;
-			}
-			else if (value > 1.0)
-			{
-				return 1.0;
-			}
-			return value;
-		}
-		void main()
-		{
-			vec4 sampled = fetch_color(u_texture, in_uv);
-			vec4 tinted = apply_tint(sampled, u_tint);
-			float exposure = compute_exposure(u_exposure);
-			vec4 scaled = tinted * exposure;
-			vec4 color_mix = in_col * (1.0 - exposure);
-			out_color = scaled + color_mix;
-		}
-	);
-	printf("Input : %s\n\n", input);
-
-	in = input;
-	at = in;
-	init_keyword_interns();
-	next_ch();
-	next();
-	type_system_init_builtins(&g_types);
-	type_system_cache_builtins(&g_types);
-	symbol_table_init(&g_symbols);
-	parse();
-	type_check_ir();
-	dump_ir();
+	const ShaderSnippet snippets[] = {
+	{ "basic_io", snippet_basic_io },
+	{ "control_flow", snippet_control_flow },
+	{ "array_indexing", snippet_array_indexing },
+	{ "swizzle_usage", snippet_swizzle },
+	{ "function_calls", snippet_function_calls },
+	{ "matrix_ops", snippet_matrix_ops },
+	{ "looping", snippet_looping },
+	{ "discard", snippet_discard }
+	};
+	int snippet_count = (int)(sizeof(snippets) / sizeof(snippets[0]));
+	for (int i = 0; i < snippet_count; ++i) {
+	printf("=== %s ===\n", snippets[i].name);
+	transpile(snippets[i].source);
 	printf("\n");
-	dump_symbols(&g_symbols);
-	symbol_table_free(&g_symbols);
-	type_system_free(&g_types);
-	if (g_ir) afree(g_ir);
-
+}
 	return 0;
 }
