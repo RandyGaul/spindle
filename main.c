@@ -387,17 +387,7 @@ static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type typ
 	return &ts->types[idx - 1];
 }
 
-Type* type_system_get(TypeSystem* ts, const char* name, int len)
-{
-	if (len <= 0) return NULL;
-	const char* interned = sintern_range(name, name + len);
-	uint64_t key = (uint64_t)interned;
-	uint64_t idx = map_get(ts->map, key);
-	if (!idx) return NULL;
-	return &ts->types[(int)idx - 1];
-}
-
-Type* type_system_get_from_string(TypeSystem* ts, const char* name)
+Type* type_system_get(TypeSystem* ts, const char* name)
 {
 	uint64_t idx = map_get(ts->map, (uint64_t)name);
 	if (!idx) return NULL;
@@ -755,16 +745,16 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 	}
 }
 
-int is_type_name(const char* s, int n)
+int is_type_name(const char* s)
 {
-	if (!s || n <= 0) return 0;
-	return type_system_get(&g_types, s, n) != NULL;
+	return type_system_get(&g_types, s) != NULL;
 }
 
 int is_type_token()
 {
 	if (tok.kind != TOK_IDENTIFIER) return 0;
-	if (is_type_name(tok.lexeme, tok.len)) return 1;
+	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	if (is_type_name(name)) return 1;
 	if (storage_flag_from_keyword(tok.lexeme)) return 1;
 	if (tok.lexeme == kw_layout) return 1;
 	return 0;
@@ -814,9 +804,10 @@ TypeSpec parse_type_specifier()
 {
 	TypeSpec spec = (TypeSpec){ 0 };
 	parse_type_qualifiers(&spec);
-	if (tok.kind != TOK_IDENTIFIER || !is_type_name(tok.lexeme, tok.len)) parse_error("expected type");
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected type");
 	spec.type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-	spec.type = type_system_get_from_string(&g_types, spec.type_name);
+	if (!is_type_name(spec.type_name)) parse_error("expected type");
+	spec.type = type_system_get(&g_types, spec.type_name);
 	if (!spec.type) parse_error("unknown type");
 	next();
 	return spec;
