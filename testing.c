@@ -135,15 +135,16 @@ void unit_test()
 	Type* vec4_type = type_system_get(&ts, sintern("vec4"));
 	assert(vec4_type && vec4_type->tag == T_VEC && vec4_type->cols == 4);
 	// Ensure user-declared struct types are interned and retrievable.
-	Type custom_type = (Type){ 0 };
-	custom_type.tag = T_STRUCT;
-	custom_type.cols = 1;
-	custom_type.rows = 1;
-	custom_type.base = T_FLOAT;
-	custom_type.array_len = 0;
 	const char* custom_name = sintern("test_struct");
-	Type* declared_type = type_system_add_internal(&ts, custom_name, custom_type);
+	Type* declared_type = type_system_declare_struct(&ts, custom_name);
 	assert(declared_type == type_system_get(&ts, custom_name));
+	type_struct_begin_definition(declared_type);
+	const char* field_name = sintern("value");
+	StructField* struct_field = type_struct_add_field(declared_type, field_name, float_type, -1);
+	assert(struct_field && struct_field->type == float_type);
+	type_struct_complete_definition(declared_type);
+	assert(type_struct_is_defined(declared_type));
+	assert(type_struct_find_field(declared_type, field_name) == struct_field);
 	type_system_free(&ts);
 
 	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
@@ -266,4 +267,60 @@ void unit_test()
 	}
 	compiler_teardown();
 	assert(saw_discard);
+
+	compiler_setup(snippet_structs);
+	const char* light_name = sintern("Light");
+	Type* light_type = type_system_get(&g_types, light_name);
+	assert(light_type && light_type->tag == T_STRUCT);
+	const char* color_name = sintern("color");
+	const char* intensity_name = sintern("intensity");
+	StructField* color_field = type_struct_find_field(light_type, color_name);
+	assert(color_field && color_field->type && type_is_vector(color_field->type) && color_field->type->cols == 3);
+	StructField* intensity_field = type_struct_find_field(light_type, intensity_name);
+	assert(intensity_field && intensity_field->type && type_is_scalar(intensity_field->type) && intensity_field->type->tag == T_FLOAT);
+	const char* sun_name = sintern("sun");
+	const char* copy_name = sintern("copy");
+	Symbol* sun_sym = NULL;
+	Symbol* copy_sym = NULL;
+	for (int i = 0; i < acount(g_symbols.symbols); ++i)
+	{
+		Symbol* sym = &g_symbols.symbols[i];
+		if (sym->name == sun_name)
+		{
+			sun_sym = sym;
+			continue;
+		}
+		if (sym->name == copy_name)
+		{
+			copy_sym = sym;
+			continue;
+		}
+	}
+	assert(sun_sym && sun_sym->type == light_type);
+	assert(copy_sym && copy_sym->type == light_type);
+	int saw_struct_construct = 0;
+	int saw_member_color = 0;
+	int saw_member_intensity = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		if (g_ir[i].op == IR_CONSTRUCT && g_ir[i].str0 == light_name)
+		{
+			saw_struct_construct = 1;
+			continue;
+		}
+		if (g_ir[i].op == IR_MEMBER && g_ir[i].str0 == color_name)
+		{
+			saw_member_color = 1;
+			continue;
+		}
+		if (g_ir[i].op == IR_MEMBER && g_ir[i].str0 == intensity_name)
+		{
+			saw_member_intensity = 1;
+			continue;
+		}
+	}
+	compiler_teardown();
+	assert(saw_struct_construct);
+	assert(saw_member_color);
+	assert(saw_member_intensity);
 }
