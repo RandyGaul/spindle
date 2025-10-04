@@ -117,6 +117,7 @@ typedef enum IR_Op
 	IR_CONSTRUCT,
 	IR_INDEX,
 	IR_MEMBER,
+	IR_SWIZZLE,
 	IR_SELECT,
 	IR_IF_BEGIN,
 	IR_IF_THEN,
@@ -226,6 +227,7 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_CONSTRUCT] = "construct",
 	[IR_INDEX] = "index",
 	[IR_MEMBER] = "member",
+	[IR_SWIZZLE] = "swizzle",
 	[IR_SELECT] = "select",
 	[IR_IF_BEGIN] = "if_begin",
 	[IR_IF_THEN] = "if_then",
@@ -597,6 +599,9 @@ void dump_ir()
 		case IR_FUNC_PARAM_TYPE:
 		case IR_FUNC_PARAM_NAME:
 			printf(" %s", inst->str0);
+			break;
+		case IR_SWIZZLE:
+			printf(" %s count=%d mask=0x%x", inst->str0, inst->arg0, inst->arg1);
 			break;
 		case IR_UNARY:
 		case IR_BINARY:
@@ -1100,11 +1105,59 @@ void expr_index()
 	ir_emit(IR_INDEX);
 }
 
+int swizzle_set_from_char(char c)
+{
+	if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+	switch (c) {
+	case 'x': case 'y': case 'z': case 'w': return 0;
+	case 'r': case 'g': case 'b': case 'a': return 1;
+	case 's': case 't': case 'p': case 'q': return 2;
+	default: break;
+	}
+	return -1;
+}
+
+int swizzle_component_index(int set, char c)
+{
+	static const char* sets[] = { "xyzw", "rgba", "stpq" };
+	if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+	if (set < 0 || set >= (int)(sizeof(sets) / sizeof(sets[0]))) return -1;
+	const char* names = sets[set];
+	for (int i = 0; i < 4; ++i) {
+		if (c == names[i]) return i;
+	}
+	return -1;
+}
+
+int swizzle_is_valid(const char* name, int len, int* out_mask)
+{
+	if (len < 1 || len > 4) return 0;
+	int set = swizzle_set_from_char(name[0]);
+	if (set < 0) return 0;
+	int mask = 0;
+	for (int i = 0; i < len; ++i) {
+		int comp = swizzle_component_index(set, name[i]);
+		if (comp < 0) return 0;
+		mask |= comp << (i * 4);
+	}
+	if (out_mask) *out_mask = mask;
+	return 1;
+}
+
 void expr_member()
 {
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after '.'");
-	IR_Cmd* inst = ir_emit(IR_MEMBER);
-	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	const char* name = tok.lexeme;
+	int mask = 0;
+	if (swizzle_is_valid(name, tok.len, &mask)) {
+		IR_Cmd* inst = ir_emit(IR_SWIZZLE);
+		inst->str0 = sintern_range(name, name + tok.len);
+		inst->arg0 = tok.len;
+		inst->arg1 = mask;
+	} else {
+		IR_Cmd* inst = ir_emit(IR_MEMBER);
+		inst->str0 = sintern_range(name, name + tok.len);
+	}
 	next();
 }
 
