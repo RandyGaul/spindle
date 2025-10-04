@@ -1,6 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
+#include <stddef.h>
+
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
 
@@ -29,7 +31,36 @@ typedef struct Symbol
 	IR_String name;
 	IR_String type;
 	SymbolKind kind;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
 } Symbol;
+
+typedef enum SymbolStorage
+{
+	SYM_STORAGE_IN	      = 1 << 0,
+	SYM_STORAGE_OUT	      = 1 << 1,
+	SYM_STORAGE_UNIFORM = 1 << 2,
+} SymbolStorage;
+
+typedef enum SymbolLayout
+{
+	SYM_LAYOUT_SET	      = 1 << 0,
+	SYM_LAYOUT_BINDING  = 1 << 1,
+	SYM_LAYOUT_LOCATION = 1 << 2,
+} SymbolLayout;
+
+typedef struct TypeSpec
+{
+	IR_String type;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
+} TypeSpec;
 
 typedef struct SymbolTable
 {
@@ -198,6 +229,11 @@ typedef struct IR_Cmd
 	int arg0;
 	int arg1;
 	Tok tok;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
 } IR_Cmd;
 
 SymbolTable g_symbols;
@@ -241,12 +277,111 @@ Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type, Symbol
 	return &st->symbols[idx - 1];
 }
 
+void symbol_add_storage(Symbol* sym, unsigned flags)
+{
+	if (!sym) return;
+	sym->storage_flags |= flags;
+}
+
+int symbol_has_storage(const Symbol* sym, unsigned flag)
+{
+	return sym && (sym->storage_flags & flag);
+}
+
+void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
+{
+	if (!sym) return;
+	sym->layout_flags |= layout_flag;
+	switch (layout_flag) {
+	case SYM_LAYOUT_SET:
+	sym->layout_set = value;
+	break;
+	case SYM_LAYOUT_BINDING:
+	sym->layout_binding = value;
+	break;
+	case SYM_LAYOUT_LOCATION:
+	sym->layout_location = value;
+	break;
+	default:
+	break;
+}
+}
+
+int symbol_has_layout(const Symbol* sym, unsigned layout_flag)
+{
+	return sym && (sym->layout_flags & layout_flag);
+}
+
+int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
+{
+	if (!symbol_has_layout(sym, layout_flag)) return -1;
+	switch (layout_flag) {
+	case SYM_LAYOUT_SET:
+	return sym->layout_set;
+	case SYM_LAYOUT_BINDING:
+	return sym->layout_binding;
+	case SYM_LAYOUT_LOCATION:
+	return sym->layout_location;
+	default:
+	break;
+}
+	return -1;
+}
+
+void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
+{
+	if (!sym || !spec) return;
+	symbol_add_storage(sym, spec->storage_flags);
+	if (spec->layout_flags & SYM_LAYOUT_SET) symbol_set_layout(sym, SYM_LAYOUT_SET, spec->layout_set);
+	if (spec->layout_flags & SYM_LAYOUT_BINDING) symbol_set_layout(sym, SYM_LAYOUT_BINDING, spec->layout_binding);
+	if (spec->layout_flags & SYM_LAYOUT_LOCATION) symbol_set_layout(sym, SYM_LAYOUT_LOCATION, spec->layout_location);
+}
+
 void symbol_table_free(SymbolTable* st)
 {
 	map_free(st->map);
 	if (st->symbols) afree(st->symbols);
 	st->map = (Map){ 0 };
 	st->symbols = NULL;
+}
+
+void dump_storage_flags(unsigned flags)
+{
+	if (!flags) return;
+	printf(" storage=");
+	int first = 1;
+	if (flags & SYM_STORAGE_IN) {
+		printf("%sin", first ? "" : "|");
+		first = 0;
+}
+	if (flags & SYM_STORAGE_OUT) {
+		printf("%sout", first ? "" : "|");
+		first = 0;
+}
+	if (flags & SYM_STORAGE_UNIFORM) {
+		printf("%suniform", first ? "" : "|");
+		first = 0;
+}
+}
+
+void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
+{
+	if (!layout_flags) return;
+	printf(" layout(");
+	int first = 1;
+	if (layout_flags & SYM_LAYOUT_SET) {
+		printf("%sset=%d", first ? "" : ", ", set);
+		first = 0;
+}
+	if (layout_flags & SYM_LAYOUT_BINDING) {
+		printf("%sbinding=%d", first ? "" : ", ", binding);
+		first = 0;
+}
+	if (layout_flags & SYM_LAYOUT_LOCATION) {
+		printf("%slocation=%d", first ? "" : ", ", location);
+		first = 0;
+}
+	printf(")");
 }
 
 void dump_ir()
@@ -256,6 +391,11 @@ void dump_ir()
 		IR_Cmd* inst = &g_ir[i];
 		printf("  %s", ir_op_name[inst->op]);
 		switch (inst->op) {
+		case IR_DECL_BEGIN:
+		case IR_FUNC_PARAM_BEGIN:
+			dump_storage_flags(inst->storage_flags);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
 		case IR_PUSH_INT:
 			printf(" %d", inst->arg0);
 			break;
@@ -276,6 +416,8 @@ void dump_ir()
 			break;
 		case IR_FUNC_BEGIN:
 			printf(" return=%.*s name=%.*s", inst->str0.len, inst->str0.ptr, inst->str1.len, inst->str1.ptr);
+			dump_storage_flags(inst->storage_flags);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		default:
 			break;
@@ -284,14 +426,19 @@ void dump_ir()
 	}
 }
 
+
 void dump_symbols(const SymbolTable* st)
 {
 	printf("Symbols:\n");
 	for (int i = 0; i < acount(st->symbols); ++i) {
 		const Symbol* sym = &st->symbols[i];
-		printf("  %s %.*s : %.*s\n", symbol_kind_name[sym->kind], sym->name.len, sym->name.ptr, sym->type.len, sym->type.ptr);
+		printf("  %s %.*s : %.*s", symbol_kind_name[sym->kind], sym->name.len, sym->name.ptr, sym->type.len, sym->type.ptr);
+		dump_storage_flags(sym->storage_flags);
+		dump_layout_info(sym->layout_flags, sym->layout_set, sym->layout_binding, sym->layout_location);
+		printf("\n");
 	}
 }
+
 
 typedef enum Prec
 {
@@ -325,7 +472,15 @@ struct
 
 void parse_error(const char* msg)
 {
-	fprintf(stderr, "Parse error: %s\n", msg);
+	fprintf(stderr, "Parse error: %s", msg);
+	if (tok.kind < TOK_COUNT) {
+		fprintf(stderr, " (token %s", tok_name[tok.kind]);
+		if (tok.lexeme && tok.len) {
+			fprintf(stderr, " '%.*s'", tok.len, tok.lexeme);
+		}
+		fprintf(stderr, ")");
+	}
+	fprintf(stderr, "\n");
 	exit(1);
 }
 
@@ -372,6 +527,47 @@ int str_eq_n(const char* s, int n, const char* kw)
 	return n == (int)klen && strncmp(s, kw, n) == 0;
 }
 
+unsigned storage_flag_from_keyword(const char* s, int n)
+{
+	if (str_eq_n(s, n, "in")) return SYM_STORAGE_IN;
+	if (str_eq_n(s, n, "out")) return SYM_STORAGE_OUT;
+	if (str_eq_n(s, n, "uniform")) return SYM_STORAGE_UNIFORM;
+	return 0;
+}
+
+unsigned layout_flag_from_keyword(const char* s, int n)
+{
+	if (str_eq_n(s, n, "set")) return SYM_LAYOUT_SET;
+	if (str_eq_n(s, n, "binding")) return SYM_LAYOUT_BINDING;
+	if (str_eq_n(s, n, "location")) return SYM_LAYOUT_LOCATION;
+	return 0;
+}
+
+void type_spec_add_storage(TypeSpec* spec, unsigned flags)
+{
+	if (!spec) return;
+	spec->storage_flags |= flags;
+}
+
+void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
+{
+	if (!spec) return;
+	spec->layout_flags |= layout_flag;
+	switch (layout_flag) {
+	case SYM_LAYOUT_SET:
+		spec->layout_set = value;
+		break;
+	case SYM_LAYOUT_BINDING:
+		spec->layout_binding = value;
+		break;
+	case SYM_LAYOUT_LOCATION:
+		spec->layout_location = value;
+		break;
+	default:
+		break;
+	}
+}
+
 int is_type_name(const char* s, int n)
 {
 	static const char* type_names[] = {
@@ -394,7 +590,61 @@ int is_type_name(const char* s, int n)
 
 int is_type_token()
 {
-	return tok.kind == TOK_IDENTIFIER && is_type_name(tok.lexeme, tok.len);
+	if (tok.kind != TOK_IDENTIFIER) return 0;
+	if (is_type_name(tok.lexeme, tok.len)) return 1;
+	if (storage_flag_from_keyword(tok.lexeme, tok.len)) return 1;
+	if (str_eq_n(tok.lexeme, tok.len, "layout")) return 1;
+	return 0;
+}
+
+void parse_layout_block(TypeSpec* spec)
+{
+	if (!spec) return;
+	next();
+	expect(TOK_LPAREN);
+	while (tok.kind != TOK_RPAREN) {
+		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in layout");
+		unsigned layout_flag = layout_flag_from_keyword(tok.lexeme, tok.len);
+		if (!layout_flag) parse_error("unknown layout identifier");
+		next();
+		expect(TOK_ASSIGN);
+		if (tok.kind != TOK_INT) parse_error("expected integer in layout assignment");
+		type_spec_set_layout(spec, layout_flag, tok.int_val);
+		next();
+		if (tok.kind == TOK_COMMA) {
+			next();
+			continue;
+		}
+		break;
+	}
+	expect(TOK_RPAREN);
+}
+
+void parse_type_qualifiers(TypeSpec* spec)
+{
+	while (tok.kind == TOK_IDENTIFIER) {
+		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme, tok.len);
+		if (storage_flag) {
+			type_spec_add_storage(spec, storage_flag);
+			next();
+			continue;
+		}
+		if (str_eq_n(tok.lexeme, tok.len, "layout")) {
+			parse_layout_block(spec);
+			continue;
+		}
+		break;
+	}
+}
+
+TypeSpec parse_type_specifier()
+{
+	TypeSpec spec = (TypeSpec){ 0 };
+	parse_type_qualifiers(&spec);
+	if (tok.kind != TOK_IDENTIFIER || !is_type_name(tok.lexeme, tok.len)) parse_error("expected type");
+	spec.type = ir_string(tok.lexeme, tok.len);
+	next();
+	return spec;
 }
 
 void expr_binary(Prec min_prec);
@@ -443,18 +693,22 @@ void func_param_array_suffix()
 void func_param()
 {
 	if (!is_type_token()) parse_error("expected type in parameter");
-	ir_emit(IR_FUNC_PARAM_BEGIN);
-	current_param_type = (IR_String){ 0 };
-	IR_String type = ir_string(tok.lexeme, tok.len);
-	current_param_type = type;
+	TypeSpec spec = parse_type_specifier();
+	IR_Cmd* param = ir_emit(IR_FUNC_PARAM_BEGIN);
+	param->storage_flags = spec.storage_flags;
+	param->layout_flags = spec.layout_flags;
+	param->layout_set = spec.layout_set;
+	param->layout_binding = spec.layout_binding;
+	param->layout_location = spec.layout_location;
+	current_param_type = spec.type;
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
-	inst->str0 = type;
-	next();
+	inst->str0 = spec.type;
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
 	IR_String name = ir_string(tok.lexeme, tok.len);
 	inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
-	symbol_table_add(&g_symbols, name, current_param_type, SYM_PARAM);
+	Symbol* sym = symbol_table_add(&g_symbols, name, current_param_type, SYM_PARAM);
+	symbol_apply_type_spec(sym, &spec);
 	next();
 	func_param_array_suffix();
 	ir_emit(IR_FUNC_PARAM_END);
@@ -478,103 +732,115 @@ void func_param_list()
 	ir_emit(IR_FUNC_PARAMS_END);
 }
 
-void global_var_decl(const char* type_name, int type_len, const char* first_name, int first_len)
+void global_var_decl(TypeSpec spec, IR_String first_name)
 {
 	IR_Cmd* inst;
-	ir_emit(IR_DECL_BEGIN);
-	current_decl_type = (IR_String){ 0 };
-	IR_String type = ir_string(type_name, type_len);
-	current_decl_type = type;
+	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
+	begin->storage_flags = spec.storage_flags;
+	begin->layout_flags = spec.layout_flags;
+	begin->layout_set = spec.layout_set;
+	begin->layout_binding = spec.layout_binding;
+	begin->layout_location = spec.layout_location;
+	current_decl_type = spec.type;
 	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = type;
-	IR_String first = ir_string(first_name, first_len);
+	inst->str0 = spec.type;
 	inst = ir_emit(IR_DECL_VAR);
-	inst->str0 = first;
-	symbol_table_add(&g_symbols, first, current_decl_type, SYM_VAR);
+	inst->str0 = first_name;
+	Symbol* sym = symbol_table_add(&g_symbols, first_name, current_decl_type, SYM_VAR);
+	symbol_apply_type_spec(sym, &spec);
 	decl_array_suffix();
 	if (tok.kind == TOK_ASSIGN) {
-		next();
-		ir_emit(IR_DECL_INIT_BEGIN);
-		expr();
-		ir_emit(IR_DECL_INIT_END);
-	}
+	next();
+	ir_emit(IR_DECL_INIT_BEGIN);
+	expr();
+	ir_emit(IR_DECL_INIT_END);
+}
 	while (tok.kind == TOK_COMMA) {
-		next();
-		ir_emit(IR_DECL_SEPARATOR);
-		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IR_String name = ir_string(tok.lexeme, tok.len);
-		inst = ir_emit(IR_DECL_VAR);
-		inst->str0 = name;
-		symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
-		next();
-		decl_array_suffix();
-		if (tok.kind == TOK_ASSIGN) {
-			next();
-			ir_emit(IR_DECL_INIT_BEGIN);
-			expr();
-			ir_emit(IR_DECL_INIT_END);
-		}
-	}
+	next();
+	ir_emit(IR_DECL_SEPARATOR);
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+	IR_String name = ir_string(tok.lexeme, tok.len);
+	inst = ir_emit(IR_DECL_VAR);
+	inst->str0 = name;
+	sym = symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
+	symbol_apply_type_spec(sym, &spec);
+	next();
+	decl_array_suffix();
+	if (tok.kind == TOK_ASSIGN) {
+	next();
+	ir_emit(IR_DECL_INIT_BEGIN);
+	expr();
+	ir_emit(IR_DECL_INIT_END);
+}
+}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
 	current_decl_type = (IR_String){ 0 };
 }
 
-void func_decl_or_def(const char* type_name, int type_len, const char* name, int name_len)
+void func_decl_or_def(TypeSpec spec, IR_String name)
 {
 	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
-	func->str0 = ir_string(type_name, type_len);
-	func->str1 = ir_string(name, name_len);
-	symbol_table_add(&g_symbols, func->str1, func->str0, SYM_FUNC);
+	func->str0 = spec.type;
+	func->str1 = name;
+	func->storage_flags = spec.storage_flags;
+	func->layout_flags = spec.layout_flags;
+	func->layout_set = spec.layout_set;
+	func->layout_binding = spec.layout_binding;
+	func->layout_location = spec.layout_location;
+	Symbol* sym = symbol_table_add(&g_symbols, func->str1, func->str0, SYM_FUNC);
+	symbol_apply_type_spec(sym, &spec);
 	expect(TOK_LPAREN);
 	func_param_list();
 	if (tok.kind == TOK_SEMI) {
-		next();
-		ir_emit(IR_FUNC_PROTOTYPE_END);
+	next();
+	ir_emit(IR_FUNC_PROTOTYPE_END);
 		return;
-	}
+}
 	if (tok.kind == TOK_LBRACE) {
-		ir_emit(IR_FUNC_DEFINITION_BEGIN);
-		stmt_block();
-		ir_emit(IR_FUNC_DEFINITION_END);
+	ir_emit(IR_FUNC_DEFINITION_BEGIN);
+	stmt_block();
+	ir_emit(IR_FUNC_DEFINITION_END);
 		return;
-	}
+}
 	parse_error("expected ';' or function body");
 }
 
 void stmt_decl()
 {
-	const char* type_name = tok.lexeme;
-	int type_len = tok.len;
+	TypeSpec spec = parse_type_specifier();
 	IR_Cmd* inst;
-	ir_emit(IR_DECL_BEGIN);
-	current_decl_type = (IR_String){ 0 };
-	IR_String type = ir_string(type_name, type_len);
-	current_decl_type = type;
+	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
+	begin->storage_flags = spec.storage_flags;
+	begin->layout_flags = spec.layout_flags;
+	begin->layout_set = spec.layout_set;
+	begin->layout_binding = spec.layout_binding;
+	begin->layout_location = spec.layout_location;
+	current_decl_type = spec.type;
 	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = type;
-	next();
+	inst->str0 = spec.type;
 	while (1) {
-		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IR_String name = ir_string(tok.lexeme, tok.len);
-		inst = ir_emit(IR_DECL_VAR);
-		inst->str0 = name;
-		symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
-		next();
-		decl_array_suffix();
-		if (tok.kind == TOK_ASSIGN) {
-			next();
-			ir_emit(IR_DECL_INIT_BEGIN);
-			expr();
-			ir_emit(IR_DECL_INIT_END);
-		}
-		if (tok.kind == TOK_COMMA) {
-			next();
-			ir_emit(IR_DECL_SEPARATOR);
-			continue;
-		}
-		break;
-	}
+	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
+	IR_String name = ir_string(tok.lexeme, tok.len);
+	inst = ir_emit(IR_DECL_VAR);
+	inst->str0 = name;
+	Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
+	symbol_apply_type_spec(sym, &spec);
+	next();
+	decl_array_suffix();
+	if (tok.kind == TOK_ASSIGN) {
+	next();
+	ir_emit(IR_DECL_INIT_BEGIN);
+	expr();
+	ir_emit(IR_DECL_INIT_END);
+}
+	if (tok.kind == TOK_COMMA) {
+	next();
+	ir_emit(IR_DECL_SEPARATOR);
+	continue;
+}
+	break;
+}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
 	current_decl_type = (IR_String){ 0 };
@@ -754,18 +1020,15 @@ void stmt()
 void top_level()
 {
 	if (!is_type_token()) parse_error("expected type at top level");
-	const char* type_name = tok.lexeme;
-	int type_len = tok.len;
-	next();
+	TypeSpec type_spec = parse_type_specifier();
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after type");
-	const char* name = tok.lexeme;
-	int name_len = tok.len;
+	IR_String name = ir_string(tok.lexeme, tok.len);
 	next();
 	if (tok.kind == TOK_LPAREN) {
-		func_decl_or_def(type_name, type_len, name, name_len);
+		func_decl_or_def(type_spec, name);
 		return;
-	}
-	global_var_decl(type_name, type_len, name, name_len);
+}
+	global_var_decl(type_spec, name);
 }
 
 void parse()
@@ -882,21 +1145,21 @@ int main()
 {
 #define STR(X) #X
 	const char* input = STR(
-		float helper(int count, vec3 normals[3]);
-		vec3 g_normals[3];
-		sampler2D tex_sampler;
-		float helper(int count, vec3 normals[3])
+		layout(location = 0) in vec2 in_pos;
+		layout(location = 1) in vec2 in_uv;
+		layout(location = 0) out vec2 v_uv;
+		layout(location = 1) out vec4 v_col;
+		layout(set = 0, binding = 0) uniform sampler2D u_texture;
+		layout(set = 1, binding = 0) uniform sampler2D u_fallback;
+		void main_image(layout(location = 0) in vec2 uv, layout(location = 1) in vec4 color)
 		{
-			vec4 color = texture(tex_sampler, normals[count]);
-			if (color.a == 0) {
-				vec4 fallback = vec4(0, 0, 0, 1);
+			v_uv = uv;
+			vec4 sample = texture(u_texture, uv);
+			if (sample.a == 0) {
+				v_col = texture(u_fallback, uv);
+			} else {
+				v_col = color;
 			}
-		}
-		void main_image(vec2 uv)
-		{
-			int count = 0;
-			vec4 color = texture(tex_sampler, uv);
-			helper(count, g_normals);
 		}
 	);
 	printf("Input : %s\n\n", input);
