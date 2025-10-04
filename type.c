@@ -288,6 +288,90 @@ Type* type_get_matrix(TypeTag base, int cols, int rows)
 	return type_system_get(name);
 }
 
+static Type* builtin_result_same(Type** args, int argc, int index)
+{
+	if (index < 0 || index >= argc)
+		return NULL;
+	return args[index];
+}
+
+static Type* builtin_result_scalar(Type** args, int argc, int index)
+{
+	Type* source = builtin_result_same(args, argc, index);
+	if (!source)
+		return NULL;
+	return type_get_scalar(type_base_type(source));
+}
+
+static Type* builtin_result_vector(Type** args, int argc, int index, int components)
+{
+	Type* source = builtin_result_same(args, argc, index);
+	if (!source)
+		return NULL;
+	return type_get_vector(type_base_type(source), components);
+}
+
+Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
+{
+	if (!sym)
+		return NULL;
+	switch (sym->builtin_kind)
+	{
+	case BUILTIN_TEXTURE:
+	case BUILTIN_TEXTURE_LOD:
+	case BUILTIN_TEXTURE_PROJ:
+	case BUILTIN_TEXTURE_GRAD:
+		return type_system_get(sintern("vec4"));
+	case BUILTIN_MIN:
+	case BUILTIN_MAX:
+	case BUILTIN_CLAMP:
+	case BUILTIN_ABS:
+	case BUILTIN_FLOOR:
+	case BUILTIN_CEIL:
+	case BUILTIN_FRACT:
+	case BUILTIN_MIX:
+	case BUILTIN_SIGN:
+	case BUILTIN_TRUNC:
+	case BUILTIN_ROUND:
+	case BUILTIN_ROUND_EVEN:
+	case BUILTIN_POW:
+	case BUILTIN_EXP:
+	case BUILTIN_EXP2:
+	case BUILTIN_LOG:
+	case BUILTIN_LOG2:
+	case BUILTIN_SQRT:
+	case BUILTIN_INVERSE_SQRT:
+	case BUILTIN_MOD:
+	case BUILTIN_SIN:
+	case BUILTIN_COS:
+	case BUILTIN_TAN:
+	case BUILTIN_ASIN:
+	case BUILTIN_ACOS:
+	case BUILTIN_ATAN:
+	case BUILTIN_NORMALIZE:
+	case BUILTIN_REFLECT:
+	case BUILTIN_REFRACT:
+		return builtin_result_same(args, argc, 0);
+	case BUILTIN_STEP:
+		return builtin_result_same(args, argc, 1);
+	case BUILTIN_SMOOTHSTEP:
+		return builtin_result_same(args, argc, 2);
+	case BUILTIN_LENGTH:
+	case BUILTIN_DISTANCE:
+	case BUILTIN_DOT:
+	case BUILTIN_FWIDTH:
+	case BUILTIN_DFDX:
+	case BUILTIN_DFDY:
+		return builtin_result_scalar(args, argc, 0);
+	case BUILTIN_CROSS:
+		return builtin_result_vector(args, argc, 0, 3);
+	default:
+		break;
+	}
+	return NULL;
+}
+
+
 int type_can_assign(const Type* dst, const Type* src)
 {
 	if (!dst || !src)
@@ -839,6 +923,10 @@ void type_check_ir()
 				Symbol* sym = symbol_table_find(inst->str0);
 				if (sym && sym->kind == SYM_FUNC)
 				{
+					if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
+					{
+						type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->builtin_param_count, argc);
+					}
 					if (sym->param_signature_set)
 					{
 						if (sym->param_count != argc)
@@ -858,8 +946,22 @@ void type_check_ir()
 							}
 						}
 					}
-					if (sym->type)
+					if (sym->builtin_kind != BUILTIN_NONE)
+					{
+						Type* builtin_result = type_infer_builtin_call(sym, args, argc);
+						if (builtin_result)
+						{
+							result = builtin_result;
+						}
+						else if (sym->type)
+						{
+							result = sym->type;
+						}
+					}
+					else if (sym->type)
+					{
 						result = sym->type;
+					}
 				}
 			}
 			inst->type = result;

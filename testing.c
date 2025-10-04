@@ -143,9 +143,10 @@ void unit_test()
 	const char* custom_name = sintern("test_struct");
 	Type* declared_type = type_system_add_internal(custom_name, custom_type);
 	assert(declared_type == type_system_get(custom_name));
-	type_system_free(&ts);
+	type_system_free();
 
-	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
+// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
+	type_system_init_builtins();
 	symbol_table_init();
 	Type int_type = (Type){ 0 };
 	int_type.tag = T_INT;
@@ -165,7 +166,14 @@ void unit_test()
 	symbol_table_leave_scope(&st);
 	assert(symbol_table_find(inner_name) == NULL);
 	assert(symbol_table_find(value_name) == value_sym);
+	const char* texture_name = sintern("texture");
+	Symbol* texture_sym = symbol_table_find(texture_name);
+	assert(texture_sym && texture_sym->builtin_kind == BUILTIN_TEXTURE);
+	const char* frac_name = sintern("frac");
+	Symbol* frac_sym = symbol_table_find(frac_name);
+	assert(frac_sym && frac_sym->builtin_kind == BUILTIN_FRACT);
 	symbol_table_free(&st);
+	type_system_free();
 
 	// Check that IR emission produces entries with the requested opcode.
 	IR_Cmd* saved_ir = g_ir;

@@ -70,6 +70,8 @@ Type** current_function_params;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
 
+Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
+
 void symbol_table_enter_scope()
 {
 	apush(st->scopes, (SymbolScope){ 0 });
@@ -85,11 +87,83 @@ void symbol_table_leave_scope()
 	apop(st->scopes);
 }
 
+typedef struct BuiltinFunctionInit
+{
+	const char* name;
+	BuiltinFuncKind kind;
+	const char* return_type_name;
+	int param_count;
+} BuiltinFunctionInit;
+
+static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
+{
+	const char* name = sintern(init->name);
+	const char* return_type = init->return_type_name ? sintern(init->return_type_name) : NULL;
+	Type* type = return_type ? type_system_get(return_type) : NULL;
+	Symbol* sym = symbol_table_add(name, return_type, type, SYM_FUNC);
+	sym->builtin_kind = init->kind;
+	sym->builtin_param_count = init->param_count;
+}
+
+static void symbol_table_register_builtins()
+{
+	const BuiltinFunctionInit builtins[] = {
+		{ "texture", BUILTIN_TEXTURE, "vec4", 2 },
+		{ "textureLod", BUILTIN_TEXTURE_LOD, "vec4", 3 },
+		{ "textureProj", BUILTIN_TEXTURE_PROJ, "vec4", -1 },
+		{ "textureGrad", BUILTIN_TEXTURE_GRAD, "vec4", 4 },
+		{ "min", BUILTIN_MIN, NULL, 2 },
+		{ "max", BUILTIN_MAX, NULL, 2 },
+		{ "clamp", BUILTIN_CLAMP, NULL, 3 },
+		{ "abs", BUILTIN_ABS, NULL, 1 },
+		{ "floor", BUILTIN_FLOOR, NULL, 1 },
+		{ "ceil", BUILTIN_CEIL, NULL, 1 },
+		{ "fract", BUILTIN_FRACT, NULL, 1 },
+		{ "frac", BUILTIN_FRACT, NULL, 1 },
+		{ "mix", BUILTIN_MIX, NULL, 3 },
+		{ "step", BUILTIN_STEP, NULL, 2 },
+		{ "smoothstep", BUILTIN_SMOOTHSTEP, NULL, 3 },
+		{ "dot", BUILTIN_DOT, NULL, 2 },
+		{ "cross", BUILTIN_CROSS, NULL, 2 },
+		{ "normalize", BUILTIN_NORMALIZE, NULL, 1 },
+		{ "length", BUILTIN_LENGTH, "float", 1 },
+		{ "distance", BUILTIN_DISTANCE, "float", 2 },
+		{ "reflect", BUILTIN_REFLECT, NULL, 2 },
+		{ "refract", BUILTIN_REFRACT, NULL, 3 },
+		{ "pow", BUILTIN_POW, NULL, 2 },
+		{ "exp", BUILTIN_EXP, NULL, 1 },
+		{ "exp2", BUILTIN_EXP2, NULL, 1 },
+		{ "log", BUILTIN_LOG, NULL, 1 },
+		{ "log2", BUILTIN_LOG2, NULL, 1 },
+		{ "sqrt", BUILTIN_SQRT, NULL, 1 },
+		{ "inversesqrt", BUILTIN_INVERSE_SQRT, NULL, 1 },
+		{ "mod", BUILTIN_MOD, NULL, 2 },
+		{ "sin", BUILTIN_SIN, NULL, 1 },
+		{ "cos", BUILTIN_COS, NULL, 1 },
+		{ "tan", BUILTIN_TAN, NULL, 1 },
+		{ "asin", BUILTIN_ASIN, NULL, 1 },
+		{ "acos", BUILTIN_ACOS, NULL, 1 },
+		{ "atan", BUILTIN_ATAN, NULL, -1 },
+		{ "sign", BUILTIN_SIGN, NULL, 1 },
+		{ "trunc", BUILTIN_TRUNC, NULL, 1 },
+		{ "round", BUILTIN_ROUND, NULL, 1 },
+		{ "roundEven", BUILTIN_ROUND_EVEN, NULL, 1 },
+		{ "dFdx", BUILTIN_DFDX, NULL, 1 },
+		{ "dFdy", BUILTIN_DFDY, NULL, 1 },
+		{ "fwidth", BUILTIN_FWIDTH, NULL, 1 }
+	};
+	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
+	{
+		symbol_table_register_builtin(&builtins[i]);
+	}
+}
+
 void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
 	symbol_table_enter_scope(st);
+	symbol_table_register_builtins();
 }
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
@@ -105,6 +179,7 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 	sym.type = type;
 	sym.kind = kind;
 	sym.scope_depth = acount(st->scopes) - 1;
+	sym.builtin_param_count = -1;
 	apush(st->symbols, sym);
 	int idx = acount(st->symbols);
 	map_add(scope->map, key, (uint64_t)idx);
@@ -975,12 +1050,12 @@ void expr_unary_common(Tok op)
 
 #define EXPR_UNARY(name, token_enum) \
 	void expr_##name() \
-	{ \
+		{ \
 		expr_unary_common(TOK_##token_enum); \
 	}
 #define EXPR_BINARY(name, precname, token_enum) \
 	void expr_##name() \
-	{ \
+		{ \
 		expr_binary_left(TOK_##token_enum, PREC_##precname); \
 	}
 
