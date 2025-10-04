@@ -39,6 +39,8 @@ const char* kw_discard;
 const char* kw_for;
 const char* kw_while;
 const char* kw_do;
+const char* kw_true;
+const char* kw_false;
 
 void init_keyword_interns()
 {
@@ -58,6 +60,8 @@ void init_keyword_interns()
 	kw_for = sintern("for");
 	kw_while = sintern("while");
 	kw_do = sintern("do");
+	kw_true = sintern("true");
+	kw_false = sintern("false");
 }
 
 SymbolTable g_symbol_table;
@@ -781,6 +785,13 @@ void expr_int()
 	next();
 }
 
+void expr_bool()
+{
+	IR_Cmd* inst = ir_emit(IR_PUSH_BOOL);
+	inst->arg0 = tok.int_val;
+	next();
+}
+
 void expr_float()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_FLOAT);
@@ -1470,6 +1481,12 @@ void next()
 		{
 			tok.kind = TOK_DISCARD;
 			tok.lexpr = expr_error;
+		}
+		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
+		{
+			tok.kind = TOK_BOOL;
+			tok.lexpr = expr_bool;
+			tok.int_val = tok.lexeme == kw_true;
 		}
 		return;
 	}
