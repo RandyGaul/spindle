@@ -749,8 +749,8 @@ void type_check_error(const char* fmt, ...)
 
 void type_check_ir()
 {
-	Type** stack = NULL;
-	Type** func_stack = NULL;
+	dyna Type** stack = NULL;
+	dyna Type** func_stack = NULL;
 	Type* current_decl_type = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{

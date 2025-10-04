@@ -127,8 +127,7 @@ void unit_test()
 	init_keyword_interns();
 
 	// Validate that builtin scalar and vector types are registered and queryable.
-	TypeSystem ts = (TypeSystem){ 0 };
-	type_system_init_builtins(&ts);
+	type_system_init_builtins();
 	const char* float_name = sintern("float");
 	Type* float_type = type_system_get(float_name);
 	assert(float_type && float_type->tag == T_FLOAT);

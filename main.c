@@ -168,7 +168,7 @@ typedef struct Symbol
 	int layout_binding;
 	int layout_location;
 	int scope_depth;
-	Type** params;
+	dyna Type** params;
 	int param_count;
 	int param_signature_set;
 	Type array_type;
@@ -190,7 +190,7 @@ typedef struct TypeSpec
 typedef struct TypeSystem
 {
 	Map map;
-	Type* types;
+	dyna Type* types;
 } TypeSystem;
 
 typedef enum IR_Op
@@ -364,7 +364,7 @@ typedef struct IR_Cmd
 
 // The global intermediate representation tape.
 // This gets produced before outputting any SPIRV as a middle-step.
-IR_Cmd* g_ir;
+dyna IR_Cmd* g_ir;
 TypeSystem g_type_system;
 TypeSystem* ts = &g_type_system;
 Type* g_type_void;
