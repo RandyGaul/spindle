@@ -60,20 +60,20 @@ typedef enum Tok
 	TOK_GE,
 	TOK_EQ,
 	TOK_NE,
-TOK_AND_AND,
-TOK_OR_OR,
-TOK_AMP,
-TOK_PIPE,
-TOK_CARET,
-TOK_LSHIFT,
-TOK_RSHIFT,
-TOK_ASSIGN,
-TOK_PLUS_ASSIGN,
-TOK_AND_ASSIGN,
-TOK_OR_ASSIGN,
-TOK_XOR_ASSIGN,
-TOK_LSHIFT_ASSIGN,
-TOK_RSHIFT_ASSIGN,
+	TOK_AND_AND,
+	TOK_OR_OR,
+	TOK_AMP,
+	TOK_PIPE,
+	TOK_CARET,
+	TOK_LSHIFT,
+	TOK_RSHIFT,
+	TOK_ASSIGN,
+	TOK_PLUS_ASSIGN,
+	TOK_AND_ASSIGN,
+	TOK_OR_ASSIGN,
+	TOK_XOR_ASSIGN,
+	TOK_LSHIFT_ASSIGN,
+	TOK_RSHIFT_ASSIGN,
 
 	TOK_COUNT
 } Tok;
@@ -129,37 +129,37 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_EQ] = "==",
 	[TOK_NE] = "!=",
 
-[TOK_AND_AND] = "&&",
-[TOK_OR_OR] = "||",
-[TOK_AMP] = "&",
-[TOK_PIPE] = "|",
-[TOK_CARET] = "^",
-[TOK_LSHIFT] = "<<",
-[TOK_RSHIFT] = ">>",
+	[TOK_AND_AND] = "&&",
+	[TOK_OR_OR] = "||",
+	[TOK_AMP] = "&",
+	[TOK_PIPE] = "|",
+	[TOK_CARET] = "^",
+	[TOK_LSHIFT] = "<<",
+	[TOK_RSHIFT] = ">>",
 
-[TOK_ASSIGN] = "=",
-[TOK_PLUS_ASSIGN] = "+=",
-[TOK_AND_ASSIGN] = "&=",
-[TOK_OR_ASSIGN] = "|=",
-[TOK_XOR_ASSIGN] = "^=",
-[TOK_LSHIFT_ASSIGN] = "<<=",
-[TOK_RSHIFT_ASSIGN] = ">>=",
+	[TOK_ASSIGN] = "=",
+	[TOK_PLUS_ASSIGN] = "+=",
+	[TOK_AND_ASSIGN] = "&=",
+	[TOK_OR_ASSIGN] = "|=",
+	[TOK_XOR_ASSIGN] = "^=",
+	[TOK_LSHIFT_ASSIGN] = "<<=",
+	[TOK_RSHIFT_ASSIGN] = ">>=",
 };
 
 typedef enum SymbolKind
 {
-        SYM_VAR,
-        SYM_FUNC,
-        SYM_PARAM,
-        SYM_BLOCK,
-        SYM_KIND_COUNT
+	SYM_VAR,
+	SYM_FUNC,
+	SYM_PARAM,
+	SYM_BLOCK,
+	SYM_KIND_COUNT
 } SymbolKind;
 
 const char* symbol_kind_name[SYM_KIND_COUNT] = {
-        [SYM_VAR] = "var",
-        [SYM_FUNC] = "func",
-        [SYM_PARAM] = "param",
-        [SYM_BLOCK] = "block",
+	[SYM_VAR] = "var",
+	[SYM_FUNC] = "func",
+	[SYM_PARAM] = "param",
+	[SYM_BLOCK] = "block",
 };
 
 typedef enum TypeTag
@@ -183,36 +183,36 @@ typedef struct Type Type;
 
 struct Type
 {
-        TypeTag tag;
-        uint8_t cols;
-        uint8_t rows;
-        uint8_t base;
-        uint8_t dim;
-        int array_len;
-        void* user;
-        const char* name;
+	TypeTag tag;
+	uint8_t cols;
+	uint8_t rows;
+	uint8_t base;
+	uint8_t dim;
+	int array_len;
+	void* user;
+	const char* name;
 };
 
 typedef struct StructMember
 {
-        const char* name;
-        Type* declared_type;
-        Type* type;
-        Type array_type;
-        int has_array;
-        int array_len;
-        int array_unsized;
-        unsigned layout_flags;
-        int layout_set;
-        int layout_binding;
-        int layout_location;
+	const char* name;
+	Type* declared_type;
+	Type* type;
+	Type array_type;
+	int has_array;
+	int array_len;
+	int array_unsized;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
 } StructMember;
 
 typedef struct StructInfo
 {
-        const char* name;
-        dyna StructMember* members;
-        dyna const char** layout_identifiers;
+	const char* name;
+	dyna StructMember* members;
+	dyna const char** layout_identifiers;
 } StructInfo;
 
 Type* type_system_declare_struct(const char* name);
@@ -226,86 +226,86 @@ StructMember* type_struct_find_member(Type* type, const char* name);
 
 typedef enum BuiltinFuncKind
 {
-        BUILTIN_NONE,
-        BUILTIN_TEXTURE,
-        BUILTIN_TEXTURE_LOD,
-        BUILTIN_TEXTURE_PROJ,
-        BUILTIN_TEXTURE_GRAD,
-        BUILTIN_MIN,
-        BUILTIN_MAX,
-        BUILTIN_CLAMP,
-        BUILTIN_ABS,
-        BUILTIN_FLOOR,
-        BUILTIN_CEIL,
-        BUILTIN_FRACT,
-        BUILTIN_MIX,
-        BUILTIN_STEP,
-        BUILTIN_SMOOTHSTEP,
-        BUILTIN_DOT,
-        BUILTIN_CROSS,
-        BUILTIN_NORMALIZE,
-        BUILTIN_LENGTH,
-        BUILTIN_DISTANCE,
-        BUILTIN_REFLECT,
-        BUILTIN_REFRACT,
-        BUILTIN_POW,
-        BUILTIN_EXP,
-        BUILTIN_EXP2,
-        BUILTIN_LOG,
-        BUILTIN_LOG2,
-        BUILTIN_SQRT,
-        BUILTIN_INVERSE_SQRT,
-        BUILTIN_MOD,
-        BUILTIN_SIN,
-        BUILTIN_COS,
-        BUILTIN_TAN,
-        BUILTIN_ASIN,
-        BUILTIN_ACOS,
-        BUILTIN_ATAN,
-        BUILTIN_SIGN,
-        BUILTIN_TRUNC,
-        BUILTIN_ROUND,
-        BUILTIN_ROUND_EVEN,
-        BUILTIN_DFDX,
-        BUILTIN_DFDY,
-        BUILTIN_FWIDTH
+	BUILTIN_NONE,
+	BUILTIN_TEXTURE,
+	BUILTIN_TEXTURE_LOD,
+	BUILTIN_TEXTURE_PROJ,
+	BUILTIN_TEXTURE_GRAD,
+	BUILTIN_MIN,
+	BUILTIN_MAX,
+	BUILTIN_CLAMP,
+	BUILTIN_ABS,
+	BUILTIN_FLOOR,
+	BUILTIN_CEIL,
+	BUILTIN_FRACT,
+	BUILTIN_MIX,
+	BUILTIN_STEP,
+	BUILTIN_SMOOTHSTEP,
+	BUILTIN_DOT,
+	BUILTIN_CROSS,
+	BUILTIN_NORMALIZE,
+	BUILTIN_LENGTH,
+	BUILTIN_DISTANCE,
+	BUILTIN_REFLECT,
+	BUILTIN_REFRACT,
+	BUILTIN_POW,
+	BUILTIN_EXP,
+	BUILTIN_EXP2,
+	BUILTIN_LOG,
+	BUILTIN_LOG2,
+	BUILTIN_SQRT,
+	BUILTIN_INVERSE_SQRT,
+	BUILTIN_MOD,
+	BUILTIN_SIN,
+	BUILTIN_COS,
+	BUILTIN_TAN,
+	BUILTIN_ASIN,
+	BUILTIN_ACOS,
+	BUILTIN_ATAN,
+	BUILTIN_SIGN,
+	BUILTIN_TRUNC,
+	BUILTIN_ROUND,
+	BUILTIN_ROUND_EVEN,
+	BUILTIN_DFDX,
+	BUILTIN_DFDY,
+	BUILTIN_FWIDTH
 } BuiltinFuncKind;
 
 typedef struct Symbol
 {
-        const char* name;
-        const char* type_name;
-        Type* type;
-        SymbolKind kind;
-        unsigned storage_flags;
-        unsigned layout_flags;
-        int layout_set;
-        int layout_binding;
-        int layout_location;
-        int scope_depth;
-        dyna Type** params;
-        int param_count;
-        int param_signature_set;
-        Type array_type;
-        Type* array_element_type;
-        int array_dimensions;
-        BuiltinFuncKind builtin_kind;
-        int builtin_param_count;
+	const char* name;
+	const char* type_name;
+	Type* type;
+	SymbolKind kind;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
+	int scope_depth;
+	dyna Type** params;
+	int param_count;
+	int param_signature_set;
+	Type array_type;
+	Type* array_element_type;
+	int array_dimensions;
+	BuiltinFuncKind builtin_kind;
+	int builtin_param_count;
 } Symbol;
 
 typedef struct TypeSpec
 {
-        const char* type_name;
-        Type* type;
-        unsigned storage_flags;
-        unsigned layout_flags;
-        int layout_set;
-        int layout_binding;
-        int layout_location;
-        dyna const char** layout_identifiers;
-        StructInfo* struct_info;
-        int has_struct_definition;
-        int is_interface_block;
+	const char* type_name;
+	Type* type;
+	unsigned storage_flags;
+	unsigned layout_flags;
+	int layout_set;
+	int layout_binding;
+	int layout_location;
+	dyna const char** layout_identifiers;
+	StructInfo* struct_info;
+	int has_struct_definition;
+	int is_interface_block;
 } TypeSpec;
 
 typedef struct TypeSystem
@@ -391,18 +391,18 @@ typedef enum IR_Op
 	IR_FUNC_PARAM_END,
 	IR_FUNC_PARAM_SEPARATOR,
 	IR_FUNC_PARAMS_END,
-        IR_FUNC_PROTOTYPE_END,
-        IR_FUNC_DEFINITION_BEGIN,
-        IR_FUNC_DEFINITION_END,
-        IR_STRUCT_BEGIN,
-        IR_STRUCT_MEMBER,
-        IR_STRUCT_END,
-        IR_BLOCK_DECL_BEGIN,
-        IR_BLOCK_DECL_LAYOUT,
-        IR_BLOCK_DECL_MEMBER,
-        IR_BLOCK_DECL_INSTANCE,
-        IR_BLOCK_DECL_END,
-        IR_OP_COUNT
+	IR_FUNC_PROTOTYPE_END,
+	IR_FUNC_DEFINITION_BEGIN,
+	IR_FUNC_DEFINITION_END,
+	IR_STRUCT_BEGIN,
+	IR_STRUCT_MEMBER,
+	IR_STRUCT_END,
+	IR_BLOCK_DECL_BEGIN,
+	IR_BLOCK_DECL_LAYOUT,
+	IR_BLOCK_DECL_MEMBER,
+	IR_BLOCK_DECL_INSTANCE,
+	IR_BLOCK_DECL_END,
+	IR_OP_COUNT
 } IR_Op;
 
 enum
@@ -486,19 +486,19 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_FUNC_PARAM_ARRAY_SIZE_END] = "func_param_array_size_end",
 	[IR_FUNC_PARAM_ARRAY_END] = "func_param_array_end",
 	[IR_FUNC_PARAM_END] = "func_param_end",
-        [IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
-        [IR_FUNC_PARAMS_END] = "func_params_end",
-        [IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
-        [IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
-        [IR_FUNC_DEFINITION_END] = "func_definition_end",
-        [IR_STRUCT_BEGIN] = "struct_begin",
-        [IR_STRUCT_MEMBER] = "struct_member",
-        [IR_STRUCT_END] = "struct_end",
-        [IR_BLOCK_DECL_BEGIN] = "block_decl_begin",
-        [IR_BLOCK_DECL_LAYOUT] = "block_decl_layout",
-        [IR_BLOCK_DECL_MEMBER] = "block_decl_member",
-        [IR_BLOCK_DECL_INSTANCE] = "block_decl_instance",
-        [IR_BLOCK_DECL_END] = "block_decl_end",
+	[IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
+	[IR_FUNC_PARAMS_END] = "func_params_end",
+	[IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
+	[IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
+	[IR_FUNC_DEFINITION_END] = "func_definition_end",
+	[IR_STRUCT_BEGIN] = "struct_begin",
+	[IR_STRUCT_MEMBER] = "struct_member",
+	[IR_STRUCT_END] = "struct_end",
+	[IR_BLOCK_DECL_BEGIN] = "block_decl_begin",
+	[IR_BLOCK_DECL_LAYOUT] = "block_decl_layout",
+	[IR_BLOCK_DECL_MEMBER] = "block_decl_member",
+	[IR_BLOCK_DECL_INSTANCE] = "block_decl_instance",
+	[IR_BLOCK_DECL_END] = "block_decl_end",
 };
 
 typedef struct IR_Cmd
@@ -547,221 +547,209 @@ void dump_ir();
 void dump_symbols();
 
 const char* snippet_basic_io = STR(
-	layout(location = 0) in vec3 in_pos;
-	layout(location = 1) in vec2 in_uv;
-	layout(location = 0) out vec4 out_color;
-	layout(set = 0, binding = 0) uniform sampler2D u_texture;
-	layout(set = 1, binding = 0) uniform vec4 u_tint;
-	void main() {
-		vec4 sampled = texture(u_texture, in_uv);
-		out_color = sampled * u_tint;
-	}
-);
+		layout(location = 0) in vec3 in_pos;
+		layout(location = 1) in vec2 in_uv;
+		layout(location = 0) out vec4 out_color;
+		layout(set = 0, binding = 0) uniform sampler2D u_texture;
+		layout(set = 1, binding = 0) uniform vec4 u_tint;
+		void main() {
+			vec4 sampled = texture(u_texture, in_uv);
+			out_color = sampled * u_tint;
+		});
 
 const char* snippet_control_flow = STR(
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		float accum = 0.0;
-		int counter = 0;
-		accum += float(counter++);
-		accum += float(++counter);
-		vec2 adjustments = vec2(0.25, 0.25);
-		adjustments++;
-		--adjustments;
-		accum += adjustments.x;
-		for (int i = 0; i < 4; ++i)
-		{
-			accum += float(i) * 0.25;
-		}
-		counter--;
-		--counter;
-		if (accum > 0.5)
-		{
-			out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);
-		}
-		else
-		{
-			out_color = vec4(1.0 - accum);
-		}
-	}
-);
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			float accum = 0.0;
+			int counter = 0;
+			accum += float(counter++);
+			accum += float(++counter);
+			vec2 adjustments = vec2(0.25, 0.25);
+			adjustments++;
+			--adjustments;
+			accum += adjustments.x;
+			for (int i = 0; i < 4; ++i)
+			{
+				accum += float(i) * 0.25;
+			}
+			counter--;
+			--counter;
+			if (accum > 0.5)
+			{
+				out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);
+			}
+			else
+			{
+				out_color = vec4(1.0 - accum);
+			}
+		});
 
 const char* snippet_array_indexing = STR(
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		float scalars[4];
-		scalars[0] = 1.0;
-		int ints[3];
-		ints[1] = 2;
-		uint uints[3];
-		uints[2] = 3u;
-		bool flags[2];
-		flags[0] = false;
-		flags[1] = ints[1] > 0;
-		vec4 vectors[2];
-		vec4 v = vectors[1];
-		mat3 matrices[2];
-		mat3 m = matrices[0];
-		vec3 column = m[1];
-		float element = column[2];
-		out_color = vec4(scalars[0], float(ints[1]), v.x, element);
-		bool flag = flags[1];
-		bool literal_true = true;
-		uint value = uints[2];
-		if (literal_true && flag)
-		{
-			out_color.xy += vec2(float(value));
-		}
-	}
-);
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			float scalars[4];
+			scalars[0] = 1.0;
+			int ints[3];
+			ints[1] = 2;
+			uint uints[3];
+			uints[2] = 3u;
+			bool flags[2];
+			flags[0] = false;
+			flags[1] = ints[1] > 0;
+			vec4 vectors[2];
+			vec4 v = vectors[1];
+			mat3 matrices[2];
+			mat3 m = matrices[0];
+			vec3 column = m[1];
+			float element = column[2];
+			out_color = vec4(scalars[0], float(ints[1]), v.x, element);
+			bool flag = flags[1];
+			bool literal_true = true;
+			uint value = uints[2];
+			if (literal_true && flag)
+			{
+				out_color.xy += vec2(float(value));
+			}
+		});
 
 const char* snippet_swizzle = STR(
-	layout(location = 0) in vec4 input_vec;
-	layout(location = 0) out vec4 out_vec;
-	void main() {
-		float single = input_vec.x;
-		vec3 rgb = input_vec.rgb;
-		vec2 ba = input_vec.ba;
-		vec4 assembled = vec4(rgb, 1.0);
-		vec4 full = input_vec.xyzw;
-		out_vec = vec4(ba, assembled.gr);
-		out_vec += vec4(single, full.wzy);
-	}
-);
+		layout(location = 0) in vec4 input_vec;
+		layout(location = 0) out vec4 out_vec;
+		void main() {
+			float single = input_vec.x;
+			vec3 rgb = input_vec.rgb;
+			vec2 ba = input_vec.ba;
+			vec4 assembled = vec4(rgb, 1.0);
+			vec4 full = input_vec.xyzw;
+			out_vec = vec4(ba, assembled.gr);
+			out_vec += vec4(single, full.wzy);
+		});
 
 const char* snippet_function_calls = STR(
-	layout(location = 0) in vec2 in_uv;
-	layout(location = 0) out vec4 out_color;
-	float saturate(float value) {
-		if (value < 0.0)
-			return 0.0;
-		if (value > 1.0)
-			return 1.0;
-		return value;
-	} vec4 apply_gain(vec4 color, float gain) {
-		return vec4(color.rgb * gain, color.a);
-	} void main() {
-		vec4 base = vec4(in_uv, 0.5, 1.0);
-		float gain = saturate(base.x + base.y);
-		out_color = apply_gain(base, gain);
-	}
-);
+		layout(location = 0) in vec2 in_uv;
+		layout(location = 0) out vec4 out_color;
+		float saturate(float value) {
+			if (value < 0.0)
+				return 0.0;
+			if (value > 1.0)
+				return 1.0;
+			return value;
+		} vec4 apply_gain(vec4 color, float gain) {
+			return vec4(color.rgb * gain, color.a);
+		} void main() {
+			vec4 base = vec4(in_uv, 0.5, 1.0);
+			float gain = saturate(base.x + base.y);
+			out_color = apply_gain(base, gain);
+		});
 
 const char* snippet_matrix_ops = STR(
-        layout(location = 0) out vec4 out_color;
-        void main() {
-                mat3 rotation = mat3(1.0);
-                vec3 column = rotation[1];
-                float diagonal = rotation[2][2];
-                out_color = vec4(column, diagonal);
-        }
-);
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			mat3 rotation = mat3(1.0);
+			vec3 column = rotation[1];
+			float diagonal = rotation[2][2];
+			out_color = vec4(column, diagonal);
+		});
 
 const char* snippet_struct_block = STR(
-        struct Light {
-                vec3 position;
-                float intensity;
-        };
-        layout(std140, set = 1, binding = 0) uniform LightBlock {
-                Light lights[2];
-        } u_light_data;
-        layout(location = 0) out vec4 out_color;
-        void main() {
-                out_color = vec4(u_light_data.lights[0].position, u_light_data.lights[0].intensity);
-        }
-);
+		struct Light {
+			vec3 position;
+			float intensity;
+		};
+		layout(std140, set = 1, binding = 0) uniform LightBlock {
+			Light lights[2];
+		} u_light_data;
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			out_color = vec4(u_light_data.lights[0].position, u_light_data.lights[0].intensity);
+		});
 
 const char* snippet_looping = STR(
-        layout(location = 0) out vec4 out_color;
-        void main() {
-                int counter = 0;
-                float total = 0.0;
-		while (counter < 4)
-		{
-			total += float(counter);
-			counter = counter + 1;
-		}
-		do
-		{
-			total = total + 0.5;
-			counter = counter - 1;
-			if (counter == 1)
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			int counter = 0;
+			float total = 0.0;
+			while (counter < 4)
 			{
-				continue;
+				total += float(counter);
+				counter = counter + 1;
 			}
-		} while (counter > 0);
-		out_color = vec4(total);
-	}
-);
+			do
+			{
+				total = total + 0.5;
+				counter = counter - 1;
+				if (counter == 1)
+				{
+					continue;
+				}
+			} while (counter > 0);
+			out_color = vec4(total);
+		});
 
 const char* snippet_bitwise = STR(
-	layout(location = 0) out ivec2 out_bits;
-	void main() {
-		int a = 5;
-		int b = 3;
-		int mask = a & b;
-		int mix = (a | b) ^ 1;
-		int shifted = (a << 2) >> 1;
-		ivec2 vec_mask = ivec2(1, 2);
-		ivec2 values = ivec2(4, 8);
-		values |= vec_mask;
-		values &= ivec2(7, 7);
-		values ^= ivec2(1, 2);
-		values <<= ivec2(1, 0);
-		values >>= 1;
-		out_bits = values + ivec2(mask, mix + shifted);
-	}
-);
+		layout(location = 0) out ivec2 out_bits;
+		void main() {
+			int a = 5;
+			int b = 3;
+			int mask = a & b;
+			int mix = (a | b) ^ 1;
+			int shifted = (a << 2) >> 1;
+			ivec2 vec_mask = ivec2(1, 2);
+			ivec2 values = ivec2(4, 8);
+			values |= vec_mask;
+			values &= ivec2(7, 7);
+			values ^= ivec2(1, 2);
+			values <<= ivec2(1, 0);
+			values >>= 1;
+			out_bits = values + ivec2(mask, mix + shifted);
+		});
 
 const char* snippet_switch_stmt = STR(
-	layout(location = 0) in int in_mode;
-	layout(location = 0) out vec4 out_color;
-	void main() {
-		int mode = in_mode;
-		vec4 color = vec4(0.0);
-		switch (mode)
-		{
-		case 0:
-			color = vec4(1.0, 0.0, 0.0, 1.0);
-			break;
-		case 1:
-		case 2:
-			color = vec4(float(mode));
-			break;
-		default:
-			color = vec4(0.0, 0.0, 1.0, 1.0);
-			break;
-		}
-		out_color = color;
-	}
-);
+		layout(location = 0) in int in_mode;
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			int mode = in_mode;
+			vec4 color = vec4(0.0);
+			switch (mode)
+			{
+			case 0:
+				color = vec4(1.0, 0.0, 0.0, 1.0);
+				break;
+			case 1:
+			case 2:
+				color = vec4(float(mode));
+				break;
+			default:
+				color = vec4(0.0, 0.0, 1.0, 1.0);
+				break;
+			}
+			out_color = color;
+		});
 
 const char* snippet_discard = STR(
-        layout(location = 0) in vec4 in_color;
-        layout(location = 0) out vec4 out_color;
-        void main() {
-                vec4 color = in_color;
-                if (color.a == 0.0)
-                {
-                        discard;
-                }
-                out_color = color;
-        }
-);
+		layout(location = 0) in vec4 in_color;
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			vec4 color = in_color;
+			if (color.a == 0.0)
+			{
+				discard;
+			}
+			out_color = color;
+		});
 
 const char* snippet_builtin_funcs = STR(
-        layout(location = 0) out vec4 out_color;
-        layout(set = 0, binding = 0) uniform sampler2D u_tex;
-        void main() {
-                vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
-                vec4 sampled = texture(u_tex, uv);
-                float m = max(sampled.x, sampled.y);
-                float f = frac(m);
-                float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
-                vec3 unit = normalize(sampled.rgb);
-                out_color = vec4(unit * (f + shade), sampled.a);
-        }
-);
+		layout(location = 0) out vec4 out_color;
+		layout(set = 0, binding = 0) uniform sampler2D u_tex;
+		void main() {
+			vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
+			vec4 sampled = texture(u_tex, uv);
+			float m = max(sampled.x, sampled.y);
+			float f = frac(m);
+			float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
+			vec3 unit = normalize(sampled.rgb);
+			out_color = vec4(unit * (f + shade), sampled.a);
+		});
 
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
@@ -777,7 +765,6 @@ void transpile(const char* source)
 	dump_symbols();
 	compiler_teardown();
 }
-
 
 int main()
 {
@@ -799,9 +786,9 @@ int main()
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },
 		{ "discard", snippet_discard },
-              { "switch", snippet_switch_stmt },
-              { "builtin_funcs", snippet_builtin_funcs },
-                { "struct_block", snippet_struct_block },
+		{ "switch", snippet_switch_stmt },
+		{ "builtin_funcs", snippet_builtin_funcs },
+		{ "struct_block", snippet_struct_block },
 	};
 
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)

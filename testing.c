@@ -89,46 +89,46 @@ void dump_ir()
 		case IR_CONSTRUCT:
 			printf(" type=%s argc=%d", inst->str0 ? inst->str0 : "<null>", inst->arg0);
 			break;
-                case IR_FUNC_BEGIN:
-                        printf(" return=%s name=%s", inst->str0, inst->str1);
-                        dump_storage_flags(inst->storage_flags);
-                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-                        break;
-                case IR_STRUCT_BEGIN:
-                        printf(" name=%s", inst->str0 ? inst->str0 : "<anon>");
-                        break;
-                case IR_STRUCT_MEMBER:
-                        printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
-                        if (inst->arg0)
-                                printf(" array_len=%d", inst->arg0);
-                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-                        break;
-                case IR_STRUCT_END:
-                        break;
-                case IR_BLOCK_DECL_BEGIN:
-                        printf(" type=%s", inst->str0 ? inst->str0 : "<anon>");
-                        dump_storage_flags(inst->storage_flags);
-                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-                        break;
-                case IR_BLOCK_DECL_LAYOUT:
-                        printf(" %s", inst->str0 ? inst->str0 : "<anon>");
-                        break;
-                case IR_BLOCK_DECL_MEMBER:
-                        printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
-                        if (inst->arg0)
-                                printf(" array_len=%d", inst->arg0);
-                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-                        break;
-                case IR_BLOCK_DECL_INSTANCE:
-                        printf(" %s", inst->str0 ? inst->str0 : "<anon>");
-                        break;
-                case IR_BLOCK_DECL_END:
-                        break;
-                case IR_RETURN:
-                        printf(" has_value=%d", inst->arg0);
-                        break;
-                case IR_BREAK:
-                case IR_CONTINUE:
+		case IR_FUNC_BEGIN:
+			printf(" return=%s name=%s", inst->str0, inst->str1);
+			dump_storage_flags(inst->storage_flags);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_STRUCT_BEGIN:
+			printf(" name=%s", inst->str0 ? inst->str0 : "<anon>");
+			break;
+		case IR_STRUCT_MEMBER:
+			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
+			if (inst->arg0)
+				printf(" array_len=%d", inst->arg0);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_STRUCT_END:
+			break;
+		case IR_BLOCK_DECL_BEGIN:
+			printf(" type=%s", inst->str0 ? inst->str0 : "<anon>");
+			dump_storage_flags(inst->storage_flags);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_BLOCK_DECL_LAYOUT:
+			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
+			break;
+		case IR_BLOCK_DECL_MEMBER:
+			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
+			if (inst->arg0)
+				printf(" array_len=%d", inst->arg0);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_BLOCK_DECL_INSTANCE:
+			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
+			break;
+		case IR_BLOCK_DECL_END:
+			break;
+		case IR_RETURN:
+			printf(" has_value=%d", inst->arg0);
+			break;
+		case IR_BREAK:
+		case IR_CONTINUE:
 		case IR_DISCARD:
 			break;
 		default:
@@ -178,7 +178,7 @@ void unit_test()
 	assert(declared_type == type_system_get(custom_name));
 	type_system_free();
 
-// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
+	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
 	type_system_init_builtins();
 	symbol_table_init();
 	Type int_type = (Type){ 0 };
@@ -452,8 +452,8 @@ void unit_test()
 		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
 		{
 			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
-			        (inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
-			        inst->layout_set == 1 && inst->layout_binding == 0;
+					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
+					inst->layout_set == 1 && inst->layout_binding == 0;
 		}
 		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
 		{

@@ -34,141 +34,141 @@ static Type* type_system_add_internal(const char* name, Type type)
 
 Type* type_system_get(const char* name)
 {
-        uint64_t idx = map_get(ts->map, (uint64_t)name);
-        if (!idx)
-                return NULL;
-        return &ts->types[(int)idx - 1];
+	uint64_t idx = map_get(ts->map, (uint64_t)name);
+	if (!idx)
+		return NULL;
+	return &ts->types[(int)idx - 1];
 }
 
 StructInfo* type_struct_info(Type* type)
 {
-        if (!type || type->tag != T_STRUCT)
-                return NULL;
-        return type->user ? (StructInfo*)type->user : NULL;
+	if (!type || type->tag != T_STRUCT)
+		return NULL;
+	return type->user ? (StructInfo*)type->user : NULL;
 }
 
 static StructInfo* type_struct_info_ensure(Type* type)
 {
-        if (!type || type->tag != T_STRUCT)
-                return NULL;
-        StructInfo* info = type_struct_info(type);
-        if (!info)
-        {
-                info = (StructInfo*)calloc(1, sizeof(StructInfo));
-                info->name = type->name;
-                type->user = info;
-        }
-        return info;
+	if (!type || type->tag != T_STRUCT)
+		return NULL;
+	StructInfo* info = type_struct_info(type);
+	if (!info)
+	{
+		info = (StructInfo*)calloc(1, sizeof(StructInfo));
+		info->name = type->name;
+		type->user = info;
+	}
+	return info;
 }
 
 Type* type_system_declare_struct(const char* name)
 {
-        Type* existing = type_system_get(name);
-        if (existing)
-        {
-                if (existing->tag == T_STRUCT)
-                {
-                        type_struct_clear(existing);
-                        return existing;
-                }
-                return existing;
-        }
-        Type type = { 0 };
-        type.tag = T_STRUCT;
-        type.cols = 1;
-        type.rows = 1;
-        type.base = T_VOID;
-        type.array_len = 0;
-        type.name = name;
-        Type* result = type_system_add_internal(name, type);
-        type_struct_clear(result);
-        return result;
+	Type* existing = type_system_get(name);
+	if (existing)
+	{
+		if (existing->tag == T_STRUCT)
+		{
+			type_struct_clear(existing);
+			return existing;
+		}
+		return existing;
+	}
+	Type type = { 0 };
+	type.tag = T_STRUCT;
+	type.cols = 1;
+	type.rows = 1;
+	type.base = T_VOID;
+	type.array_len = 0;
+	type.name = name;
+	Type* result = type_system_add_internal(name, type);
+	type_struct_clear(result);
+	return result;
 }
 
 void type_struct_clear(Type* type)
 {
-        StructInfo* info = type_struct_info_ensure(type);
-        if (!info)
-                return;
-        info->name = type ? type->name : NULL;
-        if (info->members)
-                aclear(info->members);
-        if (info->layout_identifiers)
-                aclear(info->layout_identifiers);
+	StructInfo* info = type_struct_info_ensure(type);
+	if (!info)
+		return;
+	info->name = type ? type->name : NULL;
+	if (info->members)
+		aclear(info->members);
+	if (info->layout_identifiers)
+		aclear(info->layout_identifiers);
 }
 
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type)
 {
-        StructInfo* info = type_struct_info_ensure(type);
-        if (!info)
-                return NULL;
-        StructMember member = (StructMember){ 0 };
-        member.name = name;
-        member.declared_type = member_type;
-        member.type = member_type;
-        member.array_type = (Type){ 0 };
-        member.has_array = 0;
-        member.array_len = 0;
-        member.array_unsized = 0;
-        apush(info->members, member);
-        return &alast(info->members);
+	StructInfo* info = type_struct_info_ensure(type);
+	if (!info)
+		return NULL;
+	StructMember member = (StructMember){ 0 };
+	member.name = name;
+	member.declared_type = member_type;
+	member.type = member_type;
+	member.array_type = (Type){ 0 };
+	member.has_array = 0;
+	member.array_len = 0;
+	member.array_unsized = 0;
+	apush(info->members, member);
+	return &alast(info->members);
 }
 
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location)
 {
-        if (!member)
-                return;
-        member->layout_flags = layout_flags;
-        member->layout_set = set;
-        member->layout_binding = binding;
-        member->layout_location = location;
+	if (!member)
+		return;
+	member->layout_flags = layout_flags;
+	member->layout_set = set;
+	member->layout_binding = binding;
+	member->layout_location = location;
 }
 
 void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized)
 {
-        if (!member)
-                return;
-        member->has_array = 1;
-        member->array_len = size;
-        member->array_unsized = unsized;
-        member->array_type = (Type){ 0 };
-        member->array_type.tag = T_ARRAY;
-        member->array_type.base = element_type ? element_type->tag : T_VOID;
-        member->array_type.cols = element_type ? element_type->cols : 1;
-        member->array_type.rows = element_type ? element_type->rows : 1;
-        member->array_type.array_len = unsized ? -1 : size;
-        member->array_type.user = element_type;
-        member->array_type.name = NULL;
-        member->type = &member->array_type;
+	if (!member)
+		return;
+	member->has_array = 1;
+	member->array_len = size;
+	member->array_unsized = unsized;
+	member->array_type = (Type){ 0 };
+	member->array_type.tag = T_ARRAY;
+	member->array_type.base = element_type ? element_type->tag : T_VOID;
+	member->array_type.cols = element_type ? element_type->cols : 1;
+	member->array_type.rows = element_type ? element_type->rows : 1;
+	member->array_type.array_len = unsized ? -1 : size;
+	member->array_type.user = element_type;
+	member->array_type.name = NULL;
+	member->type = &member->array_type;
 }
 
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count)
 {
-        StructInfo* info = type_struct_info_ensure(type);
-        if (!info)
-                return;
-        if (info->layout_identifiers)
-                aclear(info->layout_identifiers);
-        for (int i = 0; i < count; ++i)
-        {
-                const char* ident = identifiers ? identifiers[i] : NULL;
-                if (ident)
-                        apush(info->layout_identifiers, ident);
-        }
+	StructInfo* info = type_struct_info_ensure(type);
+	if (!info)
+		return;
+	if (info->layout_identifiers)
+		aclear(info->layout_identifiers);
+	for (int i = 0; i < count; ++i)
+	{
+		const char* ident = identifiers ? identifiers[i] : NULL;
+		if (ident)
+			apush(info->layout_identifiers, ident);
+	}
 }
 
 StructMember* type_struct_find_member(Type* type, const char* name)
 {
-        StructInfo* info = type_struct_info(type);
-        if (!info || !name)
-                return NULL;
-        for (int i = 0; i < acount(info->members); ++i)
-        {
-                StructMember* member = &info->members[i];
-                if (member->name == name)
-                        return member;
-        }
-        return NULL;
+	StructInfo* info = type_struct_info(type);
+	if (!info || !name)
+		return NULL;
+	for (int i = 0; i < acount(info->members); ++i)
+	{
+		StructMember* member = &info->members[i];
+		if (member->name == name)
+			return member;
+	}
+	return NULL;
 }
 
 void type_system_init_builtins()
@@ -225,26 +225,26 @@ void type_system_init_builtins()
 
 void type_system_free()
 {
-        for (int i = 0; i < acount(ts->types); ++i)
-        {
-                Type* type = &ts->types[i];
-                if (type->tag == T_STRUCT && type->user)
-                {
-                        StructInfo* info = (StructInfo*)type->user;
-                        if (info)
-                        {
-                                if (info->members)
-                                        afree(info->members);
-                                if (info->layout_identifiers)
-                                        afree(info->layout_identifiers);
-                                free(info);
-                        }
-                        type->user = NULL;
-                }
-        }
-        map_free(ts->map);
-        ts->map = (Map){ 0 };
-        afree(ts->types);
+	for (int i = 0; i < acount(ts->types); ++i)
+	{
+		Type* type = &ts->types[i];
+		if (type->tag == T_STRUCT && type->user)
+		{
+			StructInfo* info = (StructInfo*)type->user;
+			if (info)
+			{
+				if (info->members)
+					afree(info->members);
+				if (info->layout_identifiers)
+					afree(info->layout_identifiers);
+				free(info);
+			}
+			type->user = NULL;
+		}
+	}
+	map_free(ts->map);
+	ts->map = (Map){ 0 };
+	afree(ts->types);
 }
 
 const char* type_display(const Type* type)
@@ -518,7 +518,6 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	}
 	return NULL;
 }
-
 
 int type_can_assign(const Type* dst, const Type* src)
 {
@@ -1350,23 +1349,23 @@ void type_check_ir()
 			apush(stack, result);
 			break;
 		}
-                case IR_MEMBER:
-                {
-                        Type* base = type_stack_pop(stack, "member access");
-                        Type* result = base;
-                        if (base && base->tag == T_STRUCT)
-                        {
-                                StructMember* member = type_struct_find_member(base, inst->str0);
-                                if (!member)
-                                {
-                                        type_check_error("struct %s has no member %s", type_display(base), inst->str0 ? inst->str0 : "<anon>");
-                                }
-                                result = member->type;
-                        }
-                        inst->type = result;
-                        apush(stack, result);
-                        break;
-                }
+		case IR_MEMBER:
+		{
+			Type* base = type_stack_pop(stack, "member access");
+			Type* result = base;
+			if (base && base->tag == T_STRUCT)
+			{
+				StructMember* member = type_struct_find_member(base, inst->str0);
+				if (!member)
+				{
+					type_check_error("struct %s has no member %s", type_display(base), inst->str0 ? inst->str0 : "<anon>");
+				}
+				result = member->type;
+			}
+			inst->type = result;
+			apush(stack, result);
+			break;
+		}
 		case IR_SELECT:
 		{
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
@@ -1487,15 +1486,15 @@ void type_check_ir()
 					}
 				}
 			}
-afree(ctx->cases);
-(void)apop(switch_stack);
-break;
-}
-case IR_STMT_EXPR:
-if (acount(stack) > 0)
-type_stack_pop(stack, "expression result");
-if (acount(stack) > 0)
-aclear(stack);
+			afree(ctx->cases);
+			(void)apop(switch_stack);
+			break;
+		}
+		case IR_STMT_EXPR:
+			if (acount(stack) > 0)
+				type_stack_pop(stack, "expression result");
+			if (acount(stack) > 0)
+				aclear(stack);
 			break;
 		case IR_IF_THEN:
 		{

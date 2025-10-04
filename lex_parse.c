@@ -56,16 +56,16 @@ void init_keyword_interns()
 	kw_in = sintern("in");
 	kw_out = sintern("out");
 	kw_uniform = sintern("uniform");
-        kw_layout = sintern("layout");
-        kw_struct = sintern("struct");
-        kw_set = sintern("set");
-        kw_binding = sintern("binding");
-        kw_location = sintern("location");
+	kw_layout = sintern("layout");
+	kw_struct = sintern("struct");
+	kw_set = sintern("set");
+	kw_binding = sintern("binding");
+	kw_location = sintern("location");
 	kw_std140 = sintern("std140");
-        kw_row_major = sintern("row_major");
-        kw_column_major = sintern("column_major");
-        kw_shared = sintern("shared");
-        kw_packed = sintern("packed");
+	kw_row_major = sintern("row_major");
+	kw_column_major = sintern("column_major");
+	kw_shared = sintern("shared");
+	kw_packed = sintern("packed");
 	kw_if = sintern("if");
 	kw_else = sintern("else");
 	kw_return = sintern("return");
@@ -358,15 +358,15 @@ typedef enum Prec
 	PREC_EXPR = 0,
 	PREC_ASSIGN = 10, // right-assoc
 	PREC_TERNARY = 20, // ?:
-PREC_OR_OR = 30,
-PREC_AND_AND = 40,
-PREC_BIT_OR = 50, // |
-PREC_BIT_XOR = 60, // ^
-PREC_BIT_AND = 70, // &
-PREC_EQ = 80, // == !=
-PREC_REL = 90, // < <= > >=
-PREC_SHIFT = 95, // << >>
-PREC_ADD = 100, // + -
+	PREC_OR_OR = 30,
+	PREC_AND_AND = 40,
+	PREC_BIT_OR = 50, // |
+	PREC_BIT_XOR = 60, // ^
+	PREC_BIT_AND = 70, // &
+	PREC_EQ = 80, // == !=
+	PREC_REL = 90, // < <= > >=
+	PREC_SHIFT = 95, // << >>
+	PREC_ADD = 100, // + -
 	PREC_MUL = 110, // * / %
 	PREC_POSTFIX = 120, // () [] .
 	PREC_UNARY = 130 // prefix + - ! ~
@@ -378,14 +378,14 @@ char ch;
 
 typedef struct Token
 {
-        Tok kind;
-        Prec prec;
-        void (*lexpr)(); // Start an expression.
-        void (*rexpr)(); // Continue an expression (binary/postfix/etc).
-        int int_val;
-        double float_val;
-        const char* lexeme;
-        int len;
+	Tok kind;
+	Prec prec;
+	void (*lexpr)(); // Start an expression.
+	void (*rexpr)(); // Continue an expression (binary/postfix/etc).
+	int int_val;
+	double float_val;
+	const char* lexeme;
+	int len;
 } Token;
 
 Token tok;
@@ -495,21 +495,21 @@ unsigned layout_flag_from_keyword(const char* s)
 
 void type_spec_add_storage(TypeSpec* spec, unsigned flags)
 {
-        spec->storage_flags |= flags;
+	spec->storage_flags |= flags;
 }
 
 void type_spec_add_layout_identifier(TypeSpec* spec, const char* ident)
 {
-        if (!ident)
-                return;
-        apush(spec->layout_identifiers, ident);
+	if (!ident)
+		return;
+	apush(spec->layout_identifiers, ident);
 }
 
 void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 {
-        spec->layout_flags |= layout_flag;
-        switch (layout_flag)
-        {
+	spec->layout_flags |= layout_flag;
+	switch (layout_flag)
+	{
 	case SYM_LAYOUT_SET:
 		spec->layout_set = value;
 		break;
@@ -521,12 +521,12 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 		break;
 	default:
 		break;
-        }
+	}
 }
 
 int is_type_name(const char* s)
 {
-        return type_system_get(s) != NULL;
+	return type_system_get(s) != NULL;
 }
 
 StructInfo* parse_struct_body(Type* type, TypeSpec* spec);
@@ -541,29 +541,29 @@ int is_type_token()
 {
 	if (tok.kind != TOK_IDENTIFIER)
 		return 0;
-        const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-        if (is_type_name(name))
-                return 1;
-        if (tok.lexeme == kw_struct)
-                return 1;
-        if (storage_flag_from_keyword(tok.lexeme))
-                return 1;
-        if (tok.lexeme == kw_layout)
-                return 1;
-        return 0;
+	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	if (is_type_name(name))
+		return 1;
+	if (tok.lexeme == kw_struct)
+		return 1;
+	if (storage_flag_from_keyword(tok.lexeme))
+		return 1;
+	if (tok.lexeme == kw_layout)
+		return 1;
+	return 0;
 }
 
 void parse_layout_block(TypeSpec* spec)
 {
-        next();
-        expect(TOK_LPAREN);
-        while (tok.kind != TOK_RPAREN)
-        {
-                if (tok.kind != TOK_IDENTIFIER)
-                        parse_error("expected identifier in layout");
-                const char* ident = tok.lexeme;
-                unsigned layout_flag = layout_flag_from_keyword(ident);
-                next();
+	next();
+	expect(TOK_LPAREN);
+	while (tok.kind != TOK_RPAREN)
+	{
+		if (tok.kind != TOK_IDENTIFIER)
+			parse_error("expected identifier in layout");
+		const char* ident = tok.lexeme;
+		unsigned layout_flag = layout_flag_from_keyword(ident);
+		next();
 		if (tok.kind == TOK_ASSIGN)
 		{
 			if (!layout_flag)
@@ -580,11 +580,11 @@ void parse_layout_block(TypeSpec* spec)
 				parse_error("unsupported layout identifier");
 			type_spec_add_layout_identifier(spec, ident);
 		}
-                if (tok.kind == TOK_COMMA)
-                {
-                        next();
-                        continue;
-                }
+		if (tok.kind == TOK_COMMA)
+		{
+			next();
+			continue;
+		}
 		break;
 	}
 	expect(TOK_RPAREN);
@@ -612,216 +612,216 @@ void parse_type_qualifiers(TypeSpec* spec)
 
 TypeSpec parse_type_specifier()
 {
-        TypeSpec spec = (TypeSpec){ 0 };
-        parse_type_qualifiers(&spec);
-        if (tok.kind == TOK_IDENTIFIER && tok.lexeme == kw_struct)
-        {
-                next();
-                if (tok.kind != TOK_IDENTIFIER)
-                        parse_error("expected identifier after struct");
-                const char* struct_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-                Token lookahead = peek_token();
-                if (lookahead.kind == TOK_LBRACE)
-                {
-                        next();
-                        Type* type = type_system_declare_struct(struct_name);
-                        if (!type || type->tag != T_STRUCT)
-                                parse_error("struct name conflicts with existing type");
-                        type_struct_clear(type);
-                        if (spec.layout_identifiers && acount(spec.layout_identifiers) > 0)
-                                type_struct_set_layout_identifiers(type, spec.layout_identifiers, acount(spec.layout_identifiers));
-                        StructInfo* info = parse_struct_body(type, &spec);
-                        spec.type_name = struct_name;
-                        spec.type = type;
-                        spec.struct_info = info;
-                        spec.has_struct_definition = 1;
-                        emit_struct_ir(type, info);
-                        return spec;
-                }
-                Type* type = type_system_get(struct_name);
-                if (!type)
-                        parse_error("unknown struct type");
-                next();
-                spec.type_name = struct_name;
-                spec.type = type;
-                return spec;
-        }
-        if (tok.kind != TOK_IDENTIFIER)
-                parse_error("expected type");
-        const char* type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-        if ((spec.storage_flags & SYM_STORAGE_UNIFORM))
-        {
-                Token lookahead = peek_token();
-                if (lookahead.kind == TOK_LBRACE)
-                {
-                        next();
-                        Type* type = type_system_declare_struct(type_name);
-                        if (!type || type->tag != T_STRUCT)
-                                parse_error("block name conflicts with existing type");
-                        type_struct_clear(type);
-                        if (spec.layout_identifiers && acount(spec.layout_identifiers) > 0)
-                                type_struct_set_layout_identifiers(type, spec.layout_identifiers, acount(spec.layout_identifiers));
-                        StructInfo* info = parse_struct_body(type, &spec);
-                        spec.type_name = type_name;
-                        spec.type = type;
-                        spec.struct_info = info;
-                        spec.has_struct_definition = 1;
-                        spec.is_interface_block = 1;
-                        return spec;
-                }
-        }
-        if (!is_type_name(type_name))
-                parse_error("expected type");
-        spec.type_name = type_name;
-        spec.type = type_system_get(spec.type_name);
-        if (!spec.type)
-                parse_error("unknown type");
-        next();
-        return spec;
+	TypeSpec spec = (TypeSpec){ 0 };
+	parse_type_qualifiers(&spec);
+	if (tok.kind == TOK_IDENTIFIER && tok.lexeme == kw_struct)
+	{
+		next();
+		if (tok.kind != TOK_IDENTIFIER)
+			parse_error("expected identifier after struct");
+		const char* struct_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+		Token lookahead = peek_token();
+		if (lookahead.kind == TOK_LBRACE)
+		{
+			next();
+			Type* type = type_system_declare_struct(struct_name);
+			if (!type || type->tag != T_STRUCT)
+				parse_error("struct name conflicts with existing type");
+			type_struct_clear(type);
+			if (spec.layout_identifiers && acount(spec.layout_identifiers) > 0)
+				type_struct_set_layout_identifiers(type, spec.layout_identifiers, acount(spec.layout_identifiers));
+			StructInfo* info = parse_struct_body(type, &spec);
+			spec.type_name = struct_name;
+			spec.type = type;
+			spec.struct_info = info;
+			spec.has_struct_definition = 1;
+			emit_struct_ir(type, info);
+			return spec;
+		}
+		Type* type = type_system_get(struct_name);
+		if (!type)
+			parse_error("unknown struct type");
+		next();
+		spec.type_name = struct_name;
+		spec.type = type;
+		return spec;
+	}
+	if (tok.kind != TOK_IDENTIFIER)
+		parse_error("expected type");
+	const char* type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	if ((spec.storage_flags & SYM_STORAGE_UNIFORM))
+	{
+		Token lookahead = peek_token();
+		if (lookahead.kind == TOK_LBRACE)
+		{
+			next();
+			Type* type = type_system_declare_struct(type_name);
+			if (!type || type->tag != T_STRUCT)
+				parse_error("block name conflicts with existing type");
+			type_struct_clear(type);
+			if (spec.layout_identifiers && acount(spec.layout_identifiers) > 0)
+				type_struct_set_layout_identifiers(type, spec.layout_identifiers, acount(spec.layout_identifiers));
+			StructInfo* info = parse_struct_body(type, &spec);
+			spec.type_name = type_name;
+			spec.type = type;
+			spec.struct_info = info;
+			spec.has_struct_definition = 1;
+			spec.is_interface_block = 1;
+			return spec;
+		}
+	}
+	if (!is_type_name(type_name))
+		parse_error("expected type");
+	spec.type_name = type_name;
+	spec.type = type_system_get(spec.type_name);
+	if (!spec.type)
+		parse_error("unknown type");
+	next();
+	return spec;
 }
 
 void parse_struct_member_array_suffix(StructMember* member)
 {
-        if (!member)
-        {
-                while (tok.kind == TOK_LBRACK)
-                {
-                        next();
-                        if (tok.kind != TOK_RBRACK)
-                        {
-                                if (tok.kind != TOK_INT)
-                                        parse_error("expected integer array size");
-                                next();
-                                expect(TOK_RBRACK);
-                        }
-                        else
-                        {
-                                next();
-                        }
-                }
-                return;
-        }
-        while (tok.kind == TOK_LBRACK)
-        {
-                if (member->has_array)
-                        parse_error("multiple array dimensions in struct member not supported");
-                next();
-                int unsized = 0;
-                int size = -1;
-                if (tok.kind == TOK_RBRACK)
-                {
-                        unsized = 1;
-                }
-                else
-                {
-                        if (tok.kind != TOK_INT)
-                                parse_error("expected integer array size");
-                        size = tok.int_val;
-                        next();
-                }
-                expect(TOK_RBRACK);
-                type_struct_member_mark_array(member, member->type, size, unsized);
-        }
+	if (!member)
+	{
+		while (tok.kind == TOK_LBRACK)
+		{
+			next();
+			if (tok.kind != TOK_RBRACK)
+			{
+				if (tok.kind != TOK_INT)
+					parse_error("expected integer array size");
+				next();
+				expect(TOK_RBRACK);
+			}
+			else
+			{
+				next();
+			}
+		}
+		return;
+	}
+	while (tok.kind == TOK_LBRACK)
+	{
+		if (member->has_array)
+			parse_error("multiple array dimensions in struct member not supported");
+		next();
+		int unsized = 0;
+		int size = -1;
+		if (tok.kind == TOK_RBRACK)
+		{
+			unsized = 1;
+		}
+		else
+		{
+			if (tok.kind != TOK_INT)
+				parse_error("expected integer array size");
+			size = tok.int_val;
+			next();
+		}
+		expect(TOK_RBRACK);
+		type_struct_member_mark_array(member, member->type, size, unsized);
+	}
 }
 
 StructInfo* parse_struct_body(Type* type, TypeSpec* spec)
 {
-        expect(TOK_LBRACE);
-        while (tok.kind != TOK_RBRACE)
-        {
-                TypeSpec member_spec = parse_type_specifier();
-                if (tok.kind != TOK_IDENTIFIER)
-                        parse_error("expected identifier in struct");
-                while (1)
-                {
-                        const char* member_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-                        StructMember* member = type_struct_add_member(type, member_name, member_spec.type);
-                        type_struct_member_set_layout(member, member_spec.layout_flags, member_spec.layout_set, member_spec.layout_binding, member_spec.layout_location);
-                        next();
-                        parse_struct_member_array_suffix(member);
-                        if (tok.kind == TOK_COMMA)
-                        {
-                                next();
-                                continue;
-                        }
-                        break;
-                }
-                expect(TOK_SEMI);
-        }
-        expect(TOK_RBRACE);
-        StructInfo* info = type_struct_info(type);
-        spec->struct_info = info;
-        spec->has_struct_definition = 1;
-        return info;
+	expect(TOK_LBRACE);
+	while (tok.kind != TOK_RBRACE)
+	{
+		TypeSpec member_spec = parse_type_specifier();
+		if (tok.kind != TOK_IDENTIFIER)
+			parse_error("expected identifier in struct");
+		while (1)
+		{
+			const char* member_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+			StructMember* member = type_struct_add_member(type, member_name, member_spec.type);
+			type_struct_member_set_layout(member, member_spec.layout_flags, member_spec.layout_set, member_spec.layout_binding, member_spec.layout_location);
+			next();
+			parse_struct_member_array_suffix(member);
+			if (tok.kind == TOK_COMMA)
+			{
+				next();
+				continue;
+			}
+			break;
+		}
+		expect(TOK_SEMI);
+	}
+	expect(TOK_RBRACE);
+	StructInfo* info = type_struct_info(type);
+	spec->struct_info = info;
+	spec->has_struct_definition = 1;
+	return info;
 }
 
 void emit_struct_ir(Type* type, StructInfo* info)
 {
-        if (!type || !info)
-                return;
-        IR_Cmd* begin = ir_emit(IR_STRUCT_BEGIN);
-        begin->str0 = type->name;
-        begin->type = type;
-        for (int i = 0; i < acount(info->members); ++i)
-        {
-                StructMember* member = &info->members[i];
-                IR_Cmd* inst = ir_emit(IR_STRUCT_MEMBER);
-                inst->str0 = member->name;
-                inst->str1 = member->declared_type ? member->declared_type->name : NULL;
-                inst->type = member->type;
-                inst->layout_flags = member->layout_flags;
-                inst->layout_set = member->layout_set;
-                inst->layout_binding = member->layout_binding;
-                inst->layout_location = member->layout_location;
-                if (member->has_array)
-                        inst->arg0 = member->array_unsized ? -1 : member->array_len;
-        }
-        ir_emit(IR_STRUCT_END);
+	if (!type || !info)
+		return;
+	IR_Cmd* begin = ir_emit(IR_STRUCT_BEGIN);
+	begin->str0 = type->name;
+	begin->type = type;
+	for (int i = 0; i < acount(info->members); ++i)
+	{
+		StructMember* member = &info->members[i];
+		IR_Cmd* inst = ir_emit(IR_STRUCT_MEMBER);
+		inst->str0 = member->name;
+		inst->str1 = member->declared_type ? member->declared_type->name : NULL;
+		inst->type = member->type;
+		inst->layout_flags = member->layout_flags;
+		inst->layout_set = member->layout_set;
+		inst->layout_binding = member->layout_binding;
+		inst->layout_location = member->layout_location;
+		if (member->has_array)
+			inst->arg0 = member->array_unsized ? -1 : member->array_len;
+	}
+	ir_emit(IR_STRUCT_END);
 }
 
 void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 {
-        if (!spec || !spec->type)
-                return;
-        IR_Cmd* begin = ir_emit(IR_BLOCK_DECL_BEGIN);
-        begin->str0 = spec->type_name;
-        begin->type = spec->type;
-        ir_apply_type_spec(begin, spec);
-        int layout_count = spec->layout_identifiers ? acount(spec->layout_identifiers) : 0;
-        for (int i = 0; i < layout_count; ++i)
-        {
-                IR_Cmd* layout_inst = ir_emit(IR_BLOCK_DECL_LAYOUT);
-                layout_inst->str0 = spec->layout_identifiers[i];
-        }
-        StructInfo* info = spec->struct_info ? spec->struct_info : type_struct_info(spec->type);
-        if (info)
-        {
-                for (int i = 0; i < acount(info->members); ++i)
-                {
-                        StructMember* member = &info->members[i];
-                        IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_MEMBER);
-                        inst->str0 = member->name;
-                        inst->str1 = member->declared_type ? member->declared_type->name : NULL;
-                        inst->type = member->type;
-                        inst->layout_flags = member->layout_flags;
-                        inst->layout_set = member->layout_set;
-                        inst->layout_binding = member->layout_binding;
-                        inst->layout_location = member->layout_location;
-                        if (member->has_array)
-                                inst->arg0 = member->array_unsized ? -1 : member->array_len;
-                }
-        }
-        if (instance_name)
-        {
-                IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_INSTANCE);
-                inst->str0 = instance_name;
-        }
-        ir_emit(IR_BLOCK_DECL_END);
-        if (instance_name)
-        {
-                Symbol* sym = symbol_table_add(instance_name, spec->type_name, spec->type, SYM_BLOCK);
-                symbol_apply_type_spec(sym, spec);
-        }
+	if (!spec || !spec->type)
+		return;
+	IR_Cmd* begin = ir_emit(IR_BLOCK_DECL_BEGIN);
+	begin->str0 = spec->type_name;
+	begin->type = spec->type;
+	ir_apply_type_spec(begin, spec);
+	int layout_count = spec->layout_identifiers ? acount(spec->layout_identifiers) : 0;
+	for (int i = 0; i < layout_count; ++i)
+	{
+		IR_Cmd* layout_inst = ir_emit(IR_BLOCK_DECL_LAYOUT);
+		layout_inst->str0 = spec->layout_identifiers[i];
+	}
+	StructInfo* info = spec->struct_info ? spec->struct_info : type_struct_info(spec->type);
+	if (info)
+	{
+		for (int i = 0; i < acount(info->members); ++i)
+		{
+			StructMember* member = &info->members[i];
+			IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_MEMBER);
+			inst->str0 = member->name;
+			inst->str1 = member->declared_type ? member->declared_type->name : NULL;
+			inst->type = member->type;
+			inst->layout_flags = member->layout_flags;
+			inst->layout_set = member->layout_set;
+			inst->layout_binding = member->layout_binding;
+			inst->layout_location = member->layout_location;
+			if (member->has_array)
+				inst->arg0 = member->array_unsized ? -1 : member->array_len;
+		}
+	}
+	if (instance_name)
+	{
+		IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_INSTANCE);
+		inst->str0 = instance_name;
+	}
+	ir_emit(IR_BLOCK_DECL_END);
+	if (instance_name)
+	{
+		Symbol* sym = symbol_table_add(instance_name, spec->type_name, spec->type, SYM_BLOCK);
+		symbol_apply_type_spec(sym, spec);
+	}
 }
 
 void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec)
@@ -1065,29 +1065,29 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 
 void stmt_decl()
 {
-        TypeSpec spec = parse_type_specifier();
-        if (spec.is_interface_block)
-        {
-                const char* instance_name = NULL;
-                if (tok.kind == TOK_IDENTIFIER)
-                {
-                        instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-                        next();
-                }
-                expect(TOK_SEMI);
-                interface_block_decl(&spec, instance_name);
-                return;
-        }
-        if (tok.kind == TOK_SEMI)
-        {
-                next();
-                return;
-        }
-        IR_Cmd* inst;
-        decl_emit_begin(&spec);
-        while (1)
-        {
-                if (tok.kind != TOK_IDENTIFIER)
+	TypeSpec spec = parse_type_specifier();
+	if (spec.is_interface_block)
+	{
+		const char* instance_name = NULL;
+		if (tok.kind == TOK_IDENTIFIER)
+		{
+			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+			next();
+		}
+		expect(TOK_SEMI);
+		interface_block_decl(&spec, instance_name);
+		return;
+	}
+	if (tok.kind == TOK_SEMI)
+	{
+		next();
+		return;
+	}
+	IR_Cmd* inst;
+	decl_emit_begin(&spec);
+	while (1)
+	{
+		if (tok.kind != TOK_IDENTIFIER)
 			parse_error("expected identifier in declaration");
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
@@ -1408,12 +1408,12 @@ void expr_post_dec()
 
 #define EXPR_UNARY(name, token_enum) \
 	void expr_##name() \
-		{ \
+	{ \
 		expr_unary_common(TOK_##token_enum); \
 	}
 #define EXPR_BINARY(name, precname, token_enum) \
 	void expr_##name() \
-		{ \
+	{ \
 		expr_binary_left(TOK_##token_enum, PREC_##precname); \
 	}
 
@@ -1745,31 +1745,31 @@ void stmt()
 
 void top_level()
 {
-        if (!is_type_token())
-                parse_error("expected type at top level");
-        TypeSpec type_spec = parse_type_specifier();
-        if (type_spec.is_interface_block)
-        {
-                const char* instance_name = NULL;
-                if (tok.kind == TOK_IDENTIFIER)
-                {
-                        instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-                        next();
-                }
-                expect(TOK_SEMI);
-                interface_block_decl(&type_spec, instance_name);
-                return;
-        }
-        if (tok.kind == TOK_SEMI)
-        {
-                next();
-                return;
-        }
-        if (tok.kind != TOK_IDENTIFIER)
-                parse_error("expected identifier after type");
-        const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-        next();
-        if (tok.kind == TOK_LPAREN)
+	if (!is_type_token())
+		parse_error("expected type at top level");
+	TypeSpec type_spec = parse_type_specifier();
+	if (type_spec.is_interface_block)
+	{
+		const char* instance_name = NULL;
+		if (tok.kind == TOK_IDENTIFIER)
+		{
+			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+			next();
+		}
+		expect(TOK_SEMI);
+		interface_block_decl(&type_spec, instance_name);
+		return;
+	}
+	if (tok.kind == TOK_SEMI)
+	{
+		next();
+		return;
+	}
+	if (tok.kind != TOK_IDENTIFIER)
+		parse_error("expected identifier after type");
+	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
+	next();
+	if (tok.kind == TOK_LPAREN)
 	{
 		func_decl_or_def(type_spec, name);
 		return;
@@ -1808,17 +1808,17 @@ void parse()
 		next_ch(); \
 		if (match_ch(ch2)) \
 		{ \
-		tok.kind = TOK_##tok2; \
-		tok.prec = PREC_##prec2; \
-		tok.lexpr = expr_##lexpr2; \
-		tok.rexpr = expr_##rexpr2; \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
 		} \
 		else \
 		{ \
-		tok.kind = TOK_##tok1; \
-		tok.prec = PREC_##prec1; \
-		tok.lexpr = expr_##lexpr1; \
-		tok.rexpr = expr_##rexpr1; \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
 		} \
 		break;
 
@@ -1827,17 +1827,17 @@ void parse()
 		next_ch(); \
 		if (match_ch('=')) \
 		{ \
-		tok.kind = TOK_##tok_assign; \
-		tok.prec = PREC_##prec_assign; \
-		tok.lexpr = expr_##lexpr_assign; \
-		tok.rexpr = expr_##rexpr_assign; \
+			tok.kind = TOK_##tok_assign; \
+			tok.prec = PREC_##prec_assign; \
+			tok.lexpr = expr_##lexpr_assign; \
+			tok.rexpr = expr_##rexpr_assign; \
 		} \
 		else \
 		{ \
-		tok.kind = TOK_##tok1; \
-		tok.prec = PREC_##prec1; \
-		tok.lexpr = expr_##lexpr1; \
-		tok.rexpr = expr_##rexpr1; \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
 		} \
 		break;
 
@@ -1846,24 +1846,24 @@ void parse()
 		next_ch(); \
 		if (match_ch(ch2)) \
 		{ \
-		tok.kind = TOK_##tok2; \
-		tok.prec = PREC_##prec2; \
-		tok.lexpr = expr_##lexpr2; \
-		tok.rexpr = expr_##rexpr2; \
+			tok.kind = TOK_##tok2; \
+			tok.prec = PREC_##prec2; \
+			tok.lexpr = expr_##lexpr2; \
+			tok.rexpr = expr_##rexpr2; \
 		} \
 		else if (match_ch('=')) \
 		{ \
-		tok.kind = TOK_##tok_assign; \
-		tok.prec = PREC_##prec_assign; \
-		tok.lexpr = expr_##lexpr_assign; \
-		tok.rexpr = expr_##rexpr_assign; \
+			tok.kind = TOK_##tok_assign; \
+			tok.prec = PREC_##prec_assign; \
+			tok.lexpr = expr_##lexpr_assign; \
+			tok.rexpr = expr_##rexpr_assign; \
 		} \
 		else \
 		{ \
-		tok.kind = TOK_##tok1; \
-		tok.prec = PREC_##prec1; \
-		tok.lexpr = expr_##lexpr1; \
-		tok.rexpr = expr_##rexpr1; \
+			tok.kind = TOK_##tok1; \
+			tok.prec = PREC_##prec1; \
+			tok.lexpr = expr_##lexpr1; \
+			tok.rexpr = expr_##rexpr1; \
 		} \
 		break;
 
@@ -1872,34 +1872,34 @@ void parse()
 		next_ch(); \
 		if (match_ch(ch1)) \
 		{ \
-		if (match_ch('=')) \
-		{ \
-		tok.kind = TOK_##tok_shift_assign; \
-		tok.prec = PREC_##prec_shift_assign; \
-		tok.lexpr = expr_##lexpr_shift_assign; \
-		tok.rexpr = expr_##rexpr_shift_assign; \
-		} \
-		else \
-		{ \
-		tok.kind = TOK_##tok_shift; \
-		tok.prec = PREC_##prec_shift; \
-		tok.lexpr = expr_##lexpr_shift; \
-		tok.rexpr = expr_##rexpr_shift; \
-		} \
+			if (match_ch('=')) \
+			{ \
+				tok.kind = TOK_##tok_shift_assign; \
+				tok.prec = PREC_##prec_shift_assign; \
+				tok.lexpr = expr_##lexpr_shift_assign; \
+				tok.rexpr = expr_##rexpr_shift_assign; \
+			} \
+			else \
+			{ \
+				tok.kind = TOK_##tok_shift; \
+				tok.prec = PREC_##prec_shift; \
+				tok.lexpr = expr_##lexpr_shift; \
+				tok.rexpr = expr_##rexpr_shift; \
+			} \
 		} \
 		else if (match_ch('=')) \
 		{ \
-		tok.kind = TOK_##tok_rel_eq; \
-		tok.prec = PREC_##prec_rel_eq; \
-		tok.lexpr = expr_##lexpr_rel_eq; \
-		tok.rexpr = expr_##rexpr_rel_eq; \
+			tok.kind = TOK_##tok_rel_eq; \
+			tok.prec = PREC_##prec_rel_eq; \
+			tok.lexpr = expr_##lexpr_rel_eq; \
+			tok.rexpr = expr_##rexpr_rel_eq; \
 		} \
 		else \
 		{ \
-		tok.kind = TOK_##tok_rel; \
-		tok.prec = PREC_##prec_rel; \
-		tok.lexpr = expr_##lexpr_rel; \
-		tok.rexpr = expr_##rexpr_rel; \
+			tok.kind = TOK_##tok_rel; \
+			tok.prec = PREC_##prec_rel; \
+			tok.lexpr = expr_##lexpr_rel; \
+			tok.rexpr = expr_##rexpr_rel; \
 		} \
 		break;
 
@@ -2018,9 +2018,9 @@ void lex_number()
 
 void next()
 {
-        tok.kind = TOK_EOF;
-        tok.prec = 0;
-        tok.lexpr = expr_error;
+	tok.kind = TOK_EOF;
+	tok.prec = 0;
+	tok.lexpr = expr_error;
 	tok.rexpr = expr_error;
 	tok.int_val = 0;
 	tok.float_val = 0.0;
@@ -2175,15 +2175,15 @@ void next()
 
 Token peek_token()
 {
-        Token saved_tok = tok;
-        const char* saved_at = at;
-        char saved_ch = ch;
-        next();
-        Token result = tok;
-        tok = saved_tok;
-        at = saved_at;
-        ch = saved_ch;
-        return result;
+	Token saved_tok = tok;
+	const char* saved_at = at;
+	char saved_ch = ch;
+	next();
+	Token result = tok;
+	tok = saved_tok;
+	at = saved_at;
+	ch = saved_ch;
+	return result;
 }
 
 void reset_parser_state()
