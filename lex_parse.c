@@ -416,7 +416,7 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 
 int is_type_name(const char* s)
 {
-	return type_system_get(&g_types, s) != NULL;
+	return type_system_get(s) != NULL;
 }
 
 int is_type_token()
@@ -489,7 +489,7 @@ TypeSpec parse_type_specifier()
 	spec.type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	if (!is_type_name(spec.type_name))
 		parse_error("expected type");
-	spec.type = type_system_get(&g_types, spec.type_name);
+	spec.type = type_system_get(spec.type_name);
 	if (!spec.type)
 		parse_error("unknown type");
 	next();
@@ -832,7 +832,7 @@ void expr_call()
 		{
 			callee_name = callee->str0;
 			Symbol* sym = symbol_table_find(callee->str0);
-			Type* type = type_system_get(&g_types, callee->str0);
+			Type* type = type_system_get(callee->str0);
 			if (type && (!sym || sym->kind != SYM_FUNC))
 			{
 				callee->type = type;
@@ -1509,7 +1509,7 @@ void reset_parser_state()
 void compiler_teardown()
 {
 	symbol_table_free();
-	type_system_free(&g_types);
+	type_system_free();
 	afree(g_ir);
 	afree(current_function_params);
 	current_decl_type_name = NULL;
@@ -1528,7 +1528,7 @@ void compiler_setup(const char* source)
 	at = in;
 	next_ch();
 	next();
-	type_system_init_builtins(&g_types);
+	type_system_init_builtins();
 	symbol_table_init();
 	parse();
 	type_check_ir();

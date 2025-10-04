@@ -365,7 +365,8 @@ typedef struct IR_Cmd
 // The global intermediate representation tape.
 // This gets produced before outputting any SPIRV as a middle-step.
 IR_Cmd* g_ir;
-TypeSystem g_types;
+TypeSystem g_type_system;
+TypeSystem* ts = &g_type_system;
 Type* g_type_void;
 Type* g_type_bool;
 Type* g_type_int;
@@ -378,10 +379,10 @@ Type* g_type_double;
 void type_check_error(const char* fmt, ...);
 int type_equal(const Type* a, const Type* b);
 const char* type_display(const Type* type);
-Type* type_system_get(struct TypeSystem* ts, const char* name);
-void type_system_free(TypeSystem* ts);
-void type_system_init_builtins(TypeSystem* ts);
-void type_system_init_builtins(TypeSystem* ts);
+Type* type_system_get(const char* name);
+void type_system_free();
+void type_system_init_builtins();
+void type_system_init_builtins();
 void type_check_ir();
 void dump_ir();
 void dump_symbols();

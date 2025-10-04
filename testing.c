@@ -130,9 +130,9 @@ void unit_test()
 	TypeSystem ts = (TypeSystem){ 0 };
 	type_system_init_builtins(&ts);
 	const char* float_name = sintern("float");
-	Type* float_type = type_system_get(&ts, float_name);
+	Type* float_type = type_system_get(float_name);
 	assert(float_type && float_type->tag == T_FLOAT);
-	Type* vec4_type = type_system_get(&ts, sintern("vec4"));
+	Type* vec4_type = type_system_get(sintern("vec4"));
 	assert(vec4_type && vec4_type->tag == T_VEC && vec4_type->cols == 4);
 	// Ensure user-declared struct types are interned and retrievable.
 	Type custom_type = (Type){ 0 };
@@ -142,8 +142,8 @@ void unit_test()
 	custom_type.base = T_FLOAT;
 	custom_type.array_len = 0;
 	const char* custom_name = sintern("test_struct");
-	Type* declared_type = type_system_add_internal(&ts, custom_name, custom_type);
-	assert(declared_type == type_system_get(&ts, custom_name));
+	Type* declared_type = type_system_add_internal(custom_name, custom_type);
+	assert(declared_type == type_system_get(custom_name));
 	type_system_free(&ts);
 
 	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
