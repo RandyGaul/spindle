@@ -126,6 +126,28 @@ typedef enum IR_Op
 	IR_IF_THEN,
 	IR_IF_ELSE,
 	IR_IF_END,
+	IR_FOR_BEGIN,
+	IR_FOR_INIT_BEGIN,
+	IR_FOR_INIT_END,
+	IR_FOR_COND_BEGIN,
+	IR_FOR_COND_END,
+	IR_FOR_STEP_BEGIN,
+	IR_FOR_STEP_END,
+	IR_FOR_BODY_BEGIN,
+	IR_FOR_BODY_END,
+	IR_FOR_END,
+	IR_WHILE_BEGIN,
+	IR_WHILE_COND_BEGIN,
+	IR_WHILE_COND_END,
+	IR_WHILE_BODY_BEGIN,
+	IR_WHILE_BODY_END,
+	IR_WHILE_END,
+	IR_DO_BEGIN,
+	IR_DO_BODY_BEGIN,
+	IR_DO_BODY_END,
+	IR_DO_COND_BEGIN,
+	IR_DO_COND_END,
+	IR_DO_END,
 	IR_BLOCK_BEGIN,
 	IR_BLOCK_END,
 	IR_STMT_EXPR,
@@ -166,11 +188,11 @@ typedef enum IR_Op
 
 typedef enum Tok
 {
-        TOK_EOF, TOK_IDENTIFIER, TOK_INT, TOK_FLOAT,
+	TOK_EOF, TOK_IDENTIFIER, TOK_INT, TOK_FLOAT,
 
 	TOK_LPAREN, TOK_RPAREN, TOK_LBRACK, TOK_RBRACK, TOK_LBRACE, TOK_RBRACE, TOK_DOT, TOK_COMMA, TOK_SEMI, TOK_QUESTION, TOK_COLON,
 
-	TOK_IF, TOK_ELSE, TOK_RETURN, TOK_BREAK, TOK_CONTINUE, TOK_DISCARD,
+	TOK_IF, TOK_ELSE, TOK_FOR, TOK_WHILE, TOK_DO, TOK_RETURN, TOK_BREAK, TOK_CONTINUE, TOK_DISCARD,
 
 	TOK_PLUS, TOK_MINUS, TOK_STAR, TOK_SLASH, TOK_PERCENT,
 	TOK_NOT, TOK_TILDE,
@@ -201,6 +223,9 @@ const char* tok_name[TOK_COUNT] = {
 
 	[TOK_IF]         = "if",
 	[TOK_ELSE]       = "else",
+	[TOK_FOR]        = "for",
+	[TOK_WHILE]      = "while",
+	[TOK_DO]         = "do",
 	[TOK_RETURN]     = "return",
 	[TOK_BREAK]      = "break",
 	[TOK_CONTINUE]   = "continue",
@@ -244,6 +269,28 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_IF_THEN] = "if_then",
 	[IR_IF_ELSE] = "if_else",
 	[IR_IF_END] = "if_end",
+	[IR_FOR_BEGIN] = "for_begin",
+	[IR_FOR_INIT_BEGIN] = "for_init_begin",
+	[IR_FOR_INIT_END] = "for_init_end",
+	[IR_FOR_COND_BEGIN] = "for_cond_begin",
+	[IR_FOR_COND_END] = "for_cond_end",
+	[IR_FOR_STEP_BEGIN] = "for_step_begin",
+	[IR_FOR_STEP_END] = "for_step_end",
+	[IR_FOR_BODY_BEGIN] = "for_body_begin",
+	[IR_FOR_BODY_END] = "for_body_end",
+	[IR_FOR_END] = "for_end",
+	[IR_WHILE_BEGIN] = "while_begin",
+	[IR_WHILE_COND_BEGIN] = "while_cond_begin",
+	[IR_WHILE_COND_END] = "while_cond_end",
+	[IR_WHILE_BODY_BEGIN] = "while_body_begin",
+	[IR_WHILE_BODY_END] = "while_body_end",
+	[IR_WHILE_END] = "while_end",
+	[IR_DO_BEGIN] = "do_begin",
+	[IR_DO_BODY_BEGIN] = "do_body_begin",
+	[IR_DO_BODY_END] = "do_body_end",
+	[IR_DO_COND_BEGIN] = "do_cond_begin",
+	[IR_DO_COND_END] = "do_cond_end",
+	[IR_DO_END] = "do_end",
 	[IR_BLOCK_BEGIN] = "block_begin",
 	[IR_BLOCK_END] = "block_end",
 	[IR_STMT_EXPR] = "stmt_expr",
@@ -324,6 +371,9 @@ const char* kw_return;
 const char* kw_break;
 const char* kw_continue;
 const char* kw_discard;
+const char* kw_for;
+const char* kw_while;
+const char* kw_do;
 
 void init_keyword_interns()
 {
@@ -340,6 +390,9 @@ void init_keyword_interns()
 	kw_break = sintern("break");
 	kw_continue = sintern("continue");
 	kw_discard = sintern("discard");
+	kw_for = sintern("for");
+	kw_while = sintern("while");
+	kw_do = sintern("do");
 }
 
 IR_Cmd* ir_emit(IR_Op op)
@@ -2064,6 +2117,73 @@ void stmt_discard()
 	ir_emit(IR_DISCARD);
 }
 
+void stmt_while()
+{
+	expect(TOK_WHILE);
+	ir_emit(IR_WHILE_BEGIN);
+	expect(TOK_LPAREN);
+	ir_emit(IR_WHILE_COND_BEGIN);
+	expr();
+	expect(TOK_RPAREN);
+	ir_emit(IR_WHILE_COND_END);
+	ir_emit(IR_WHILE_BODY_BEGIN);
+	stmt_controlled();
+	ir_emit(IR_WHILE_BODY_END);
+	ir_emit(IR_WHILE_END);
+}
+
+void stmt_do()
+{
+	expect(TOK_DO);
+	ir_emit(IR_DO_BEGIN);
+	ir_emit(IR_DO_BODY_BEGIN);
+	stmt_controlled();
+	ir_emit(IR_DO_BODY_END);
+	expect(TOK_WHILE);
+	expect(TOK_LPAREN);
+	ir_emit(IR_DO_COND_BEGIN);
+	expr();
+	expect(TOK_RPAREN);
+	ir_emit(IR_DO_COND_END);
+	expect(TOK_SEMI);
+	ir_emit(IR_DO_END);
+}
+
+void stmt_for()
+{
+	expect(TOK_FOR);
+	ir_emit(IR_FOR_BEGIN);
+	expect(TOK_LPAREN);
+	symbol_table_enter_scope(&g_symbols);
+	ir_emit(IR_FOR_INIT_BEGIN);
+	if (tok.kind == TOK_SEMI) {
+		next();
+	} else if (is_type_token()) {
+		stmt_decl();
+	} else {
+		expr();
+		expect(TOK_SEMI);
+	}
+	ir_emit(IR_FOR_INIT_END);
+	ir_emit(IR_FOR_COND_BEGIN);
+	if (tok.kind != TOK_SEMI) {
+		expr();
+	}
+	expect(TOK_SEMI);
+	ir_emit(IR_FOR_COND_END);
+	ir_emit(IR_FOR_STEP_BEGIN);
+	if (tok.kind != TOK_RPAREN) {
+		expr();
+	}
+	expect(TOK_RPAREN);
+	ir_emit(IR_FOR_STEP_END);
+	ir_emit(IR_FOR_BODY_BEGIN);
+	stmt_controlled();
+	ir_emit(IR_FOR_BODY_END);
+	ir_emit(IR_FOR_END);
+	symbol_table_leave_scope(&g_symbols);
+}
+
 void stmt()
 {
 	if (is_type_token()) {
@@ -2073,6 +2193,15 @@ void stmt()
 	switch (tok.kind) {
 	case TOK_IF:
 		stmt_if();
+		break;
+	case TOK_FOR:
+		stmt_for();
+		break;
+	case TOK_WHILE:
+		stmt_while();
+		break;
+	case TOK_DO:
+		stmt_do();
 		break;
 	case TOK_LBRACE:
 		stmt_block();
@@ -2255,6 +2384,18 @@ void next()
 			}
 		else if (tok.lexeme == kw_else) {
 			tok.kind = TOK_ELSE;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_for) {
+			tok.kind = TOK_FOR;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_while) {
+			tok.kind = TOK_WHILE;
+			tok.lexpr = expr_error;
+			}
+		else if (tok.lexeme == kw_do) {
+			tok.kind = TOK_DO;
 			tok.lexpr = expr_error;
 			}
 		else if (tok.lexeme == kw_return) {
