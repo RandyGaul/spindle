@@ -305,14 +305,12 @@ IR_Cmd* ir_emit(IR_Op op)
 
 void symbol_table_enter_scope(SymbolTable* st)
 {
-	if (!st) return;
 	SymbolScope scope = (SymbolScope){ 0 };
 	apush(st->scopes, scope);
 }
 
 void symbol_table_leave_scope(SymbolTable* st)
 {
-	if (!st || !st->scopes) return;
 	int count = acount(st->scopes);
 	if (!count) return;
 	SymbolScope* scope = &st->scopes[count - 1];
@@ -330,9 +328,7 @@ void symbol_table_init(SymbolTable* st)
 
 Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_name, Type* type, SymbolKind kind)
 {
-	if (!st) return NULL;
 	int depth = acount(st->scopes);
-	if (!depth) return NULL;
 	SymbolScope* scope = &st->scopes[depth - 1];
 	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(scope->map, key);
@@ -351,7 +347,6 @@ Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_nam
 
 Symbol* symbol_table_resolve(SymbolTable* st, const char* name)
 {
-	if (!st) return NULL;
 	for (int i = acount(st->scopes) - 1; i >= 0; --i) {
 		SymbolScope* scope = &st->scopes[i];
 		uint64_t idx = map_get(scope->map, (uint64_t)name);
@@ -382,7 +377,6 @@ const char* type_tag_name(TypeTag tag)
 
 static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type type)
 {
-	if (!ts) return NULL;
 	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(ts->map, key);
 	if (existing) return &ts->types[(int)existing - 1];
@@ -395,7 +389,7 @@ static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type typ
 
 Type* type_system_get(TypeSystem* ts, const char* name, int len)
 {
-	if (!ts || len <= 0) return NULL;
+	if (len <= 0) return NULL;
 	const char* interned = sintern_range(name, name + len);
 	uint64_t key = (uint64_t)interned;
 	uint64_t idx = map_get(ts->map, key);
@@ -405,7 +399,6 @@ Type* type_system_get(TypeSystem* ts, const char* name, int len)
 
 Type* type_system_get_from_string(TypeSystem* ts, const char* name)
 {
-	if (!ts) return NULL;
 	uint64_t idx = map_get(ts->map, (uint64_t)name);
 	if (!idx) return NULL;
 	return &ts->types[(int)idx - 1];
@@ -418,7 +411,6 @@ Type* type_system_declare(TypeSystem* ts, const char* name, Type type)
 
 void type_system_init_builtins(TypeSystem* ts)
 {
-	if (!ts) return;
 	typedef struct TypeInit
 	{
 		const char* name;
@@ -464,7 +456,6 @@ void type_system_init_builtins(TypeSystem* ts)
 
 void type_system_free(TypeSystem* ts)
 {
-	if (!ts) return;
 	map_free(ts->map);
 	ts->map = (Map){ 0 };
 	if (ts->types) {
@@ -475,7 +466,6 @@ void type_system_free(TypeSystem* ts)
 
 void symbol_add_storage(Symbol* sym, unsigned flags)
 {
-	if (!sym) return;
 	sym->storage_flags |= flags;
 }
 
@@ -486,7 +476,6 @@ int symbol_has_storage(const Symbol* sym, unsigned flag)
 
 void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
 {
-	if (!sym) return;
 	sym->layout_flags |= layout_flag;
 	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
@@ -521,7 +510,6 @@ int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
 
 void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 {
-	if (!sym || !spec) return;
 	symbol_add_storage(sym, spec->storage_flags);
 	if (spec->layout_flags & SYM_LAYOUT_SET) symbol_set_layout(sym, SYM_LAYOUT_SET, spec->layout_set);
 	if (spec->layout_flags & SYM_LAYOUT_BINDING) symbol_set_layout(sym, SYM_LAYOUT_BINDING, spec->layout_binding);
@@ -530,7 +518,6 @@ void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 
 void symbol_table_free(SymbolTable* st)
 {
-	if (!st) return;
 	while (st->scopes && acount(st->scopes) > 0) {
 		symbol_table_leave_scope(st);
 	}
