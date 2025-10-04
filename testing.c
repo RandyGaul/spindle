@@ -65,6 +65,9 @@ void dump_ir()
 		case IR_PUSH_FLOAT:
 			printf(" %g", inst->float_val);
 			break;
+		case IR_PUSH_BOOL:
+			printf(" %s", inst->arg0 ? "true" : "false");
+			break;
 		case IR_PUSH_IDENT:
 		case IR_MEMBER:
 		case IR_DECL_TYPE:
@@ -155,7 +158,7 @@ void unit_test()
 	assert(value_sym && value_sym->name == value_name);
 	symbol_add_storage(value_sym, SYM_STORAGE_IN);
 	assert(symbol_has_storage(value_sym, SYM_STORAGE_IN));
-	symbol_table_enter_scope(&st);
+	symbol_table_enter_scope();
 	Type float_type_local = (Type){ 0 };
 	float_type_local.tag = T_FLOAT;
 	const char* inner_name = sintern("inner_value");
@@ -163,7 +166,7 @@ void unit_test()
 	symbol_set_layout(inner_sym, SYM_LAYOUT_LOCATION, 3);
 	assert(symbol_get_layout(inner_sym, SYM_LAYOUT_LOCATION) == 3);
 	assert(symbol_table_find(inner_name) == inner_sym);
-	symbol_table_leave_scope(&st);
+	symbol_table_leave_scope();
 	assert(symbol_table_find(inner_name) == NULL);
 	assert(symbol_table_find(value_name) == value_sym);
 	const char* texture_name = sintern("texture");
@@ -172,8 +175,8 @@ void unit_test()
 	const char* frac_name = sintern("frac");
 	Symbol* frac_sym = symbol_table_find(frac_name);
 	assert(frac_sym && frac_sym->builtin_kind == BUILTIN_FRACT);
-	symbol_table_free(&st);
 	type_system_free();
+	symbol_table_free();
 
 	// Check that IR emission produces entries with the requested opcode.
 	IR_Cmd* saved_ir = g_ir;
@@ -193,8 +196,13 @@ void unit_test()
 	int saw_bool_index = 0;
 	int saw_vec_index = 0;
 	int saw_mat_index = 0;
+	int saw_bool_literal = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
+		if (g_ir[i].op == IR_PUSH_BOOL)
+		{
+			saw_bool_literal = 1;
+		}
 		if (g_ir[i].op != IR_INDEX)
 			continue;
 		saw_index = 1;
@@ -232,6 +240,7 @@ void unit_test()
 	assert(saw_int_index);
 	assert(saw_uint_index);
 	assert(saw_bool_index);
+	assert(saw_bool_literal);
 	assert(saw_vec_index);
 	assert(saw_mat_index);
 
@@ -250,6 +259,61 @@ void unit_test()
 	assert(saw_swizzle[2]);
 	assert(saw_swizzle[3]);
 	assert(saw_swizzle[4]);
+
+	compiler_setup(snippet_control_flow);
+	int saw_pre_inc = 0;
+	int saw_post_inc = 0;
+	int saw_pre_dec = 0;
+	int saw_post_dec = 0;
+	int saw_pre_inc_lvalue = 0;
+	int saw_post_inc_lvalue = 0;
+	int saw_pre_dec_lvalue = 0;
+	int saw_post_dec_lvalue = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_UNARY)
+			continue;
+		if (inst->tok == TOK_PLUS_PLUS)
+		{
+			if (inst->arg1 == 0)
+			{
+				saw_pre_inc = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_pre_inc_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+			else if (inst->arg1 == 1)
+			{
+				saw_post_inc = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_post_inc_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+		}
+		else if (inst->tok == TOK_MINUS_MINUS)
+		{
+			if (inst->arg1 == 0)
+			{
+				saw_pre_dec = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_pre_dec_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+			else if (inst->arg1 == 1)
+			{
+				saw_post_dec = 1;
+				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
+					saw_post_dec_lvalue = g_ir[inst->arg0].is_lvalue;
+			}
+		}
+	}
+	compiler_teardown();
+	assert(saw_pre_inc);
+	assert(saw_post_inc);
+	assert(saw_pre_dec);
+	assert(saw_post_dec);
+	assert(saw_pre_inc_lvalue);
+	assert(saw_post_inc_lvalue);
+	assert(saw_pre_dec_lvalue);
+	assert(saw_post_dec_lvalue);
 
 	compiler_setup(snippet_function_calls);
 	assert(acount(g_ir) > 0);
