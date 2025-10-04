@@ -837,6 +837,26 @@ TypeSpec parse_type_specifier()
 	return spec;
 }
 
+void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec)
+{
+	if (!inst || !spec) return;
+	inst->storage_flags = spec->storage_flags;
+	inst->layout_flags = spec->layout_flags;
+	inst->layout_set = spec->layout_set;
+	inst->layout_binding = spec->layout_binding;
+	inst->layout_location = spec->layout_location;
+}
+
+void decl_emit_begin(const TypeSpec* spec)
+{
+	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
+	ir_apply_type_spec(begin, spec);
+	current_decl_type_name = spec->type_name;
+	current_decl_type_type = spec->type;
+	IR_Cmd* inst = ir_emit(IR_DECL_TYPE);
+	inst->str0 = spec->type_name;
+}
+
 void expr_binary(Prec min_prec);
 void expr() { expr_binary(PREC_EXPR); }
 void expr_error() { parse_error("unexpected token in expression"); }
@@ -885,11 +905,7 @@ void func_param()
 	if (!is_type_token()) parse_error("expected type in parameter");
 	TypeSpec spec = parse_type_specifier();
 	IR_Cmd* param = ir_emit(IR_FUNC_PARAM_BEGIN);
-	param->storage_flags = spec.storage_flags;
-	param->layout_flags = spec.layout_flags;
-	param->layout_set = spec.layout_set;
-	param->layout_binding = spec.layout_binding;
-	param->layout_location = spec.layout_location;
+	ir_apply_type_spec(param, &spec);
 	current_param_type_name = spec.type_name;
 	current_param_type_type = spec.type;
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
@@ -926,16 +942,7 @@ void func_param_list()
 void global_var_decl(TypeSpec spec, const char* first_name)
 {
 	IR_Cmd* inst;
-	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
-	begin->storage_flags = spec.storage_flags;
-	begin->layout_flags = spec.layout_flags;
-	begin->layout_set = spec.layout_set;
-	begin->layout_binding = spec.layout_binding;
-	begin->layout_location = spec.layout_location;
-	current_decl_type_name = spec.type_name;
-	current_decl_type_type = spec.type;
-	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = spec.type_name;
+	decl_emit_begin(&spec);
 	inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = first_name;
 	Symbol* sym = symbol_table_add(&g_symbols, first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -976,11 +983,7 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
 	func->str0 = spec.type_name;
 	func->str1 = name;
-	func->storage_flags = spec.storage_flags;
-	func->layout_flags = spec.layout_flags;
-	func->layout_set = spec.layout_set;
-	func->layout_binding = spec.layout_binding;
-	func->layout_location = spec.layout_location;
+	ir_apply_type_spec(func, &spec);
 	Symbol* sym = symbol_table_add(&g_symbols, func->str1, spec.type_name, spec.type, SYM_FUNC);
 	symbol_apply_type_spec(sym, &spec);
 	expect(TOK_LPAREN);
@@ -1007,16 +1010,7 @@ void stmt_decl()
 {
 	TypeSpec spec = parse_type_specifier();
 	IR_Cmd* inst;
-	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
-	begin->storage_flags = spec.storage_flags;
-	begin->layout_flags = spec.layout_flags;
-	begin->layout_set = spec.layout_set;
-	begin->layout_binding = spec.layout_binding;
-	begin->layout_location = spec.layout_location;
-	current_decl_type_name = spec.type_name;
-	current_decl_type_type = spec.type;
-	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = spec.type_name;
+	decl_emit_begin(&spec);
 	while (1) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
 		const char* name = ir_string(tok.lexeme, tok.len);
