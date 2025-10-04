@@ -362,6 +362,8 @@ typedef struct IR_Cmd
 	int layout_location;
 } IR_Cmd;
 
+// The global intermediate representation tape.
+// This gets produced before outputting any SPIRV as a middle-step.
 IR_Cmd* g_ir;
 TypeSystem g_types;
 Type* g_type_void;
@@ -371,6 +373,8 @@ Type* g_type_uint;
 Type* g_type_float;
 Type* g_type_double;
 
+// Any forward declarations we need tend to just get placed here as a simple way to
+// maintain a unity build.
 void type_check_error(const char* fmt, ...);
 int type_equal(const Type* a, const Type* b);
 const char* type_display(const Type* type);
@@ -378,7 +382,6 @@ Type* type_system_get(struct TypeSystem* ts, const char* name);
 void type_system_free(TypeSystem* ts);
 void type_system_init_builtins(TypeSystem* ts);
 void type_system_init_builtins(TypeSystem* ts);
-void type_system_cache_builtins(TypeSystem* ts);
 void type_check_ir();
 void dump_ir();
 void dump_symbols(const struct SymbolTable* st);
@@ -519,6 +522,7 @@ const char* snippet_discard = STR(
 	}
 );
 
+// Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
 #include "testing.c"

@@ -142,7 +142,7 @@ void unit_test()
 	custom_type.base = T_FLOAT;
 	custom_type.array_len = 0;
 	const char* custom_name = sintern("test_struct");
-	Type* declared_type = type_system_declare(&ts, custom_name, custom_type);
+	Type* declared_type = type_system_add_internal(&ts, custom_name, custom_type);
 	assert(declared_type == type_system_get(&ts, custom_name));
 	type_system_free(&ts);
 

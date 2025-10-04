@@ -40,11 +40,6 @@ Type* type_system_get(TypeSystem* ts, const char* name)
 	return &ts->types[(int)idx - 1];
 }
 
-Type* type_system_declare(TypeSystem* ts, const char* name, Type type)
-{
-	return type_system_add_internal(ts, name, type);
-}
-
 void type_system_init_builtins(TypeSystem* ts)
 {
 	typedef struct TypeInit
@@ -89,6 +84,12 @@ void type_system_init_builtins(TypeSystem* ts)
 		const char* name = sintern_range(builtins[i].name, builtins[i].name + strlen(builtins[i].name));
 		type_system_add_internal(ts, name, builtins[i].type);
 	}
+	g_type_void = type_system_get(ts, sintern("void"));
+	g_type_bool = type_system_get(ts, sintern("bool"));
+	g_type_int = type_system_get(ts, sintern("int"));
+	g_type_uint = type_system_get(ts, sintern("uint"));
+	g_type_float = type_system_get(ts, sintern("float"));
+	g_type_double = type_system_get(ts, sintern("double"));
 }
 
 void type_system_free(TypeSystem* ts)
@@ -96,17 +97,6 @@ void type_system_free(TypeSystem* ts)
 	map_free(ts->map);
 	ts->map = (Map){ 0 };
 	afree(ts->types);
-}
-
-void type_system_cache_builtins(TypeSystem* ts)
-{
-	g_type_void = type_system_get(ts, sintern("void"));
-	g_type_bool = type_system_get(ts, sintern("bool"));
-	g_type_int = type_system_get(ts, sintern("int"));
-	g_type_uint = type_system_get(ts, sintern("uint"));
-	g_type_float = type_system_get(ts, sintern("float"));
-	g_type_double = type_system_get(ts, sintern("double"));
-	assert(g_type_void && g_type_bool && g_type_int && g_type_uint && g_type_float && g_type_double);
 }
 
 const char* type_display(const Type* type)

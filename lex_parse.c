@@ -1528,7 +1528,6 @@ void compiler_setup(const char* source)
 	next_ch();
 	next();
 	type_system_init_builtins(&g_types);
-	type_system_cache_builtins(&g_types);
 	symbol_table_init(&g_symbols);
 	parse();
 	type_check_ir();
