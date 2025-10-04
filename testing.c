@@ -89,16 +89,46 @@ void dump_ir()
 		case IR_CONSTRUCT:
 			printf(" type=%s argc=%d", inst->str0 ? inst->str0 : "<null>", inst->arg0);
 			break;
-		case IR_FUNC_BEGIN:
-			printf(" return=%s name=%s", inst->str0, inst->str1);
-			dump_storage_flags(inst->storage_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_RETURN:
-			printf(" has_value=%d", inst->arg0);
-			break;
-		case IR_BREAK:
-		case IR_CONTINUE:
+                case IR_FUNC_BEGIN:
+                        printf(" return=%s name=%s", inst->str0, inst->str1);
+                        dump_storage_flags(inst->storage_flags);
+                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+                        break;
+                case IR_STRUCT_BEGIN:
+                        printf(" name=%s", inst->str0 ? inst->str0 : "<anon>");
+                        break;
+                case IR_STRUCT_MEMBER:
+                        printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
+                        if (inst->arg0)
+                                printf(" array_len=%d", inst->arg0);
+                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+                        break;
+                case IR_STRUCT_END:
+                        break;
+                case IR_BLOCK_DECL_BEGIN:
+                        printf(" type=%s", inst->str0 ? inst->str0 : "<anon>");
+                        dump_storage_flags(inst->storage_flags);
+                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+                        break;
+                case IR_BLOCK_DECL_LAYOUT:
+                        printf(" %s", inst->str0 ? inst->str0 : "<anon>");
+                        break;
+                case IR_BLOCK_DECL_MEMBER:
+                        printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
+                        if (inst->arg0)
+                                printf(" array_len=%d", inst->arg0);
+                        dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+                        break;
+                case IR_BLOCK_DECL_INSTANCE:
+                        printf(" %s", inst->str0 ? inst->str0 : "<anon>");
+                        break;
+                case IR_BLOCK_DECL_END:
+                        break;
+                case IR_RETURN:
+                        printf(" has_value=%d", inst->arg0);
+                        break;
+                case IR_BREAK:
+                case IR_CONTINUE:
 		case IR_DISCARD:
 			break;
 		default:
@@ -400,4 +430,48 @@ void unit_test()
 	}
 	compiler_teardown();
 	assert(saw_discard);
+
+	compiler_setup(snippet_struct_block);
+	const char* light_struct = sintern("Light");
+	const char* block_name = sintern("LightBlock");
+	const char* instance_name = sintern("u_light_data");
+	const char* member_name = sintern("lights");
+	const char* std140_name = sintern("std140");
+	int saw_struct = 0;
+	int saw_block = 0;
+	int saw_block_layout_identifier = 0;
+	int saw_block_instance = 0;
+	int saw_block_member_array = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op == IR_STRUCT_BEGIN && inst->str0 == light_struct)
+		{
+			saw_struct = 1;
+		}
+		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
+		{
+			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
+			        (inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
+			        inst->layout_set == 1 && inst->layout_binding == 0;
+		}
+		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
+		{
+			saw_block_layout_identifier = 1;
+		}
+		if (inst->op == IR_BLOCK_DECL_INSTANCE && inst->str0 == instance_name)
+		{
+			saw_block_instance = 1;
+		}
+		if (inst->op == IR_BLOCK_DECL_MEMBER && inst->str0 == member_name && inst->arg0 == 2)
+		{
+			saw_block_member_array = 1;
+		}
+	}
+	compiler_teardown();
+	assert(saw_struct);
+	assert(saw_block);
+	assert(saw_block_layout_identifier);
+	assert(saw_block_instance);
+	assert(saw_block_member_array);
 }
