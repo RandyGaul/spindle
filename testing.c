@@ -324,6 +324,70 @@ void unit_test()
 	assert(acount(g_ir) > 0);
 	compiler_teardown();
 
+	compiler_setup(snippet_bitwise);
+	int saw_band = 0;
+	int saw_bor = 0;
+	int saw_bxor = 0;
+	int saw_shl = 0;
+	int saw_shr = 0;
+	int saw_band_assign = 0;
+	int saw_bor_assign = 0;
+	int saw_bxor_assign = 0;
+	int saw_shl_assign = 0;
+	int saw_shr_assign = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_BINARY)
+			continue;
+		switch (inst->tok)
+		{
+		case TOK_AMP:
+			saw_band = 1;
+			break;
+		case TOK_PIPE:
+			saw_bor = 1;
+			break;
+		case TOK_CARET:
+			saw_bxor = 1;
+			break;
+		case TOK_LSHIFT:
+			saw_shl = 1;
+			break;
+		case TOK_RSHIFT:
+			saw_shr = 1;
+			break;
+		case TOK_AND_ASSIGN:
+			saw_band_assign = 1;
+			break;
+		case TOK_OR_ASSIGN:
+			saw_bor_assign = 1;
+			break;
+		case TOK_XOR_ASSIGN:
+			saw_bxor_assign = 1;
+			break;
+		case TOK_LSHIFT_ASSIGN:
+			saw_shl_assign = 1;
+			break;
+		case TOK_RSHIFT_ASSIGN:
+			saw_shr_assign = 1;
+			break;
+		default:
+			break;
+		}
+	}
+	compiler_teardown();
+	assert(saw_band);
+	assert(saw_bor);
+	assert(saw_bxor);
+	assert(saw_shl);
+	assert(saw_shr);
+	assert(saw_band_assign);
+	assert(saw_bor_assign);
+	assert(saw_bxor_assign);
+	assert(saw_shl_assign);
+	assert(saw_shr_assign);
+
 	compiler_setup(snippet_discard);
 	int saw_discard = 0;
 	for (int i = 0; i < acount(g_ir); ++i)

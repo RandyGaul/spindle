@@ -346,11 +346,15 @@ typedef enum Prec
 	PREC_EXPR = 0,
 	PREC_ASSIGN = 10, // right-assoc
 	PREC_TERNARY = 20, // ?:
-	PREC_OR_OR = 30,
-	PREC_AND_AND = 40,
-	PREC_EQ = 80, // == !=
-	PREC_REL = 90, // < <= > >=
-	PREC_ADD = 100, // + -
+PREC_OR_OR = 30,
+PREC_AND_AND = 40,
+PREC_BIT_OR = 50, // |
+PREC_BIT_XOR = 60, // ^
+PREC_BIT_AND = 70, // &
+PREC_EQ = 80, // == !=
+PREC_REL = 90, // < <= > >=
+PREC_SHIFT = 95, // << >>
+PREC_ADD = 100, // + -
 	PREC_MUL = 110, // * / %
 	PREC_POSTFIX = 120, // () [] .
 	PREC_UNARY = 130 // prefix + - ! ~
@@ -1167,6 +1171,11 @@ EXPR_BINARY(sub, ADD, MINUS);
 EXPR_BINARY(mul, MUL, STAR);
 EXPR_BINARY(div, MUL, SLASH);
 EXPR_BINARY(mod, MUL, PERCENT);
+EXPR_BINARY(band, BIT_AND, AMP);
+EXPR_BINARY(bor, BIT_OR, PIPE);
+EXPR_BINARY(bxor, BIT_XOR, CARET);
+EXPR_BINARY(shl, SHIFT, LSHIFT);
+EXPR_BINARY(shr, SHIFT, RSHIFT);
 EXPR_BINARY(lt, REL, LT);
 EXPR_BINARY(le, REL, LE);
 EXPR_BINARY(gt, REL, GT);
@@ -1177,6 +1186,11 @@ EXPR_BINARY(land, AND_AND, AND_AND);
 EXPR_BINARY(lor, OR_OR, OR_OR);
 EXPR_BINARY(assign, ASSIGN, ASSIGN);
 EXPR_BINARY(plus_assign, ASSIGN, PLUS_ASSIGN);
+EXPR_BINARY(and_assign, ASSIGN, AND_ASSIGN);
+EXPR_BINARY(or_assign, ASSIGN, OR_ASSIGN);
+EXPR_BINARY(xor_assign, ASSIGN, XOR_ASSIGN);
+EXPR_BINARY(shl_assign, ASSIGN, LSHIFT_ASSIGN);
+EXPR_BINARY(shr_assign, ASSIGN, RSHIFT_ASSIGN);
 
 void expr_binary(Prec min_prec)
 {
@@ -1521,17 +1535,98 @@ void parse()
 		next_ch(); \
 		if (match_ch(ch2)) \
 		{ \
-			tok.kind = TOK_##tok2; \
-			tok.prec = PREC_##prec2; \
-			tok.lexpr = expr_##lexpr2; \
-			tok.rexpr = expr_##rexpr2; \
+		tok.kind = TOK_##tok2; \
+		tok.prec = PREC_##prec2; \
+		tok.lexpr = expr_##lexpr2; \
+		tok.rexpr = expr_##rexpr2; \
 		} \
 		else \
 		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
+		tok.kind = TOK_##tok1; \
+		tok.prec = PREC_##prec1; \
+		tok.lexpr = expr_##lexpr1; \
+		tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
+#define TOK_EXPR_ASSIGN(ch1, tok1, prec1, lexpr1, rexpr1, tok_assign, prec_assign, lexpr_assign, rexpr_assign) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch('=')) \
+		{ \
+		tok.kind = TOK_##tok_assign; \
+		tok.prec = PREC_##prec_assign; \
+		tok.lexpr = expr_##lexpr_assign; \
+		tok.rexpr = expr_##rexpr_assign; \
+		} \
+		else \
+		{ \
+		tok.kind = TOK_##tok1; \
+		tok.prec = PREC_##prec1; \
+		tok.lexpr = expr_##lexpr1; \
+		tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
+#define TOK_EXPR_EXPR_ASSIGN(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2, tok_assign, prec_assign, lexpr_assign, rexpr_assign) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch2)) \
+		{ \
+		tok.kind = TOK_##tok2; \
+		tok.prec = PREC_##prec2; \
+		tok.lexpr = expr_##lexpr2; \
+		tok.rexpr = expr_##rexpr2; \
+		} \
+		else if (match_ch('=')) \
+		{ \
+		tok.kind = TOK_##tok_assign; \
+		tok.prec = PREC_##prec_assign; \
+		tok.lexpr = expr_##lexpr_assign; \
+		tok.rexpr = expr_##rexpr_assign; \
+		} \
+		else \
+		{ \
+		tok.kind = TOK_##tok1; \
+		tok.prec = PREC_##prec1; \
+		tok.lexpr = expr_##lexpr1; \
+		tok.rexpr = expr_##rexpr1; \
+		} \
+		break;
+
+#define TOK_SHIFT_REL(ch1, tok_rel, prec_rel, lexpr_rel, rexpr_rel, tok_rel_eq, prec_rel_eq, lexpr_rel_eq, rexpr_rel_eq, tok_shift, prec_shift, lexpr_shift, rexpr_shift, tok_shift_assign, prec_shift_assign, lexpr_shift_assign, rexpr_shift_assign) \
+	case ch1: \
+		next_ch(); \
+		if (match_ch(ch1)) \
+		{ \
+		if (match_ch('=')) \
+		{ \
+		tok.kind = TOK_##tok_shift_assign; \
+		tok.prec = PREC_##prec_shift_assign; \
+		tok.lexpr = expr_##lexpr_shift_assign; \
+		tok.rexpr = expr_##rexpr_shift_assign; \
+		} \
+		else \
+		{ \
+		tok.kind = TOK_##tok_shift; \
+		tok.prec = PREC_##prec_shift; \
+		tok.lexpr = expr_##lexpr_shift; \
+		tok.rexpr = expr_##rexpr_shift; \
+		} \
+		} \
+		else if (match_ch('=')) \
+		{ \
+		tok.kind = TOK_##tok_rel_eq; \
+		tok.prec = PREC_##prec_rel_eq; \
+		tok.lexpr = expr_##lexpr_rel_eq; \
+		tok.rexpr = expr_##rexpr_rel_eq; \
+		} \
+		else \
+		{ \
+		tok.kind = TOK_##tok_rel; \
+		tok.prec = PREC_##prec_rel; \
+		tok.lexpr = expr_##lexpr_rel; \
+		tok.rexpr = expr_##rexpr_rel; \
 		} \
 		break;
 
@@ -1692,15 +1787,13 @@ void next()
 		TOK_EXPR('?', QUESTION, TERNARY, error, ternary)
 
 		// two-char combos
-		TOK_EXPR_EXPR('<', LT, REL, error, lt, '=', LE, REL, error, le)
-		TOK_EXPR_EXPR('>', GT, REL, error, gt, '=', GE, REL, error, ge)
+		TOK_SHIFT_REL('<', LT, REL, error, lt, LE, REL, error, le, LSHIFT, SHIFT, error, shl, LSHIFT_ASSIGN, ASSIGN, error, shl_assign)
+		TOK_SHIFT_REL('>', GT, REL, error, gt, GE, REL, error, ge, RSHIFT, SHIFT, error, shr, RSHIFT_ASSIGN, ASSIGN, error, shr_assign)
 		TOK_EXPR_EXPR('=', ASSIGN, ASSIGN, error, assign, '=', EQ, EQ, error, eq)
 		TOK_EXPR_EXPR('!', NOT, UNARY, not, error, '=', NE, EQ, error, ne)
-
-		// && and ||
-		TOK_EXPR_EXPR('&', NOT, UNARY, error, error, '&', AND_AND, AND_AND, error, land)
-		TOK_EXPR_EXPR('|', NOT, UNARY, error, error, '|', OR_OR, OR_OR, error, lor)
-
+		TOK_EXPR_EXPR_ASSIGN('&', AMP, BIT_AND, error, band, '&', AND_AND, AND_AND, error, land, AND_ASSIGN, ASSIGN, error, and_assign)
+		TOK_EXPR_EXPR_ASSIGN('|', PIPE, BIT_OR, error, bor, '|', OR_OR, OR_OR, error, lor, OR_ASSIGN, ASSIGN, error, or_assign)
+		TOK_EXPR_ASSIGN('^', CARET, BIT_XOR, error, bxor, XOR_ASSIGN, ASSIGN, error, xor_assign)
 	default:
 		break;
 	}
