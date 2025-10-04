@@ -168,7 +168,7 @@ typedef struct Symbol
 	int layout_binding;
 	int layout_location;
 	int scope_depth;
-	Type** params;
+	dyna Type** params;
 	int param_count;
 	int param_signature_set;
 	Type array_type;
@@ -190,7 +190,7 @@ typedef struct TypeSpec
 typedef struct TypeSystem
 {
 	Map map;
-	Type* types;
+	dyna Type* types;
 } TypeSystem;
 
 typedef enum IR_Op
@@ -364,8 +364,9 @@ typedef struct IR_Cmd
 
 // The global intermediate representation tape.
 // This gets produced before outputting any SPIRV as a middle-step.
-IR_Cmd* g_ir;
-TypeSystem g_types;
+dyna IR_Cmd* g_ir;
+TypeSystem g_type_system;
+TypeSystem* ts = &g_type_system;
 Type* g_type_void;
 Type* g_type_bool;
 Type* g_type_int;
@@ -378,13 +379,13 @@ Type* g_type_double;
 void type_check_error(const char* fmt, ...);
 int type_equal(const Type* a, const Type* b);
 const char* type_display(const Type* type);
-Type* type_system_get(struct TypeSystem* ts, const char* name);
-void type_system_free(TypeSystem* ts);
-void type_system_init_builtins(TypeSystem* ts);
-void type_system_init_builtins(TypeSystem* ts);
+Type* type_system_get(const char* name);
+void type_system_free();
+void type_system_init_builtins();
+void type_system_init_builtins();
 void type_check_ir();
 void dump_ir();
-void dump_symbols(const struct SymbolTable* st);
+void dump_symbols();
 
 const char* snippet_basic_io = STR(
 	layout(location = 0) in vec3 in_pos;
@@ -533,7 +534,7 @@ void transpile(const char* source)
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");
-	dump_symbols(&g_symbols);
+	dump_symbols();
 	compiler_teardown();
 }
 

@@ -60,7 +60,8 @@ void init_keyword_interns()
 	kw_do = sintern("do");
 }
 
-SymbolTable g_symbols;
+SymbolTable g_symbol_table;
+SymbolTable* st = &g_symbol_table;
 const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
@@ -69,12 +70,12 @@ Type** current_function_params;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
 
-void symbol_table_enter_scope(SymbolTable* st)
+void symbol_table_enter_scope()
 {
 	apush(st->scopes, (SymbolScope){ 0 });
 }
 
-void symbol_table_leave_scope(SymbolTable* st)
+void symbol_table_leave_scope()
 {
 	int count = acount(st->scopes);
 	if (!count)
@@ -84,14 +85,14 @@ void symbol_table_leave_scope(SymbolTable* st)
 	apop(st->scopes);
 }
 
-void symbol_table_init(SymbolTable* st)
+void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
 	symbol_table_enter_scope(st);
 }
 
-Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_name, Type* type, SymbolKind kind)
+Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
 {
 	SymbolScope* scope = &alast(st->scopes);
 	uint64_t key = (uint64_t)name;
@@ -110,7 +111,7 @@ Symbol* symbol_table_add(SymbolTable* st, const char* name, const char* type_nam
 	return &st->symbols[idx - 1];
 }
 
-Symbol* symbol_table_find(SymbolTable* st, const char* name)
+Symbol* symbol_table_find(const char* name)
 {
 	for (int i = acount(st->scopes) - 1; i >= 0; --i)
 	{
@@ -240,7 +241,7 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 	sym->param_signature_set = 1;
 }
 
-void symbol_table_free(SymbolTable* st)
+void symbol_table_free()
 {
 	while (acount(st->scopes) > 0)
 	{
@@ -415,7 +416,7 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 
 int is_type_name(const char* s)
 {
-	return type_system_get(&g_types, s) != NULL;
+	return type_system_get(s) != NULL;
 }
 
 int is_type_token()
@@ -488,7 +489,7 @@ TypeSpec parse_type_specifier()
 	spec.type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	if (!is_type_name(spec.type_name))
 		parse_error("expected type");
-	spec.type = type_system_get(&g_types, spec.type_name);
+	spec.type = type_system_get(spec.type_name);
 	if (!spec.type)
 		parse_error("unknown type");
 	next();
@@ -509,7 +510,7 @@ IR_Cmd* ir_emit(IR_Op op)
 	IR_Cmd inst = (IR_Cmd){ 0 };
 	inst.op = op;
 	apush(g_ir, inst);
-	return &g_ir[acount(g_ir) - 1];
+	return &alast(g_ir);
 }
 
 void decl_emit_begin(const TypeSpec* spec)
@@ -612,7 +613,7 @@ void func_param()
 	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
-	Symbol* sym = symbol_table_add(&g_symbols, name, current_param_type_name, current_param_type_type, SYM_PARAM);
+	Symbol* sym = symbol_table_add(name, current_param_type_name, current_param_type_type, SYM_PARAM);
 	symbol_apply_type_spec(sym, &spec);
 	current_param_symbol = sym;
 	next();
@@ -648,7 +649,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 	decl_emit_begin(&spec);
 	inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = first_name;
-	Symbol* sym = symbol_table_add(&g_symbols, first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
+	Symbol* sym = symbol_table_add(first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 	symbol_apply_type_spec(sym, &spec);
 	current_decl_symbol = sym;
 	decl_array_suffix();
@@ -669,7 +670,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
-		sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
+		sym = symbol_table_add(name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
 		current_decl_symbol = sym;
 		next();
@@ -695,8 +696,8 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	func->str0 = spec.type_name;
 	func->str1 = name;
 	ir_apply_type_spec(func, &spec);
-	Symbol* sym = symbol_table_add(&g_symbols, func->str1, spec.type_name, spec.type, SYM_FUNC);
-	int sym_index = (int)(sym - g_symbols.symbols);
+	Symbol* sym = symbol_table_add(func->str1, spec.type_name, spec.type, SYM_FUNC);
+	int sym_index = (int)(sym - st->symbols);
 	if (sym->type && spec.type && !type_equal(sym->type, spec.type))
 	{
 		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
@@ -709,16 +710,16 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	if (current_function_params)
 		aclear(current_function_params);
 	expect(TOK_LPAREN);
-	symbol_table_enter_scope(&g_symbols);
+	symbol_table_enter_scope();
 	func_param_list();
-	sym = &g_symbols.symbols[sym_index];
+	sym = &st->symbols[sym_index];
 	symbol_set_function_signature(sym, current_function_params, acount(current_function_params));
 	if (current_function_params)
 		aclear(current_function_params);
 	if (tok.kind == TOK_SEMI)
 	{
 		next();
-		symbol_table_leave_scope(&g_symbols);
+		symbol_table_leave_scope();
 		ir_emit(IR_FUNC_PROTOTYPE_END);
 		return;
 	}
@@ -726,11 +727,11 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	{
 		ir_emit(IR_FUNC_DEFINITION_BEGIN);
 		stmt_block();
-		symbol_table_leave_scope(&g_symbols);
+		symbol_table_leave_scope();
 		ir_emit(IR_FUNC_DEFINITION_END);
 		return;
 	}
-	symbol_table_leave_scope(&g_symbols);
+	symbol_table_leave_scope();
 	parse_error("expected ';' or function body");
 }
 
@@ -746,7 +747,7 @@ void stmt_decl()
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
-		Symbol* sym = symbol_table_add(&g_symbols, name, current_decl_type_name, current_decl_type_type, SYM_VAR);
+		Symbol* sym = symbol_table_add(name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
 		current_decl_symbol = sym;
 		next();
@@ -830,8 +831,8 @@ void expr_call()
 		if (callee->op == IR_PUSH_IDENT && callee->str0)
 		{
 			callee_name = callee->str0;
-			Symbol* sym = symbol_table_find(&g_symbols, callee->str0);
-			Type* type = type_system_get(&g_types, callee->str0);
+			Symbol* sym = symbol_table_find(callee->str0);
+			Type* type = type_system_get(callee->str0);
 			if (type && (!sym || sym->kind != SYM_FUNC))
 			{
 				callee->type = type;
@@ -1020,13 +1021,13 @@ void stmt_block()
 {
 	expect(TOK_LBRACE);
 	ir_emit(IR_BLOCK_BEGIN);
-	symbol_table_enter_scope(&g_symbols);
+	symbol_table_enter_scope();
 	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
 	{
 		stmt();
 	}
 	expect(TOK_RBRACE);
-	symbol_table_leave_scope(&g_symbols);
+	symbol_table_leave_scope();
 	ir_emit(IR_BLOCK_END);
 }
 
@@ -1138,7 +1139,7 @@ void stmt_for()
 	expect(TOK_FOR);
 	ir_emit(IR_FOR_BEGIN);
 	expect(TOK_LPAREN);
-	symbol_table_enter_scope(&g_symbols);
+	symbol_table_enter_scope();
 	ir_emit(IR_FOR_INIT_BEGIN);
 	if (tok.kind == TOK_SEMI)
 	{
@@ -1172,7 +1173,7 @@ void stmt_for()
 	stmt_controlled();
 	ir_emit(IR_FOR_BODY_END);
 	ir_emit(IR_FOR_END);
-	symbol_table_leave_scope(&g_symbols);
+	symbol_table_leave_scope();
 }
 
 void stmt()
@@ -1507,8 +1508,8 @@ void reset_parser_state()
 
 void compiler_teardown()
 {
-	symbol_table_free(&g_symbols);
-	type_system_free(&g_types);
+	symbol_table_free();
+	type_system_free();
 	afree(g_ir);
 	afree(current_function_params);
 	current_decl_type_name = NULL;
@@ -1527,8 +1528,8 @@ void compiler_setup(const char* source)
 	at = in;
 	next_ch();
 	next();
-	type_system_init_builtins(&g_types);
-	symbol_table_init(&g_symbols);
+	type_system_init_builtins();
+	symbol_table_init();
 	parse();
 	type_check_ir();
 }

@@ -19,7 +19,7 @@ const char* type_tag_name(TypeTag tag)
 	return names[tag] ? names[tag] : "unknown";
 }
 
-static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type type)
+static Type* type_system_add_internal(const char* name, Type type)
 {
 	uint64_t key = (uint64_t)name;
 	uint64_t existing = map_get(ts->map, key);
@@ -32,7 +32,7 @@ static Type* type_system_add_internal(TypeSystem* ts, const char* name, Type typ
 	return &ts->types[idx - 1];
 }
 
-Type* type_system_get(TypeSystem* ts, const char* name)
+Type* type_system_get(const char* name)
 {
 	uint64_t idx = map_get(ts->map, (uint64_t)name);
 	if (!idx)
@@ -40,7 +40,7 @@ Type* type_system_get(TypeSystem* ts, const char* name)
 	return &ts->types[(int)idx - 1];
 }
 
-void type_system_init_builtins(TypeSystem* ts)
+void type_system_init_builtins()
 {
 	typedef struct TypeInit
 	{
@@ -82,17 +82,17 @@ void type_system_init_builtins(TypeSystem* ts)
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
 	{
 		const char* name = sintern_range(builtins[i].name, builtins[i].name + strlen(builtins[i].name));
-		type_system_add_internal(ts, name, builtins[i].type);
+		type_system_add_internal(name, builtins[i].type);
 	}
-	g_type_void = type_system_get(ts, sintern("void"));
-	g_type_bool = type_system_get(ts, sintern("bool"));
-	g_type_int = type_system_get(ts, sintern("int"));
-	g_type_uint = type_system_get(ts, sintern("uint"));
-	g_type_float = type_system_get(ts, sintern("float"));
-	g_type_double = type_system_get(ts, sintern("double"));
+	g_type_void = type_system_get(sintern("void"));
+	g_type_bool = type_system_get(sintern("bool"));
+	g_type_int = type_system_get(sintern("int"));
+	g_type_uint = type_system_get(sintern("uint"));
+	g_type_float = type_system_get(sintern("float"));
+	g_type_double = type_system_get(sintern("double"));
 }
 
-void type_system_free(TypeSystem* ts)
+void type_system_free()
 {
 	map_free(ts->map);
 	ts->map = (Map){ 0 };
@@ -277,7 +277,7 @@ Type* type_get_vector(TypeTag base, int cols)
 	const char* name = type_vector_name(base, cols);
 	if (!name)
 		return NULL;
-	return type_system_get(&g_types, name);
+	return type_system_get(name);
 }
 
 Type* type_get_matrix(TypeTag base, int cols, int rows)
@@ -285,7 +285,7 @@ Type* type_get_matrix(TypeTag base, int cols, int rows)
 	const char* name = type_matrix_name(base, cols, rows);
 	if (!name)
 		return NULL;
-	return type_system_get(&g_types, name);
+	return type_system_get(name);
 }
 
 int type_can_assign(const Type* dst, const Type* src)
@@ -749,8 +749,8 @@ void type_check_error(const char* fmt, ...)
 
 void type_check_ir()
 {
-	Type** stack = NULL;
-	Type** func_stack = NULL;
+	dyna Type** stack = NULL;
+	dyna Type** func_stack = NULL;
 	Type* current_decl_type = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
@@ -770,12 +770,12 @@ void type_check_ir()
 			Type* type = NULL;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(&g_symbols, inst->str0);
+				Symbol* sym = symbol_table_find(inst->str0);
 				if (!sym)
 				{
-					for (int j = acount(g_symbols.symbols) - 1; j >= 0; --j)
+					for (int j = acount(st->symbols) - 1; j >= 0; --j)
 					{
-						Symbol* candidate = &g_symbols.symbols[j];
+						Symbol* candidate = &st->symbols[j];
 						if (candidate->name == inst->str0)
 						{
 							sym = candidate;
@@ -789,7 +789,7 @@ void type_check_ir()
 				}
 				else
 				{
-					type = type_system_get(&g_types, inst->str0);
+					type = type_system_get(inst->str0);
 				}
 			}
 			inst->type = type;
@@ -836,7 +836,7 @@ void type_check_ir()
 			Type* result = callee;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(&g_symbols, inst->str0);
+				Symbol* sym = symbol_table_find(inst->str0);
 				if (sym && sym->kind == SYM_FUNC)
 				{
 					if (sym->param_signature_set)
@@ -970,7 +970,7 @@ void type_check_ir()
 			break;
 		}
 		case IR_DECL_TYPE:
-			current_decl_type = type_system_get(&g_types, inst->str0);
+			current_decl_type = type_system_get(inst->str0);
 			inst->type = current_decl_type;
 			break;
 		case IR_DECL_END:
@@ -1035,7 +1035,7 @@ void type_check_ir()
 		}
 		case IR_FUNC_BEGIN:
 		{
-			Type* ret = type_system_get(&g_types, inst->str0);
+			Type* ret = type_system_get(inst->str0);
 			inst->type = ret;
 			apush(func_stack, ret);
 			break;
