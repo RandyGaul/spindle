@@ -85,6 +85,87 @@ typedef enum IROp
 	IR_OP_COUNT
 } IROp;
 
+typedef struct IR_String
+{
+	const char* ptr;
+	int len;
+} IR_String;
+
+typedef enum SymbolKind
+{
+	SYM_VAR,
+	SYM_FUNC,
+	SYM_PARAM,
+	SYM_KIND_COUNT
+} SymbolKind;
+
+const char* symbol_kind_name[SYM_KIND_COUNT] = {
+	[SYM_VAR]	= "var",
+	[SYM_FUNC]	= "func",
+	[SYM_PARAM]	= "param",
+};
+
+typedef struct Symbol
+{
+	IR_String name;
+	IR_String type;
+	SymbolKind kind;
+} Symbol;
+
+typedef struct SymbolTable
+{
+	Map map;
+	Symbol* symbols;
+} SymbolTable;
+
+typedef enum IR_Op
+{
+	IR_PUSH_INT,
+	IR_PUSH_IDENT,
+	IR_UNARY,
+	IR_BINARY,
+	IR_CALL,
+	IR_INDEX,
+	IR_MEMBER,
+	IR_SELECT,
+	IR_IF_BEGIN,
+	IR_IF_THEN,
+	IR_IF_ELSE,
+	IR_IF_END,
+	IR_BLOCK_BEGIN,
+	IR_BLOCK_END,
+	IR_STMT_EXPR,
+	IR_DECL_BEGIN,
+	IR_DECL_TYPE,
+	IR_DECL_VAR,
+	IR_DECL_ARRAY_BEGIN,
+	IR_DECL_ARRAY_UNSIZED,
+	IR_DECL_ARRAY_SIZE_BEGIN,
+	IR_DECL_ARRAY_SIZE_END,
+	IR_DECL_ARRAY_END,
+	IR_DECL_INIT_BEGIN,
+	IR_DECL_INIT_END,
+	IR_DECL_SEPARATOR,
+	IR_DECL_END,
+	IR_FUNC_BEGIN,
+	IR_FUNC_PARAMS_BEGIN,
+	IR_FUNC_PARAM_BEGIN,
+	IR_FUNC_PARAM_TYPE,
+	IR_FUNC_PARAM_NAME,
+	IR_FUNC_PARAM_ARRAY_BEGIN,
+	IR_FUNC_PARAM_ARRAY_UNSIZED,
+	IR_FUNC_PARAM_ARRAY_SIZE_BEGIN,
+	IR_FUNC_PARAM_ARRAY_SIZE_END,
+	IR_FUNC_PARAM_ARRAY_END,
+	IR_FUNC_PARAM_END,
+	IR_FUNC_PARAM_SEPARATOR,
+	IR_FUNC_PARAMS_END,
+	IR_FUNC_PROTOTYPE_END,
+	IR_FUNC_DEFINITION_BEGIN,
+	IR_FUNC_DEFINITION_END,
+	IR_OP_COUNT
+} IR_Op;
+
 typedef enum Tok
 {
 	TOK_EOF, TOK_IDENTIFIER, TOK_INT,
@@ -292,8 +373,6 @@ void dump_symbols(const SymbolTable* st)
 		printf("  %s %.*s : %.*s\n", symbol_kind_name[sym->kind], sym->name.len, sym->name.ptr, sym->type.len, sym->type.ptr);
 	}
 }
-
-
 
 typedef enum Prec
 {
