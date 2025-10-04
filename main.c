@@ -1,14 +1,14 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
-#include <stddef.h>
 #define CKIT_IMPLEMENTATION
 #include "ckit.h"
-typedef struct IRString
+
+typedef struct IR_String
 {
 	const char* ptr;
 	int len;
-} IRString;
+} IR_String;
 
 typedef enum SymbolKind
 {
@@ -26,8 +26,8 @@ const char* symbol_kind_name[SYM_KIND_COUNT] = {
 
 typedef struct Symbol
 {
-	IRString name;
-	IRString type;
+	IR_String name;
+	IR_String type;
 	SymbolKind kind;
 } Symbol;
 
@@ -84,87 +84,6 @@ typedef enum IROp
 	IR_FUNC_DEFINITION_END,
 	IR_OP_COUNT
 } IROp;
-
-typedef struct IR_String
-{
-	const char* ptr;
-	int len;
-} IR_String;
-
-typedef enum SymbolKind
-{
-	SYM_VAR,
-	SYM_FUNC,
-	SYM_PARAM,
-	SYM_KIND_COUNT
-} SymbolKind;
-
-const char* symbol_kind_name[SYM_KIND_COUNT] = {
-	[SYM_VAR]	= "var",
-	[SYM_FUNC]	= "func",
-	[SYM_PARAM]	= "param",
-};
-
-typedef struct Symbol
-{
-	IR_String name;
-	IR_String type;
-	SymbolKind kind;
-} Symbol;
-
-typedef struct SymbolTable
-{
-	Map map;
-	Symbol* symbols;
-} SymbolTable;
-
-typedef enum IR_Op
-{
-	IR_PUSH_INT,
-	IR_PUSH_IDENT,
-	IR_UNARY,
-	IR_BINARY,
-	IR_CALL,
-	IR_INDEX,
-	IR_MEMBER,
-	IR_SELECT,
-	IR_IF_BEGIN,
-	IR_IF_THEN,
-	IR_IF_ELSE,
-	IR_IF_END,
-	IR_BLOCK_BEGIN,
-	IR_BLOCK_END,
-	IR_STMT_EXPR,
-	IR_DECL_BEGIN,
-	IR_DECL_TYPE,
-	IR_DECL_VAR,
-	IR_DECL_ARRAY_BEGIN,
-	IR_DECL_ARRAY_UNSIZED,
-	IR_DECL_ARRAY_SIZE_BEGIN,
-	IR_DECL_ARRAY_SIZE_END,
-	IR_DECL_ARRAY_END,
-	IR_DECL_INIT_BEGIN,
-	IR_DECL_INIT_END,
-	IR_DECL_SEPARATOR,
-	IR_DECL_END,
-	IR_FUNC_BEGIN,
-	IR_FUNC_PARAMS_BEGIN,
-	IR_FUNC_PARAM_BEGIN,
-	IR_FUNC_PARAM_TYPE,
-	IR_FUNC_PARAM_NAME,
-	IR_FUNC_PARAM_ARRAY_BEGIN,
-	IR_FUNC_PARAM_ARRAY_UNSIZED,
-	IR_FUNC_PARAM_ARRAY_SIZE_BEGIN,
-	IR_FUNC_PARAM_ARRAY_SIZE_END,
-	IR_FUNC_PARAM_ARRAY_END,
-	IR_FUNC_PARAM_END,
-	IR_FUNC_PARAM_SEPARATOR,
-	IR_FUNC_PARAMS_END,
-	IR_FUNC_PROTOTYPE_END,
-	IR_FUNC_DEFINITION_BEGIN,
-	IR_FUNC_DEFINITION_END,
-	IR_OP_COUNT
-} IR_Op;
 
 typedef enum Tok
 {
@@ -226,75 +145,75 @@ const char* tok_name[TOK_COUNT] = {
 };
 
 const char* ir_op_name[IR_OP_COUNT] = {
-	[IR_PUSH_INT]			= "push_int",
-	[IR_PUSH_IDENT]		= "push_ident",
-	[IR_UNARY]			= "unary",
-	[IR_BINARY]			= "binary",
-	[IR_CALL]			= "call",
-	[IR_INDEX]			= "index",
-	[IR_MEMBER]		= "member",
-	[IR_SELECT]		= "select",
-	[IR_IF_BEGIN]		= "if_begin",
-	[IR_IF_THEN]		= "if_then",
-	[IR_IF_ELSE]		= "if_else",
-	[IR_IF_END]			= "if_end",
-	[IR_BLOCK_BEGIN]		= "block_begin",
-	[IR_BLOCK_END]		= "block_end",
-	[IR_STMT_EXPR]		= "stmt_expr",
-	[IR_DECL_BEGIN]		= "decl_begin",
-	[IR_DECL_TYPE]		= "decl_type",
-	[IR_DECL_VAR]		= "decl_var",
-	[IR_DECL_ARRAY_BEGIN]	= "decl_array_begin",
-	[IR_DECL_ARRAY_UNSIZED]	= "decl_array_unsized",
-	[IR_DECL_ARRAY_SIZE_BEGIN]	= "decl_array_size_begin",
-	[IR_DECL_ARRAY_SIZE_END]	= "decl_array_size_end",
-	[IR_DECL_ARRAY_END]		= "decl_array_end",
-	[IR_DECL_INIT_BEGIN]	= "decl_init_begin",
-	[IR_DECL_INIT_END]		= "decl_init_end",
-	[IR_DECL_SEPARATOR]	= "decl_separator",
-	[IR_DECL_END]		= "decl_end",
-	[IR_FUNC_BEGIN]		= "func_begin",
-	[IR_FUNC_PARAMS_BEGIN]	= "func_params_begin",
-	[IR_FUNC_PARAM_BEGIN]	= "func_param_begin",
-	[IR_FUNC_PARAM_TYPE]	= "func_param_type",
-	[IR_FUNC_PARAM_NAME]	= "func_param_name",
-	[IR_FUNC_PARAM_ARRAY_BEGIN]	= "func_param_array_begin",
+	[IR_PUSH_INT] = "push_int",
+	[IR_PUSH_IDENT] = "push_ident",
+	[IR_UNARY] = "unary",
+	[IR_BINARY] = "binary",
+	[IR_CALL] = "call",
+	[IR_INDEX] = "index",
+	[IR_MEMBER] = "member",
+	[IR_SELECT] = "select",
+	[IR_IF_BEGIN] = "if_begin",
+	[IR_IF_THEN] = "if_then",
+	[IR_IF_ELSE] = "if_else",
+	[IR_IF_END] = "if_end",
+	[IR_BLOCK_BEGIN] = "block_begin",
+	[IR_BLOCK_END] = "block_end",
+	[IR_STMT_EXPR] = "stmt_expr",
+	[IR_DECL_BEGIN] = "decl_begin",
+	[IR_DECL_TYPE] = "decl_type",
+	[IR_DECL_VAR] = "decl_var",
+	[IR_DECL_ARRAY_BEGIN] = "decl_array_begin",
+	[IR_DECL_ARRAY_UNSIZED] = "decl_array_unsized",
+	[IR_DECL_ARRAY_SIZE_BEGIN] = "decl_array_size_begin",
+	[IR_DECL_ARRAY_SIZE_END] = "decl_array_size_end",
+	[IR_DECL_ARRAY_END] = "decl_array_end",
+	[IR_DECL_INIT_BEGIN] = "decl_init_begin",
+	[IR_DECL_INIT_END] = "decl_init_end",
+	[IR_DECL_SEPARATOR] = "decl_separator",
+	[IR_DECL_END] = "decl_end",
+	[IR_FUNC_BEGIN] = "func_begin",
+	[IR_FUNC_PARAMS_BEGIN] = "func_params_begin",
+	[IR_FUNC_PARAM_BEGIN] = "func_param_begin",
+	[IR_FUNC_PARAM_TYPE] = "func_param_type",
+	[IR_FUNC_PARAM_NAME] = "func_param_name",
+	[IR_FUNC_PARAM_ARRAY_BEGIN] = "func_param_array_begin",
 	[IR_FUNC_PARAM_ARRAY_UNSIZED] = "func_param_array_unsized",
 	[IR_FUNC_PARAM_ARRAY_SIZE_BEGIN] = "func_param_array_size_begin",
-	[IR_FUNC_PARAM_ARRAY_SIZE_END]	= "func_param_array_size_end",
-	[IR_FUNC_PARAM_ARRAY_END]	= "func_param_array_end",
-	[IR_FUNC_PARAM_END]		= "func_param_end",
-	[IR_FUNC_PARAM_SEPARATOR]	= "func_param_separator",
-	[IR_FUNC_PARAMS_END]	= "func_params_end",
-	[IR_FUNC_PROTOTYPE_END]	= "func_prototype_end",
-	[IR_FUNC_DEFINITION_BEGIN]	= "func_definition_begin",
-	[IR_FUNC_DEFINITION_END]	= "func_definition_end",
+	[IR_FUNC_PARAM_ARRAY_SIZE_END] = "func_param_array_size_end",
+	[IR_FUNC_PARAM_ARRAY_END] = "func_param_array_end",
+	[IR_FUNC_PARAM_END] = "func_param_end",
+	[IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
+	[IR_FUNC_PARAMS_END] = "func_params_end",
+	[IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
+	[IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
+	[IR_FUNC_DEFINITION_END] = "func_definition_end",
 };
 
-typedef struct IRInstr
+typedef struct IR_Cmd
 {
 	IROp op;
-	IRString str0;
-	IRString str1;
+	IR_String str0;
+	IR_String str1;
 	int arg0;
 	int arg1;
 	Tok tok;
-} IRInstr;
+} IR_Cmd;
 
-SymbolTable g_symbols = (SymbolTable){ 0 };
-IRInstr* g_ir = NULL;
-IRString current_decl_type = (IRString){ 0 };
-IRString current_param_type = (IRString){ 0 };
+SymbolTable g_symbols;
+IR_Cmd* g_ir;
+IR_String current_decl_type;
+IR_String current_param_type;
 
-IRString ir_string(const char* s, int len)
+IR_String ir_string(const char* s, int len)
 {
-	if (!s || len <= 0) return (IRString){ 0 };
-	return (IRString){ sintern_range(s, s + len), len };
+	if (!s || len <= 0) return (IR_String){ 0 };
+	return (IR_String){ sintern_range(s, s + len), len };
 }
 
-IRInstr* ir_emit(IROp op)
+IR_Cmd* ir_emit(IROp op)
 {
-	IRInstr inst = (IRInstr){ 0 };
+	IR_Cmd inst = (IR_Cmd){ 0 };
 	inst.op = op;
 	apush(g_ir, inst);
 	return &g_ir[acount(g_ir) - 1];
@@ -306,7 +225,7 @@ void symbol_table_init(SymbolTable* st)
 	st->symbols = NULL;
 }
 
-Symbol* symbol_table_add(SymbolTable* st, IRString name, IRString type, SymbolKind kind)
+Symbol* symbol_table_add(SymbolTable* st, IR_String name, IR_String type, SymbolKind kind)
 {
 	if (!name.ptr) return NULL;
 	uint64_t key = (uint64_t)name.ptr;
@@ -334,7 +253,7 @@ void dump_ir()
 {
 	printf("IR:\n");
 	for (int i = 0; i < acount(g_ir); ++i) {
-		IRInstr* inst = &g_ir[i];
+		IR_Cmd* inst = &g_ir[i];
 		printf("  %s", ir_op_name[inst->op]);
 		switch (inst->op) {
 		case IR_PUSH_INT:
@@ -525,14 +444,14 @@ void func_param()
 {
 	if (!is_type_token()) parse_error("expected type in parameter");
 	ir_emit(IR_FUNC_PARAM_BEGIN);
-	current_param_type = (IRString){ 0 };
-	IRString type = ir_string(tok.lexeme, tok.len);
+	current_param_type = (IR_String){ 0 };
+	IR_String type = ir_string(tok.lexeme, tok.len);
 	current_param_type = type;
-	IRInstr* inst = ir_emit(IR_FUNC_PARAM_TYPE);
+	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = type;
 	next();
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in parameter");
-	IRString name = ir_string(tok.lexeme, tok.len);
+	IR_String name = ir_string(tok.lexeme, tok.len);
 	inst = ir_emit(IR_FUNC_PARAM_NAME);
 	inst->str0 = name;
 	symbol_table_add(&g_symbols, name, current_param_type, SYM_PARAM);
@@ -561,14 +480,14 @@ void func_param_list()
 
 void global_var_decl(const char* type_name, int type_len, const char* first_name, int first_len)
 {
-	IRInstr* inst;
+	IR_Cmd* inst;
 	ir_emit(IR_DECL_BEGIN);
-	current_decl_type = (IRString){ 0 };
-	IRString type = ir_string(type_name, type_len);
+	current_decl_type = (IR_String){ 0 };
+	IR_String type = ir_string(type_name, type_len);
 	current_decl_type = type;
 	inst = ir_emit(IR_DECL_TYPE);
 	inst->str0 = type;
-	IRString first = ir_string(first_name, first_len);
+	IR_String first = ir_string(first_name, first_len);
 	inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = first;
 	symbol_table_add(&g_symbols, first, current_decl_type, SYM_VAR);
@@ -583,7 +502,7 @@ void global_var_decl(const char* type_name, int type_len, const char* first_name
 		next();
 		ir_emit(IR_DECL_SEPARATOR);
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IRString name = ir_string(tok.lexeme, tok.len);
+		IR_String name = ir_string(tok.lexeme, tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
@@ -598,12 +517,12 @@ void global_var_decl(const char* type_name, int type_len, const char* first_name
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
-	current_decl_type = (IRString){ 0 };
+	current_decl_type = (IR_String){ 0 };
 }
 
 void func_decl_or_def(const char* type_name, int type_len, const char* name, int name_len)
 {
-	IRInstr* func = ir_emit(IR_FUNC_BEGIN);
+	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
 	func->str0 = ir_string(type_name, type_len);
 	func->str1 = ir_string(name, name_len);
 	symbol_table_add(&g_symbols, func->str1, func->str0, SYM_FUNC);
@@ -627,17 +546,17 @@ void stmt_decl()
 {
 	const char* type_name = tok.lexeme;
 	int type_len = tok.len;
-	IRInstr* inst;
+	IR_Cmd* inst;
 	ir_emit(IR_DECL_BEGIN);
-	current_decl_type = (IRString){ 0 };
-	IRString type = ir_string(type_name, type_len);
+	current_decl_type = (IR_String){ 0 };
+	IR_String type = ir_string(type_name, type_len);
 	current_decl_type = type;
 	inst = ir_emit(IR_DECL_TYPE);
 	inst->str0 = type;
 	next();
 	while (1) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
-		IRString name = ir_string(tok.lexeme, tok.len);
+		IR_String name = ir_string(tok.lexeme, tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
 		symbol_table_add(&g_symbols, name, current_decl_type, SYM_VAR);
@@ -658,19 +577,19 @@ void stmt_decl()
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
-	current_decl_type = (IRString){ 0 };
+	current_decl_type = (IR_String){ 0 };
 }
 
 void expr_int()
 {
-	IRInstr* inst = ir_emit(IR_PUSH_INT);
+	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
 	inst->arg0 = tok.int_val;
 	next();
 }
 
 void expr_ident()
 {
-	IRInstr* inst = ir_emit(IR_PUSH_IDENT);
+	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = ir_string(tok.lexeme, tok.len);
 	next();
 }
@@ -692,7 +611,7 @@ void expr_call()
 	} else {
 		next(); // consume ')'
 	}
-	IRInstr* inst = ir_emit(IR_CALL);
+	IR_Cmd* inst = ir_emit(IR_CALL);
 	inst->arg0 = argc;
 }
 
@@ -706,7 +625,7 @@ void expr_index()
 void expr_member()
 {
 	if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier after '.'");
-	IRInstr* inst = ir_emit(IR_MEMBER);
+	IR_Cmd* inst = ir_emit(IR_MEMBER);
 	inst->str0 = ir_string(tok.lexeme, tok.len);
 	next();
 }
@@ -723,7 +642,7 @@ void expr_ternary()
 void expr_binary_left(Tok op, Prec p)
 {
 	expr_binary(p);
-	IRInstr* inst = ir_emit(IR_BINARY);
+	IR_Cmd* inst = ir_emit(IR_BINARY);
 	inst->tok = op;
 }
 
@@ -731,7 +650,7 @@ void expr_unary_common(Tok op)
 {
 	next(); // consume operator
 	expr_binary(PREC_UNARY - 1);
-	IRInstr* inst = ir_emit(IR_UNARY);
+	IR_Cmd* inst = ir_emit(IR_UNARY);
 	inst->tok = op;
 }
 
