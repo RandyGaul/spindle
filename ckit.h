@@ -539,7 +539,7 @@ const char* str_intern_range(const char* start, const char* end)
 		}
 	}
 
-	size_t bytes = offsetof(UniqueString, str) + len + 1;
+	size_t bytes = sizeof(UniqueString) + len + 1;
 	UniqueString* node = (UniqueString*)malloc(bytes);
 	node->len = len;
 	node->next = head;
