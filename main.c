@@ -285,6 +285,15 @@ const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
 Type* current_param_type_type;
+const char* kw_in;
+const char* kw_out;
+const char* kw_uniform;
+const char* kw_layout;
+const char* kw_set;
+const char* kw_binding;
+const char* kw_location;
+const char* kw_if;
+const char* kw_else;
 
 IR_Cmd* ir_emit(IROp op)
 {
@@ -716,25 +725,21 @@ void skip_ws_comments()
 	}
 }
 
-int str_eq_n(const char* s, int n, const char* kw)
+unsigned storage_flag_from_keyword(const char* s)
 {
-	size_t klen = strlen(kw);
-	return n == (int)klen && strncmp(s, kw, n) == 0;
-}
-
-unsigned storage_flag_from_keyword(const char* s, int n)
-{
-	if (str_eq_n(s, n, "in")) return SYM_STORAGE_IN;
-	if (str_eq_n(s, n, "out")) return SYM_STORAGE_OUT;
-	if (str_eq_n(s, n, "uniform")) return SYM_STORAGE_UNIFORM;
+	if (!s) return 0;
+	if (s == kw_in) return SYM_STORAGE_IN;
+	if (s == kw_out) return SYM_STORAGE_OUT;
+	if (s == kw_uniform) return SYM_STORAGE_UNIFORM;
 	return 0;
 }
 
-unsigned layout_flag_from_keyword(const char* s, int n)
+unsigned layout_flag_from_keyword(const char* s)
 {
-	if (str_eq_n(s, n, "set")) return SYM_LAYOUT_SET;
-	if (str_eq_n(s, n, "binding")) return SYM_LAYOUT_BINDING;
-	if (str_eq_n(s, n, "location")) return SYM_LAYOUT_LOCATION;
+	if (!s) return 0;
+	if (s == kw_set) return SYM_LAYOUT_SET;
+	if (s == kw_binding) return SYM_LAYOUT_BINDING;
+	if (s == kw_location) return SYM_LAYOUT_LOCATION;
 	return 0;
 }
 
@@ -773,8 +778,8 @@ int is_type_token()
 {
 	if (tok.kind != TOK_IDENTIFIER) return 0;
 	if (is_type_name(tok.lexeme, tok.len)) return 1;
-	if (storage_flag_from_keyword(tok.lexeme, tok.len)) return 1;
-	if (str_eq_n(tok.lexeme, tok.len, "layout")) return 1;
+	if (storage_flag_from_keyword(tok.lexeme)) return 1;
+	if (tok.lexeme == kw_layout) return 1;
 	return 0;
 }
 
@@ -785,7 +790,7 @@ void parse_layout_block(TypeSpec* spec)
 	expect(TOK_LPAREN);
 	while (tok.kind != TOK_RPAREN) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in layout");
-		unsigned layout_flag = layout_flag_from_keyword(tok.lexeme, tok.len);
+		unsigned layout_flag = layout_flag_from_keyword(tok.lexeme);
 		if (!layout_flag) parse_error("unknown layout identifier");
 		next();
 		expect(TOK_ASSIGN);
@@ -804,13 +809,13 @@ void parse_layout_block(TypeSpec* spec)
 void parse_type_qualifiers(TypeSpec* spec)
 {
 	while (tok.kind == TOK_IDENTIFIER) {
-		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme, tok.len);
+		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme);
 		if (storage_flag) {
 			type_spec_add_storage(spec, storage_flag);
 			next();
 			continue;
 		}
-		if (str_eq_n(tok.lexeme, tok.len, "layout")) {
+		if (tok.lexeme == kw_layout) {
 			parse_layout_block(spec);
 			continue;
 		}
@@ -828,6 +833,26 @@ TypeSpec parse_type_specifier()
 	if (!spec.type) parse_error("unknown type");
 	next();
 	return spec;
+}
+
+void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec)
+{
+	if (!inst || !spec) return;
+	inst->storage_flags = spec->storage_flags;
+	inst->layout_flags = spec->layout_flags;
+	inst->layout_set = spec->layout_set;
+	inst->layout_binding = spec->layout_binding;
+	inst->layout_location = spec->layout_location;
+}
+
+void decl_emit_begin(const TypeSpec* spec)
+{
+	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
+	ir_apply_type_spec(begin, spec);
+	current_decl_type_name = spec->type_name;
+	current_decl_type_type = spec->type;
+	IR_Cmd* inst = ir_emit(IR_DECL_TYPE);
+	inst->str0 = spec->type_name;
 }
 
 void expr_binary(Prec min_prec);
@@ -878,11 +903,7 @@ void func_param()
 	if (!is_type_token()) parse_error("expected type in parameter");
 	TypeSpec spec = parse_type_specifier();
 	IR_Cmd* param = ir_emit(IR_FUNC_PARAM_BEGIN);
-	param->storage_flags = spec.storage_flags;
-	param->layout_flags = spec.layout_flags;
-	param->layout_set = spec.layout_set;
-	param->layout_binding = spec.layout_binding;
-	param->layout_location = spec.layout_location;
+	ir_apply_type_spec(param, &spec);
 	current_param_type_name = spec.type_name;
 	current_param_type_type = spec.type;
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
@@ -919,16 +940,7 @@ void func_param_list()
 void global_var_decl(TypeSpec spec, const char* first_name)
 {
 	IR_Cmd* inst;
-	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
-	begin->storage_flags = spec.storage_flags;
-	begin->layout_flags = spec.layout_flags;
-	begin->layout_set = spec.layout_set;
-	begin->layout_binding = spec.layout_binding;
-	begin->layout_location = spec.layout_location;
-	current_decl_type_name = spec.type_name;
-	current_decl_type_type = spec.type;
-	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = spec.type_name;
+	decl_emit_begin(&spec);
 	inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = first_name;
 	Symbol* sym = symbol_table_add(&g_symbols, first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
@@ -969,11 +981,7 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
 	func->str0 = spec.type_name;
 	func->str1 = name;
-	func->storage_flags = spec.storage_flags;
-	func->layout_flags = spec.layout_flags;
-	func->layout_set = spec.layout_set;
-	func->layout_binding = spec.layout_binding;
-	func->layout_location = spec.layout_location;
+	ir_apply_type_spec(func, &spec);
 	Symbol* sym = symbol_table_add(&g_symbols, func->str1, spec.type_name, spec.type, SYM_FUNC);
 	symbol_apply_type_spec(sym, &spec);
 	expect(TOK_LPAREN);
@@ -1000,16 +1008,7 @@ void stmt_decl()
 {
 	TypeSpec spec = parse_type_specifier();
 	IR_Cmd* inst;
-	IR_Cmd* begin = ir_emit(IR_DECL_BEGIN);
-	begin->storage_flags = spec.storage_flags;
-	begin->layout_flags = spec.layout_flags;
-	begin->layout_set = spec.layout_set;
-	begin->layout_binding = spec.layout_binding;
-	begin->layout_location = spec.layout_location;
-	current_decl_type_name = spec.type_name;
-	current_decl_type_type = spec.type;
-	inst = ir_emit(IR_DECL_TYPE);
-	inst->str0 = spec.type_name;
+	decl_emit_begin(&spec);
 	while (1) {
 		if (tok.kind != TOK_IDENTIFIER) parse_error("expected identifier in declaration");
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
@@ -1361,16 +1360,17 @@ void next()
 		const char* s = at - 1;
 		while (is_alpha(ch) || is_digit(ch)) next_ch();
 		tok.len = (int)((at - 1) - s);
-		tok.lexeme = s;
+		const char* interned = sintern_range(s, s + tok.len);
+		tok.lexeme = interned;
 		tok.kind = TOK_IDENTIFIER;
 		tok.prec = 0;
 		tok.lexpr = expr_ident;
 		tok.rexpr = expr_error;
-		if (tok.len == 2 && strncmp(s, "if", 2) == 0) {
+		if (tok.lexeme == kw_if) {
 			tok.kind = TOK_IF;
 			tok.lexpr = expr_error;
 			}
-		else if (tok.len == 4 && strncmp(s, "else", 4) == 0) {
+		else if (tok.lexeme == kw_else) {
 			tok.kind = TOK_ELSE;
 			tok.lexpr = expr_error;
 			}
@@ -1423,6 +1423,7 @@ int main()
 
 	in = input;
 	at = in;
+	init_keyword_interns();
 	next_ch();
 	next();
 	type_system_init_builtins(&g_types);
