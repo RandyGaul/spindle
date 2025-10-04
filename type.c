@@ -514,6 +514,85 @@ Type* type_binary_mod(Type* lhs, Type* rhs)
 	return NULL;
 }
 
+Type* type_binary_bitwise(Tok tok, Type* lhs, Type* rhs)
+{
+	if (!lhs || !rhs)
+		return lhs ? lhs : rhs;
+	if (!type_is_integer(lhs) || !type_is_integer(rhs))
+	{
+		type_check_error("operator %s requires integer operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs))
+	{
+		if (lhs->cols != rhs->cols)
+		{
+			type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
+		}
+		if (type_base_type(lhs) != type_base_type(rhs))
+		{
+			type_check_error("operator %s requires matching integer vector types", tok_name[tok]);
+		}
+		return lhs;
+	}
+	if (type_is_vector(lhs) && type_is_scalar(rhs))
+	{
+		if (type_base_type(lhs) != type_base_type(rhs))
+		{
+			type_check_error("operator %s requires matching integer types", tok_name[tok]);
+		}
+		return lhs;
+	}
+	if (type_is_scalar(lhs) && type_is_vector(rhs))
+	{
+		if (type_base_type(lhs) != type_base_type(rhs))
+		{
+			type_check_error("operator %s requires matching integer types", tok_name[tok]);
+		}
+		return rhs;
+	}
+	if (type_is_scalar(lhs) && type_is_scalar(rhs))
+		return lhs;
+	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	return NULL;
+}
+
+Type* type_binary_shift(Tok tok, Type* lhs, Type* rhs)
+{
+	if (!lhs || !rhs)
+		return lhs ? lhs : rhs;
+	if (!type_is_integer(lhs) || !type_is_integer(rhs))
+	{
+		type_check_error("operator %s requires integer operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	}
+	if (type_is_scalar(lhs))
+	{
+		if (!type_is_scalar(rhs))
+		{
+			type_check_error("operator %s requires integer scalar shift amounts", tok_name[tok]);
+		}
+		return lhs;
+	}
+	if (type_is_vector(lhs))
+	{
+		if (type_is_scalar(rhs))
+			return lhs;
+		if (type_is_vector(rhs))
+		{
+			if (lhs->cols != rhs->cols)
+			{
+				type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
+			}
+			if (type_base_type(lhs) != type_base_type(rhs))
+			{
+				type_check_error("operator %s requires matching integer vector types", tok_name[tok]);
+			}
+			return lhs;
+		}
+	}
+	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	return NULL;
+}
+
 Type* type_binary_rel(Tok tok, Type* lhs, Type* rhs)
 {
 	if (!lhs || !rhs)
@@ -594,6 +673,13 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 		return type_binary_div(lhs, rhs);
 	case TOK_PERCENT:
 		return type_binary_mod(lhs, rhs);
+	case TOK_AMP:
+	case TOK_PIPE:
+	case TOK_CARET:
+		return type_binary_bitwise(tok, lhs, rhs);
+	case TOK_LSHIFT:
+	case TOK_RSHIFT:
+		return type_binary_shift(tok, lhs, rhs);
 	case TOK_LT:
 	case TOK_LE:
 	case TOK_GT:
@@ -611,6 +697,31 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 	{
 		Type* sum = type_binary_add_sub(TOK_PLUS, lhs, rhs);
 		return type_binary_assign(lhs, sum);
+	}
+	case TOK_AND_ASSIGN:
+	{
+		Type* value = type_binary_bitwise(TOK_AMP, lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_OR_ASSIGN:
+	{
+		Type* value = type_binary_bitwise(TOK_PIPE, lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_XOR_ASSIGN:
+	{
+		Type* value = type_binary_bitwise(TOK_CARET, lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_LSHIFT_ASSIGN:
+	{
+		Type* value = type_binary_shift(TOK_LSHIFT, lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_RSHIFT_ASSIGN:
+	{
+		Type* value = type_binary_shift(TOK_RSHIFT, lhs, rhs);
+		return type_binary_assign(lhs, value);
 	}
 	default:
 		type_check_error("unsupported binary operator %s", tok_name[tok]);

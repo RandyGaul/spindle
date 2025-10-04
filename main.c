@@ -54,10 +54,20 @@ typedef enum Tok
 	TOK_GE,
 	TOK_EQ,
 	TOK_NE,
-	TOK_AND_AND,
-	TOK_OR_OR,
-	TOK_ASSIGN,
-	TOK_PLUS_ASSIGN,
+TOK_AND_AND,
+TOK_OR_OR,
+TOK_AMP,
+TOK_PIPE,
+TOK_CARET,
+TOK_LSHIFT,
+TOK_RSHIFT,
+TOK_ASSIGN,
+TOK_PLUS_ASSIGN,
+TOK_AND_ASSIGN,
+TOK_OR_ASSIGN,
+TOK_XOR_ASSIGN,
+TOK_LSHIFT_ASSIGN,
+TOK_RSHIFT_ASSIGN,
 
 	TOK_COUNT
 } Tok;
@@ -106,11 +116,21 @@ const char* tok_name[TOK_COUNT] = {
 	[TOK_EQ] = "==",
 	[TOK_NE] = "!=",
 
-	[TOK_AND_AND] = "&&",
-	[TOK_OR_OR] = "||",
+[TOK_AND_AND] = "&&",
+[TOK_OR_OR] = "||",
+[TOK_AMP] = "&",
+[TOK_PIPE] = "|",
+[TOK_CARET] = "^",
+[TOK_LSHIFT] = "<<",
+[TOK_RSHIFT] = ">>",
 
-	[TOK_ASSIGN] = "=",
-	[TOK_PLUS_ASSIGN] = "+=",
+[TOK_ASSIGN] = "=",
+[TOK_PLUS_ASSIGN] = "+=",
+[TOK_AND_ASSIGN] = "&=",
+[TOK_OR_ASSIGN] = "|=",
+[TOK_XOR_ASSIGN] = "^=",
+[TOK_LSHIFT_ASSIGN] = "<<=",
+[TOK_RSHIFT_ASSIGN] = ">>=",
 };
 
 typedef enum SymbolKind
@@ -510,6 +530,25 @@ const char* snippet_looping = STR(
 	}
 );
 
+const char* snippet_bitwise = STR(
+	layout(location = 0) out ivec2 out_bits;
+	void main() {
+		int a = 5;
+		int b = 3;
+		int mask = a & b;
+		int mix = (a | b) ^ 1;
+		int shifted = (a << 2) >> 1;
+		ivec2 vec_mask = ivec2(1, 2);
+		ivec2 values = ivec2(4, 8);
+		values |= vec_mask;
+		values &= ivec2(7, 7);
+		values ^= ivec2(1, 2);
+		values <<= ivec2(1, 0);
+		values >>= 1;
+		out_bits = values + ivec2(mask, mix + shifted);
+	}
+);
+
 const char* snippet_discard = STR(
 	layout(location = 0) in vec4 in_color;
 	layout(location = 0) out vec4 out_color;
@@ -522,7 +561,6 @@ const char* snippet_discard = STR(
 		out_color = color;
 	}
 );
-
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -537,6 +575,7 @@ void transpile(const char* source)
 	dump_symbols();
 	compiler_teardown();
 }
+
 
 int main()
 {
@@ -556,9 +595,9 @@ int main()
 		{ "function_calls", snippet_function_calls },
 		{ "matrix_ops", snippet_matrix_ops },
 		{ "looping", snippet_looping },
+		{ "bitwise", snippet_bitwise },
 		{ "discard", snippet_discard }
 	};
-
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
