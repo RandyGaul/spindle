@@ -798,12 +798,11 @@ int main()
 		{ "matrix_ops", snippet_matrix_ops },
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },
-		{ "discard", snippet_discard }
+		{ "discard", snippet_discard },
               { "switch", snippet_switch_stmt },
-              { "builtin_funcs", snippet_builtin_funcs }
+              { "builtin_funcs", snippet_builtin_funcs },
                 { "struct_block", snippet_struct_block },
 	};
-};
 
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{

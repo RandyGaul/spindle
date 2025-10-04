@@ -2146,6 +2146,7 @@ void next()
 		{
 			tok.kind = TOK_DEFAULT;
 			tok.lexpr = expr_error;
+		}
 		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
 		{
 			tok.kind = TOK_BOOL;
