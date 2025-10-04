@@ -477,7 +477,7 @@ void symbol_add_storage(Symbol* sym, unsigned flags)
 
 int symbol_has_storage(const Symbol* sym, unsigned flag)
 {
-	return sym && (sym->storage_flags & flag);
+	return (sym->storage_flags & flag) != 0;
 }
 
 void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
@@ -499,7 +499,7 @@ void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
 
 int symbol_has_layout(const Symbol* sym, unsigned layout_flag)
 {
-	return sym && (sym->layout_flags & layout_flag);
+	return (sym->layout_flags & layout_flag) != 0;
 }
 
 int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
@@ -524,17 +524,13 @@ void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 
 void symbol_table_free(SymbolTable* st)
 {
-	while (st->scopes && acount(st->scopes) > 0) {
+	while (acount(st->scopes) > 0) {
 		symbol_table_leave_scope(st);
 	}
-	if (st->scopes) {
-		afree(st->scopes);
-		st->scopes = NULL;
-	}
-	if (st->symbols) {
-		afree(st->symbols);
-		st->symbols = NULL;
-	}
+	afree(st->scopes);
+	st->scopes = NULL;
+	afree(st->symbols);
+	st->symbols = NULL;
 }
 
 void dump_storage_flags(unsigned flags)
@@ -723,7 +719,6 @@ void skip_ws_comments()
 
 unsigned storage_flag_from_keyword(const char* s)
 {
-	if (!s) return 0;
 	if (s == kw_in) return SYM_STORAGE_IN;
 	if (s == kw_out) return SYM_STORAGE_OUT;
 	if (s == kw_uniform) return SYM_STORAGE_UNIFORM;
@@ -732,7 +727,6 @@ unsigned storage_flag_from_keyword(const char* s)
 
 unsigned layout_flag_from_keyword(const char* s)
 {
-	if (!s) return 0;
 	if (s == kw_set) return SYM_LAYOUT_SET;
 	if (s == kw_binding) return SYM_LAYOUT_BINDING;
 	if (s == kw_location) return SYM_LAYOUT_LOCATION;
@@ -741,13 +735,11 @@ unsigned layout_flag_from_keyword(const char* s)
 
 void type_spec_add_storage(TypeSpec* spec, unsigned flags)
 {
-	if (!spec) return;
 	spec->storage_flags |= flags;
 }
 
 void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 {
-	if (!spec) return;
 	spec->layout_flags |= layout_flag;
 	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
@@ -781,7 +773,6 @@ int is_type_token()
 
 void parse_layout_block(TypeSpec* spec)
 {
-	if (!spec) return;
 	next();
 	expect(TOK_LPAREN);
 	while (tok.kind != TOK_RPAREN) {
@@ -834,7 +825,6 @@ TypeSpec parse_type_specifier()
 
 void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec)
 {
-	if (!inst || !spec) return;
 	inst->storage_flags = spec->storage_flags;
 	inst->layout_flags = spec->layout_flags;
 	inst->layout_set = spec->layout_set;
