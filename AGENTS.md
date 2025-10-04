@@ -1,8 +1,8 @@
 # Brief
 
-We're making a transpiler type of project using ckit.h. It will take glsl 450 as input and convert it to either gles300 compatible shader, or a SPIRV blob. We're doing this to support indie game developers who want to utilize SDL3's new SDL_Gpu API. SDL_Gpu provides wrappers around Metal/Vulkan/DX11/DX12. All of these vendors have APIs to compile shaders from SPIRV blobs, which includes their own optimization passes.
+We're making a transpiler type of project using ckit.h. It will take glsl 450 as input and convert it to a SPIRV blob. We're doing this to support indie game developers who want to utilize SDL3's new SDL_Gpu API. SDL_Gpu provides wrappers around Metal/Vulkan/DX11/DX12. All of these vendors have APIs to compile shaders from SPIRV blobs, which includes their own optimization passes.
 
-This means as long as we can convert to either SPIRV or gles300 we cover all major platforms, including web cross-compiles. Games written in C/C++ can have their shaders written in plain glsl450 (a limited subset) with an enforced-scope of kinds of input shaders, and our tool here we're making will transpile to either SPIRV or gles300. This covers consoles via Vulkan/DX, Linux via Vulkan, Apple devices via Metal, and emscripten web pages via GLES3.
+This means as long as we can convert to either SPIRV we cover all major platforms, including web cross-compiles. This is because SDL_Gpu uses a tool called SDL_Shadercross that depends on SPIRV-Cross. SPIRV-Cross itself can convert from SPIRV to glsles300 shaders, covering even web platform. Games written in C/C++ can have their shaders written in plain glsl450 (a limited subset) with an enforced-scope of kinds of input shaders, and our tool here we're making will transpile to SPIRV. This covers consoles via Vulkan/DX, Linux via Vulkan, Apple devices via Metal, and emscripten web pages via GLES3.
 
 This transpiler tool fills a missing gap in cross-platform shader solutions in the open source/indie world, where the only alternatives are solutions like large engines or large code projects such as glslang (which compile extremely slowly, are difficult to integrate, and have very poor runtime characteristics with complex APIs to wrangle). Instead, we will provide a very small standalone C project here.
 
@@ -20,7 +20,7 @@ When interning compile-time string literals or any nul-terminated strings, call 
 
 We're just starting out the implementation with a lex/parse combination that implements a pratt expression parser by the lexer setting up function pointers and passing to a tiny generic pratt handler.
 
-The next steps would be to flesh out IR format as we expect to emit to SPIRV blob or to gles300 shaders. We want 100% functional transpiling and don't really care about optimization. The vendors will compile our SPIRV or gles300 further onto the target GPU anyways, and have thier own optimization passes we can piggy back off of.
+The next steps would be to flesh out IR format as we expect to emit to SPIRV blob. We want 100% functional transpiling and don't really care about optimization much at all, and will consider optimization passes as a future "nice to have" feature potentially. The vendors will compile our SPIRV further onto the target GPU anyways, and have their own optimization passes we can piggy back off of.
 
 We allocate the symbol table, type system, and any related structures ourselves. Don't add defensive null-pointer checks for these systems or for allocations—assume allocation succeeds and the pointers are valid. The only acceptable null-pointer checks are when validating results from Map queries (e.g. confirming a map lookup returned a value).
 
