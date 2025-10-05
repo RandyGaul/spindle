@@ -1,3 +1,7 @@
+typedef struct Symbol Symbol;
+Symbol* symbol_table_find(const char* name);
+Symbol** symbol_table_get_function_overloads(const char* name, int* count);
+
 const char* type_tag_name(TypeTag tag)
 {
 	static const char* names[T_TYPE_COUNT] = {
@@ -201,6 +205,33 @@ StructMember* type_struct_member_at(Type* type, int index)
 	if (index < 0 || index >= acount(info->members))
 		return NULL;
 	return &info->members[index];
+}
+
+static void append_cstr(dyna char** buffer, const char* str)
+{
+	if (!buffer || !str)
+		return;
+	for (const char* it = str; *it; ++it)
+		apush(*buffer, *it);
+}
+
+static const char* format_argument_type_list(Type** args, int count)
+{
+	static dyna char* buffer = NULL;
+	if (buffer)
+		aclear(buffer);
+	for (int i = 0; i < count; ++i)
+	{
+		if (i > 0)
+		{
+			apush(buffer, ',');
+			apush(buffer, ' ');
+		}
+		const char* name = type_display(args ? args[i] : NULL);
+		append_cstr(&buffer, name ? name : "unknown");
+	}
+	apush(buffer, '\0');
+	return buffer ? buffer : "";
 }
 
 void type_system_init_builtins()
@@ -1522,50 +1553,109 @@ void type_check_ir()
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
 			Type* result = callee;
+			Symbol* sym = NULL;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(inst->str0);
-				if (sym && sym->kind == SYM_FUNC)
+				int overload_count = 0;
+				Symbol** overloads = symbol_table_get_function_overloads(inst->str0, &overload_count);
+				if (overload_count > 0)
 				{
-					if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
+					for (int i = 0; i < overload_count; ++i)
 					{
-						type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->builtin_param_count, argc);
-					}
-					if (sym->param_signature_set)
-					{
-						if (sym->param_count != argc)
+						Symbol* candidate = overloads[i];
+						if (!candidate || candidate->kind != SYM_FUNC)
+							continue;
+						if (candidate->builtin_kind != BUILTIN_NONE)
 						{
-							type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->param_count, argc);
+							if (candidate->builtin_param_count >= 0 && candidate->builtin_param_count != argc)
+								continue;
+							sym = candidate;
+							break;
 						}
-						for (int i = 0; i < sym->param_count; ++i)
+						if (!candidate->param_signature_set)
+							continue;
+						if (candidate->param_count != argc)
+							continue;
+						int ok = 1;
+						for (int j = 0; j < argc; ++j)
 						{
-							Type* param_type = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
-							Type* arg_type = args ? args[i] : NULL;
+							Type* param_type = (candidate->params && j < acount(candidate->params)) ? candidate->params[j] : NULL;
+							Type* arg_type = args ? args[j] : NULL;
 							if (param_type && arg_type)
 							{
 								if (!type_can_assign(param_type, arg_type))
 								{
-									type_check_error("argument %d to %s expects %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
+									ok = 0;
+									break;
 								}
 							}
+							else if (param_type != arg_type)
+							{
+								ok = 0;
+								break;
+							}
+						}
+						if (ok)
+						{
+							sym = candidate;
+							break;
 						}
 					}
-					if (sym->builtin_kind != BUILTIN_NONE)
+					if (!sym)
 					{
-						Type* builtin_result = type_infer_builtin_call(sym, args, argc);
-						if (builtin_result)
+						const char* arg_types = format_argument_type_list(args, argc);
+						type_check_error("no overload of %s matches argument types (%s)", inst->str0, arg_types);
+					}
+				}
+				else
+				{
+					sym = symbol_table_find(inst->str0);
+				}
+			}
+			if (sym && sym->kind == SYM_FUNC)
+			{
+				if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
+				{
+					type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->builtin_param_count, argc);
+				}
+				if (sym->param_signature_set)
+				{
+					if (sym->param_count != argc)
+					{
+						type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->param_count, argc);
+					}
+					for (int i = 0; i < sym->param_count; ++i)
+					{
+						Type* param_type = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
+						Type* arg_type = args ? args[i] : NULL;
+						if (param_type && arg_type)
 						{
-							result = builtin_result;
+							if (!type_can_assign(param_type, arg_type))
+							{
+								type_check_error("argument %d to %s expects %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
+							}
 						}
-						else if (sym->type)
+						else if (param_type != arg_type)
 						{
-							result = sym->type;
+							type_check_error("argument %d to %s has incompatible type", i + 1, inst->str0);
 						}
+					}
+				}
+				if (sym->builtin_kind != BUILTIN_NONE)
+				{
+					Type* builtin_result = type_infer_builtin_call(sym, args, argc);
+					if (builtin_result)
+					{
+						result = builtin_result;
 					}
 					else if (sym->type)
 					{
 						result = sym->type;
 					}
+				}
+				else if (sym->type)
+				{
+					result = sym->type;
 				}
 			}
 			inst->type = result;
