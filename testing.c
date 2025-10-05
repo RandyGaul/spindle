@@ -75,6 +75,8 @@ void dump_ir()
 			break;
 		case IR_PUSH_INT:
 			printf(" %d", inst->arg0);
+			if (inst->is_unsigned_literal)
+				printf("u");
 			break;
 		case IR_PUSH_FLOAT:
 			printf(" %g", inst->float_val);
@@ -792,31 +794,61 @@ DEFINE_TEST(test_bitwise_operations)
 DEFINE_TEST(test_numeric_literal_bases)
 {
 	compiler_setup(snippet_numeric_literals);
-	int saw_hex = 0;
-	int saw_bin = 0;
-	int saw_oct = 0;
+	int saw_hex_int = 0;
+	int saw_bin_int = 0;
+	int saw_oct_int = 0;
+	int saw_hex_uint = 0;
+	int saw_bin_uint = 0;
+	int saw_oct_uint = 0;
+	int saw_dec_uint = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_PUSH_INT)
 			continue;
-		if (inst->arg0 == 31)
+		if (inst->is_unsigned_literal)
 		{
-			saw_hex = 1;
+			if (inst->arg0 == 31)
+			{
+				saw_hex_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 10)
+			{
+				saw_bin_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 61)
+			{
+				saw_oct_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 42)
+			{
+				saw_dec_uint = inst->type == g_type_uint;
+			}
 		}
-		else if (inst->arg0 == 10)
+		else
 		{
-			saw_bin = 1;
-		}
-		else if (inst->arg0 == 61)
-		{
-			saw_oct = 1;
+			if (inst->arg0 == 31)
+			{
+				saw_hex_int = inst->type == g_type_int;
+			}
+			else if (inst->arg0 == 10)
+			{
+				saw_bin_int = inst->type == g_type_int;
+			}
+			else if (inst->arg0 == 61)
+			{
+				saw_oct_int = inst->type == g_type_int;
+			}
 		}
 	}
 	compiler_teardown();
-	assert(saw_hex);
-	assert(saw_bin);
-	assert(saw_oct);
+	assert(saw_hex_int);
+	assert(saw_bin_int);
+	assert(saw_oct_int);
+	assert(saw_hex_uint);
+	assert(saw_bin_uint);
+	assert(saw_oct_uint);
+	assert(saw_dec_uint);
 }
 
 DEFINE_TEST(test_discard_instruction)

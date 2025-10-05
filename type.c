@@ -1396,7 +1396,7 @@ void type_check_ir()
 		switch (inst->op)
 		{
 		case IR_PUSH_INT:
-			inst->type = g_type_int;
+			inst->type = inst->is_unsigned_literal ? g_type_uint : g_type_int;
 			apush(stack, inst->type);
 			inst->qualifier_flags = 0;
 			apush(qualifier_stack, 0);

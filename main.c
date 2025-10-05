@@ -521,6 +521,7 @@ typedef struct IR_Cmd
 	int layout_set;
 	int layout_binding;
 	int layout_location;
+	int is_unsigned_literal;
 	int is_lvalue;
 } IR_Cmd;
 
@@ -725,11 +726,17 @@ const char* snippet_bitwise = STR(
 
 const char* snippet_numeric_literals = STR(
 		layout(location = 0) out ivec3 out_values;
+		layout(location = 1) out uvec3 out_uvalues;
 		void main() {
 			int hex_val = 0x1f;
 			int bin_val = 0b1010;
 			int oct_val = 075;
+			uint uhex_val = 0x1fu;
+			uint ubin_val = 0b1010u;
+			uint uoct_val = 075u;
+			uint udec_val = 42u;
 			out_values = ivec3(hex_val, bin_val, oct_val);
+			out_uvalues = uvec3(uhex_val, ubin_val, uoct_val);
 		});
 
 const char* snippet_switch_stmt = STR(

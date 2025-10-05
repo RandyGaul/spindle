@@ -404,6 +404,7 @@ typedef struct Token
 	double float_val;
 	const char* lexeme;
 	int len;
+	int is_unsigned;
 } Token;
 
 Token tok;
@@ -1188,6 +1189,7 @@ void expr_int()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
 	inst->arg0 = tok.int_val;
+	inst->is_unsigned_literal = tok.is_unsigned;
 	next();
 }
 
@@ -2048,6 +2050,7 @@ void lex_number()
 	int base = 10;
 	int use_manual_base = 0;
 	const char* digits_start = start;
+	int has_unsigned_suffix = 0;
 	if (*start == '0')
 	{
 		char next = start[1];
@@ -2118,9 +2121,14 @@ void lex_number()
 	{
 		while (*suffix == 'u' || *suffix == 'U' || *suffix == 'l' || *suffix == 'L')
 		{
+			if (*suffix == 'u' || *suffix == 'U')
+			{
+				has_unsigned_suffix = 1;
+			}
 			++suffix;
 		}
 	}
+	tok.is_unsigned = !is_float && has_unsigned_suffix;
 	tok.lexeme = start;
 	tok.len = (int)(suffix - start);
 	tok.prec = 0;
@@ -2173,6 +2181,7 @@ void next()
 	tok.float_val = 0.0;
 	tok.lexeme = at - 1;
 	tok.len = 0;
+	tok.is_unsigned = 0;
 
 	skip_ws_comments();
 
@@ -2346,6 +2355,7 @@ void reset_parser_state()
 	tok.float_val = 0.0;
 	tok.lexeme = NULL;
 	tok.len = 0;
+	tok.is_unsigned = 0;
 }
 
 void compiler_teardown()
