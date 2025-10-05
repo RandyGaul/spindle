@@ -9,6 +9,8 @@ const char* type_tag_name(TypeTag tag)
 		[T_BOOL] = "bool",
 		[T_INT] = "int",
 		[T_UINT] = "uint",
+		[T_INT64] = "int64_t",
+		[T_UINT64] = "uint64_t",
 		[T_FLOAT] = "float",
 		[T_DOUBLE] = "double",
 		[T_VEC] = "vec",
@@ -79,6 +81,8 @@ static StructInfo* type_struct_info_ensure(Type* type)
 	return info;
 }
 
+// Ensure we have a struct type ready for declarations like struct Material.
+// ...struct Material { vec4 albedo; };
 Type* type_system_declare_struct(const char* name)
 {
 	Type* existing = type_system_get(name);
@@ -102,7 +106,8 @@ Type* type_system_declare_struct(const char* name)
 	type_struct_clear(result);
 	return result;
 }
-
+// Reset cached members so repeated declarations start clean.
+// ...struct Material { vec4 albedo; };
 void type_struct_clear(Type* type)
 {
 	StructInfo* info = type_struct_info_ensure(type);
@@ -110,11 +115,23 @@ void type_struct_clear(Type* type)
 		return;
 	info->name = type ? type->name : NULL;
 	if (info->members)
+	{
+		for (int i = 0; i < acount(info->members); ++i)
+		{
+			StructMember* member = &info->members[i];
+			if (member->array_dims)
+			{
+				afree(member->array_dims);
+				member->array_dims = NULL;
+			}
+		}
 		aclear(info->members);
+	}
 	if (info->layout_identifiers)
 		aclear(info->layout_identifiers);
 }
-
+// Append a member for struct fields encountered in user code.
+// ...struct Material { vec4 albedo; };
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type)
 {
 	StructInfo* info = type_struct_info_ensure(type);
@@ -124,7 +141,7 @@ StructMember* type_struct_add_member(Type* type, const char* name, Type* member_
 	member.name = name;
 	member.declared_type = member_type;
 	member.type = member_type;
-	member.array_type = (Type){ 0 };
+	member.array_dims = NULL;
 	member.has_array = 0;
 	member.array_len = 0;
 	member.array_unsized = 0;
@@ -132,6 +149,8 @@ StructMember* type_struct_add_member(Type* type, const char* name, Type* member_
 	return &alast(info->members);
 }
 
+// Store layout qualifiers that come from layout(...) blocks on members.
+// ...layout(location = 0) vec4 color;
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location)
 {
 	if (!member)
@@ -142,22 +161,39 @@ void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, 
 	member->layout_location = location;
 }
 
+// Update a member to reflect array declarations like float weights[4].
+// ...float weights[4];
 void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized)
 {
 	if (!member)
 		return;
+	StructMemberArrayDim dim = { 0 };
+	dim.size = size;
+	dim.unsized = unsized;
+	dim.type = (Type){ 0 };
+	dim.type.tag = T_ARRAY;
+	apush(member->array_dims, dim);
 	member->has_array = 1;
-	member->array_len = size;
-	member->array_unsized = unsized;
-	member->array_type = (Type){ 0 };
-	member->array_type.tag = T_ARRAY;
-	member->array_type.base = element_type ? element_type->tag : T_VOID;
-	member->array_type.cols = element_type ? element_type->cols : 1;
-	member->array_type.rows = element_type ? element_type->rows : 1;
-	member->array_type.array_len = unsized ? -1 : size;
-	member->array_type.user = element_type;
-	member->array_type.name = NULL;
-	member->type = &member->array_type;
+	Type* base = member->declared_type;
+	for (int i = acount(member->array_dims) - 1; i >= 0; --i)
+	{
+		StructMemberArrayDim* info = &member->array_dims[i];
+		Type* element = base;
+		info->type.base = element ? element->tag : T_VOID;
+		info->type.cols = element ? element->cols : 1;
+		info->type.rows = element ? element->rows : 1;
+		info->type.array_len = info->unsized ? -1 : info->size;
+		info->type.user = element;
+		info->type.name = NULL;
+		base = &info->type;
+	}
+	member->type = base;
+	if (member->array_dims && acount(member->array_dims) > 0)
+	{
+		StructMemberArrayDim* outer = &member->array_dims[0];
+		member->array_len = outer->unsized ? -1 : outer->size;
+		member->array_unsized = outer->unsized;
+	}
 }
 
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count)
@@ -254,17 +290,29 @@ void type_system_init_builtins()
 		{ "bool", { .tag = T_BOOL, .cols = 1, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "int", { .tag = T_INT, .cols = 1, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "uint", { .tag = T_UINT, .cols = 1, .rows = 1, .base = T_UINT, .array_len = 0 } },
+		{ "int64_t", { .tag = T_INT64, .cols = 1, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "uint64_t", { .tag = T_UINT64, .cols = 1, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "atomic_uint", { .tag = T_UINT, .cols = 1, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "float", { .tag = T_FLOAT, .cols = 1, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "double", { .tag = T_DOUBLE, .cols = 1, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
 		{ "vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
+		{ "dvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
 		{ "ivec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "ivec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "ivec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "uvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "uvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "uvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_UINT, .array_len = 0 } },
+		{ "i64vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "i64vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "i64vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "u64vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "u64vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "u64vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_UINT64, .array_len = 0 } },
 		{ "bvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "bvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "bvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_BOOL, .array_len = 0 } },
@@ -277,6 +325,15 @@ void type_system_init_builtins()
 		{ "mat3x4", { .tag = T_MAT, .cols = 3, .rows = 4, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x2", { .tag = T_MAT, .cols = 4, .rows = 2, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x3", { .tag = T_MAT, .cols = 4, .rows = 3, .base = T_FLOAT, .array_len = 0 } },
+		{ "dmat2", { .tag = T_MAT, .cols = 2, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3", { .tag = T_MAT, .cols = 3, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4", { .tag = T_MAT, .cols = 4, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat2x3", { .tag = T_MAT, .cols = 2, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat2x4", { .tag = T_MAT, .cols = 2, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3x2", { .tag = T_MAT, .cols = 3, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3x4", { .tag = T_MAT, .cols = 3, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4x2", { .tag = T_MAT, .cols = 4, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4x3", { .tag = T_MAT, .cols = 4, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
 		SAMPLER("sampler1D", T_FLOAT, TYPE_DIM_1D),
 		SAMPLER("sampler2D", T_FLOAT, TYPE_DIM_2D),
 		SAMPLER("sampler3D", T_FLOAT, TYPE_DIM_3D),
@@ -362,6 +419,8 @@ void type_system_init_builtins()
 	g_type_bool = type_system_get(sintern("bool"));
 	g_type_int = type_system_get(sintern("int"));
 	g_type_uint = type_system_get(sintern("uint"));
+	g_type_int64 = type_system_get(sintern("int64_t"));
+	g_type_uint64 = type_system_get(sintern("uint64_t"));
 	g_type_float = type_system_get(sintern("float"));
 	g_type_double = type_system_get(sintern("double"));
 }
@@ -377,11 +436,19 @@ void type_system_free()
 			if (info)
 			{
 				if (info->members)
+				{
+					for (int j = 0; j < acount(info->members); ++j)
+					{
+						StructMember* member = &info->members[j];
+						if (member->array_dims)
+							afree(member->array_dims);
+					}
 					afree(info->members);
+}
 				if (info->layout_identifiers)
 					afree(info->layout_identifiers);
 				free(info);
-			}
+}
 			type->user = NULL;
 		}
 	}
@@ -439,6 +506,8 @@ int type_base_is_numeric(TypeTag tag)
 	{
 	case T_INT:
 	case T_UINT:
+	case T_INT64:
+	case T_UINT64:
 	case T_FLOAT:
 	case T_DOUBLE:
 		return 1;
@@ -449,7 +518,7 @@ int type_base_is_numeric(TypeTag tag)
 
 int type_base_is_integer(TypeTag tag)
 {
-	return tag == T_INT || tag == T_UINT;
+	return tag == T_INT || tag == T_UINT || tag == T_INT64 || tag == T_UINT64;
 }
 
 int type_is_numeric(const Type* type)
@@ -512,6 +581,15 @@ const char* type_vector_name(TypeTag base, int cols)
 	case T_UINT:
 		prefix = "uvec";
 		break;
+	case T_DOUBLE:
+		prefix = "dvec";
+		break;
+	case T_INT64:
+		prefix = "i64vec";
+		break;
+	case T_UINT64:
+		prefix = "u64vec";
+		break;
 	case T_BOOL:
 		prefix = "bvec";
 		break;
@@ -554,6 +632,10 @@ Type* type_get_scalar(TypeTag base)
 		return g_type_int;
 	case T_UINT:
 		return g_type_uint;
+	case T_INT64:
+		return g_type_int64;
+	case T_UINT64:
+		return g_type_uint64;
 	case T_FLOAT:
 		return g_type_float;
 	case T_DOUBLE:
@@ -602,6 +684,8 @@ static Type* builtin_result_vector(Type** args, int argc, int index, int compone
 	return type_get_vector(type_base_type(source), components);
 }
 
+// Pick the return type for sampling helpers like texture().
+// ...vec4 color = texture(u_image, v_uv);
 static Type* builtin_result_texture(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -655,6 +739,8 @@ static int sampler_coord_components(const Type* sampler)
 	return components;
 }
 
+// Match the textureSize() return shape to the sampler argument.
+// ...ivec2 size = textureSize(u_image, 0);
 static Type* builtin_result_texture_size(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -703,6 +789,8 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 	return result ? result : type_get_scalar(T_INT);
 }
 
+// Check texelFetch() coordinates, lod/sample, and sampler compatibility.
+// ...ivec4 texel = texelFetch(u_image, ivec2(gl_FragCoord.xy), 0);
 static Type* builtin_result_texel_fetch(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -781,6 +869,8 @@ static Type* builtin_result_texel_fetch(Type** args, int argc)
 	return builtin_result_texture(args, argc);
 }
 
+// Keep inverse() limited to square matrix inputs.
+// ...mat4 inv_model = inverse(model);
 static Type* builtin_result_inverse(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
@@ -796,6 +886,8 @@ static Type* builtin_result_inverse(Type** args, int argc)
 	return mat;
 }
 
+// Flip the rows and columns for transpose() return types.
+// ...mat3 normal_mat = transpose(inverse(mat3(model)));
 static Type* builtin_result_transpose(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
@@ -808,6 +900,8 @@ static Type* builtin_result_transpose(Type** args, int argc)
 	return result ? result : mat;
 }
 
+// Enforce matching shapes for relational helpers like lessThan().
+// ...bvec3 mask = lessThan(a.xyz, b.xyz);
 static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 {
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
@@ -843,6 +937,8 @@ static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 	return type_get_vector(T_BOOL, components);
 }
 
+// Collapse boolean vectors for any()/all() reductions.
+// ...bool is_visible = all(greaterThanEqual(alpha.rgb, vec3(0.0)));
 static Type* builtin_result_any_all(Type** args, int argc)
 {
 	Type* arg = (args && argc > 0) ? args[0] : NULL;
@@ -858,6 +954,8 @@ static Type* builtin_result_any_all(Type** args, int argc)
 
 
 
+// Route builtin calls to the helper that checks their arguments.
+// ...float lighting = dot(normal, light_dir);
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
@@ -1037,8 +1135,12 @@ static int type_numeric_rank(TypeTag tag)
 	switch (tag)
 	{
 	case T_DOUBLE:
-		return 4;
+		return 6;
 	case T_FLOAT:
+		return 5;
+	case T_UINT64:
+		return 4;
+	case T_INT64:
 		return 3;
 	case T_UINT:
 		return 2;
@@ -1061,7 +1163,7 @@ static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
 	preferred = rank_a < rank_b ? a : b;
 	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
 		return preferred;
-	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT, T_INT };
+	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT64, T_INT64, T_UINT, T_INT };
 	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)
 	{
 		TypeTag candidate = fallback[i];
