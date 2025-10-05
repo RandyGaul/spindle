@@ -2,47 +2,43 @@
 
 ## Currently Supported
 
--	*Language scaffolding**
-	-	Tokenization covers numeric literals, identifiers, boolean keywords, and the full suite of arithmetic, logical, bitwise, and assignment operators required for shader arithmetic.【F:main.c†L15-L83】【F:main.c†L101-L154】
-	-	Parser recognizes declarations, expression statements, blocks, and function definitions while threading the symbol table and IR builder.【F:lex_parse.c†L1172-L1207】【F:lex_parse.c†L1277-L1369】
+- **Language scaffolding**
+	- Tokenization covers numeric literals, identifiers, boolean keywords, and arithmetic/logical/assignment operators required for shader arithmetic.【F:main.c†L15-L155】
+	- Parser routines handle declarations, statements, and expressions while threading symbol tables and IR builders for emission.【F:lex_parse.c†L1487-L1531】【F:lex_parse.c†L1916-L2099】
 
--	*Type system**
-	-	Built-in scalar, vector, and matrix types across float, double, signed/unsigned 32-bit, and 64-bit domains are pre-declared for lookup during parsing.【F:type.c†L304-L372】
-	-	Sampler and image types span 1D/2D/3D/cube/array/multisample/rect variants with shadow and integer/bool flavors, enabling binding validation for texture operations.【F:type.c†L373-L438】
-	-	Struct declarations, uniform/interface blocks, and struct member arrays are parsed and recorded with layout metadata for downstream IR emission.【F:lex_parse.c†L904-L1029】【F:lex_parse.c†L1043-L1108】
+- **Type system**
+	- Built-in scalar, vector, matrix, and opaque sampler/image types are registered up front so lookups succeed during parsing.【F:type.c†L300-L419】
+	- Struct declarations and interface blocks capture member metadata and layout tags for downstream IR consumption.【F:lex_parse.c†L1000-L1090】【F:lex_parse.c†L1165-L1222】
 
--	*Storage, qualifiers, and layouts**
-	-	`in`, `out`, and `uniform` storage qualifiers plus `const` qualifiers can prefix declarations and propagate to symbol records.【F:lex_parse.c†L800-L843】【F:lex_parse.c†L567-L622】
-	-	`layout(set = …)`, `layout(binding = …)`, and `layout(location = …)` assignments are accepted alongside `layout(std140)` for uniform buffers and interface blocks.【F:lex_parse.c†L904-L940】
+- **Storage, qualifiers, and layouts**
+	- `in`, `out`, `uniform`, `buffer`, and `shared` storage keywords plus qualifiers such as `const`, `coherent`, `volatile`, `restrict`, `readonly`, and `writeonly` are interned and applied to symbols during parsing.【F:lex_parse.c†L47-L105】【F:lex_parse.c†L840-L885】
+	- Layout blocks record identifiers (`std140`, `std430`, etc.) and assignments (`set`, `binding`, `location`) for blocks and variables, and stage layout statements emit IR for compute `local_size_*` keys.【F:lex_parse.c†L887-L921】【F:lex_parse.c†L1487-L1510】【F:lex_parse.c†L2207-L2232】
 
--	*Control flow**
-	-	`if`/`else`, `for`, `while`, `do`-`while`, and `switch`/`case`/`default` statements emit structured IR with appropriate scope handling, alongside `break`, `continue`, `return`, and `discard` statements.【F:lex_parse.c†L1814-L1998】【F:lex_parse.c†L2000-L2071】
+- **Control flow**
+	- `if`/`else`, loops (`for`/`while`/`do`), `switch`/`case`, and flow statements (`break`, `continue`, `return`, `discard`) emit structured IR with scope management.【F:lex_parse.c†L1916-L2099】
 
--	*Built-in variables**
-	-	Vertex and fragment stage built-ins such as `gl_Position`, `gl_VertexIndex`, `gl_FragCoord`, and `gl_FrontFacing` are created with stage masks, storage, qualifiers, and array shapes where applicable.【F:lex_parse.c†L258-L309】
+- **Built-in variables**
+	- Vertex, fragment, and compute built-ins (`gl_Position`, `gl_FragCoord`, `gl_GlobalInvocationID`, etc.) register stage masks, storage classes, qualifiers, and array metadata.【F:lex_parse.c†L302-L338】
 
--	*Built-in functions**
-	-	A wide catalog of texture sampling, coordinate query, math, derivative, matrix, relational, and image atomic intrinsics is registered with kind metadata and arity to drive argument checking and return-type inference.【F:lex_parse.c†L322-L407】【F:type.c†L720-L1945】
+- **Built-in functions**
+	- Texture, math, derivative, matrix, relational, and image atomic intrinsics are registered with kind metadata and arity for argument checking and return-type inference.【F:lex_parse.c†L350-L417】【F:type.c†L720-L1945】
 
 ## Not Yet Supported or Incomplete
 
--	*Preprocessing**
-	-	`#` directives such as `#include`, `#define`, and macro conditionals are intentionally unsupported; shaders must be preprocessed before being handed to the transpiler.【F:AGENTS.md†L55-L60】
+- **Preprocessing**
+	- `#` directives such as `#include` and `#define` remain unsupported; shaders must be preprocessed before parsing.【F:AGENTS.md†L31-L34】
 
--	*Shader stage coverage**
-	-	Only vertex and fragment shaders are targeted today; compute, geometry, tessellation, and mesh/task stages remain out of scope pending IR and resource model extensions.【F:AGENTS.md†L24-L38】
+- **Shader stage coverage**
+	- Geometry, tessellation, and mesh/task shader stages remain out of scope pending IR and resource model extensions.【F:lex_parse.c†L302-L338】
 
--	*Layout qualifiers**
-	-	Unassigned layout identifiers other than `std140` (e.g., `std430`, `row_major`, `shared`) are rejected despite being interned for future support, and additional layout specifiers are not yet interpreted.【F:lex_parse.c†L69-L74】【F:lex_parse.c†L924-L940】
+- **Layout qualifiers**
+	- Identifiers like `row_major`, `column_major`, and `packed` are interned but still lack semantic handling beyond preservation for future work.【F:lex_parse.c†L55-L105】
 
--	*Precision and memory qualifiers**
-	-	GLSL precision qualifiers (`highp`, `mediump`, `lowp`) and storage classes like `buffer`, `shared`, or `coherent` have no parsing or semantic handling, limiting compatibility with broader GLSL 450 profiles.【F:lex_parse.c†L800-L843】【F:type.c†L304-L438】
+- **Precision qualifiers**
+	- GLSL precision keywords (`highp`, `mediump`, `lowp`) and `precise` are not recognized or propagated through parsing today.【F:lex_parse.c†L83-L105】【F:lex_parse.c†L840-L875】
 
--	*Extended type features**
-	-	Pointers, opaque handles beyond samplers/images, and user-defined opaque types (e.g., acceleration structures) are not represented in the type table, constraining feature parity with modern GLSL revisions.【F:type.c†L304-L438】
+- **Stage-specific built-ins**
+	- Geometry/tessellation built-ins (`gl_in`, `gl_InvocationID`, etc.) and stage-specific barriers are not registered yet.【F:lex_parse.c†L302-L338】
 
--	*Stage-specific built-ins**
-	-	Only a subset of fragment outputs (`gl_FragDepth`, `gl_SampleMask`) and vertex outputs (`gl_Position`, `gl_PointSize`) are emitted; geometry/tessellation built-ins (e.g., `gl_in`, `gl_InvocationID`) and compute built-ins (`gl_GlobalInvocationID`, barriers) are absent pending broader stage support.【F:lex_parse.c†L258-L309】
-
--	*Post-processing and optimization**
-	-	No SPIR-V optimization or lowering passes exist yet; work is focused on front-end validation before adding target-specific cleanups or canonicalization stages.【F:AGENTS.md†L42-L49】
+- **Post-processing and optimization**
+	- No SPIR-V optimization or lowering passes exist; the focus remains on front-end validation before adding target-specific cleanups.【F:AGENTS.md†L42-L49】
