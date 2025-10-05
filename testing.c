@@ -1069,7 +1069,7 @@ DEFINE_TEST(test_builtin_function_calls)
 
 DEFINE_TEST(test_texture_query_builtins)
 {
-	const char* texture_size_name = sintern("textureSize");
+const char* texture_size_name = sintern("textureSize");
 	const char* texel_fetch_name = sintern("texelFetch");
 	const char* inverse_name = sintern("inverse");
 	const char* transpose_name = sintern("transpose");
@@ -1336,6 +1336,7 @@ void unit_test()
 		TEST_ENTRY(test_symbol_table_scopes),
 		TEST_ENTRY(test_builtin_function_metadata),
 		TEST_ENTRY(test_resource_type_registration),
+		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_ir_emit_push_int),
 		TEST_ENTRY(test_basic_io_symbols),
 		TEST_ENTRY(test_array_indexing_ir),
@@ -1352,12 +1353,11 @@ void unit_test()
 		TEST_ENTRY(test_struct_constructor_ir),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
-TEST_ENTRY(test_texture_query_builtins),
-TEST_ENTRY(test_extended_intrinsic_calls),
-TEST_ENTRY(test_builtin_variables_vertex_stage),
-TEST_ENTRY(test_builtin_variables_fragment_stage),
+		TEST_ENTRY(test_texture_query_builtins),
+		TEST_ENTRY(test_extended_intrinsic_calls),
+		TEST_ENTRY(test_builtin_variables_vertex_stage),
+		TEST_ENTRY(test_builtin_variables_fragment_stage),
 		TEST_ENTRY(test_preprocessor_passthrough),
-		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_const_qualifier_metadata),
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));

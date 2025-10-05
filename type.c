@@ -682,11 +682,6 @@ static int type_is_floating_point(const Type* type)
 	return base == T_FLOAT || base == T_DOUBLE;
 }
 
-static int type_is_signed_integer(const Type* type)
-{
-	return type && type_base_type(type) == T_INT;
-}
-
 static Type* builtin_result_same(Type** args, int argc, int index)
 {
 	if (index < 0 || index >= argc)
@@ -856,7 +851,7 @@ static Type* builtin_result_derivative(const Symbol* sym, Type** args, int argc)
 		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
 	};
 	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
+	return builtin_result_same(args, argc, 0);
 }
 
 static int builtin_validate_numeric_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
@@ -1016,10 +1011,10 @@ static Type* builtin_result_abs_like(const Symbol* sym, Type** args, int argc)
 		type_check_error("%s requires scalar or vector argument, got %s", name, type_display(value));
 		return value;
 	}
-	if (!type_is_floating_point(value) && !type_is_signed_integer(value))
-	{
-		type_check_error("%s requires floating-point or signed integer argument, got %s", name, type_display(value));
-	}
+if (!type_is_floating_point(value) && !type_is_integer(value))
+{
+type_check_error("%s requires floating-point or integer argument, got %s", name, type_display(value));
+}
 	return value;
 }
 
@@ -1692,24 +1687,6 @@ static Type* builtin_result_texture_query_levels(Type** args, int argc)
 	return type_get_scalar(T_INT);
 }
 
-static Type* builtin_result_derivative(Type** args, int argc)
-{
-	Type* arg = (args && argc > 0) ? args[0] : NULL;
-	if (!arg)
-		return NULL;
-	if (!type_is_scalar(arg) && !type_is_vector(arg))
-	{
-		type_check_error("derivative functions require scalar or vector arguments, got %s", type_display(arg));
-		return arg;
-	}
-	TypeTag base = type_base_type(arg);
-	if (base != T_FLOAT && base != T_DOUBLE)
-	{
-		type_check_error("derivative functions require floating-point arguments, got %s", type_display(arg));
-	}
-	return arg;
-}
-
 static const char* image_atomic_name(BuiltinFuncKind kind)
 {
 	switch (kind)
@@ -1839,11 +1816,34 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_TEXTURE_LOD:
 	case BUILTIN_TEXTURE_PROJ:
 	case BUILTIN_TEXTURE_GRAD:
+	case BUILTIN_TEXTURE_OFFSET:
+	case BUILTIN_TEXTURE_LOD_OFFSET:
+	case BUILTIN_TEXTURE_PROJ_OFFSET:
+	case BUILTIN_TEXTURE_PROJ_LOD:
+	case BUILTIN_TEXTURE_PROJ_LOD_OFFSET:
+	case BUILTIN_TEXTURE_GRAD_OFFSET:
+	case BUILTIN_TEXTURE_PROJ_GRAD:
+	case BUILTIN_TEXTURE_PROJ_GRAD_OFFSET:
+	case BUILTIN_TEXTURE_GATHER:
+	case BUILTIN_TEXTURE_GATHER_OFFSET:
+	case BUILTIN_TEXTURE_GATHER_OFFSETS:
 		return builtin_result_texture(args, argc);
 	case BUILTIN_TEXTURE_SIZE:
 		return builtin_result_texture_size(args, argc);
 	case BUILTIN_TEXEL_FETCH:
-		return builtin_result_texel_fetch(args, argc);
+		return builtin_result_texel_fetch(args, argc, 0);
+	case BUILTIN_TEXEL_FETCH_OFFSET:
+		return builtin_result_texel_fetch(args, argc, 1);
+	case BUILTIN_TEXTURE_QUERY_LOD:
+		return builtin_result_texture_query_lod(args, argc);
+	case BUILTIN_TEXTURE_QUERY_LEVELS:
+		return builtin_result_texture_query_levels(args, argc);
+	case BUILTIN_DETERMINANT:
+		return builtin_result_determinant(args, argc);
+	case BUILTIN_OUTER_PRODUCT:
+		return builtin_result_outer_product(args, argc);
+	case BUILTIN_MATRIX_COMP_MULT:
+		return builtin_result_matrix_comp_mult(args, argc);
 	case BUILTIN_MIN:
 	case BUILTIN_MAX:
 		return builtin_result_min_max(sym, args, argc);
@@ -1900,11 +1900,26 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_DOT:
 		return builtin_result_dot(sym, args, argc);
 	case BUILTIN_FWIDTH:
+	case BUILTIN_FWIDTH_FINE:
+	case BUILTIN_FWIDTH_COARSE:
 	case BUILTIN_DFDX:
+	case BUILTIN_DFDX_FINE:
+	case BUILTIN_DFDX_COARSE:
 	case BUILTIN_DFDY:
+	case BUILTIN_DFDY_FINE:
+	case BUILTIN_DFDY_COARSE:
 		return builtin_result_derivative(sym, args, argc);
 	case BUILTIN_CROSS:
 		return builtin_result_vector(args, argc, 0, 3);
+	case BUILTIN_IMAGE_ATOMIC_ADD:
+	case BUILTIN_IMAGE_ATOMIC_MIN:
+	case BUILTIN_IMAGE_ATOMIC_MAX:
+	case BUILTIN_IMAGE_ATOMIC_AND:
+	case BUILTIN_IMAGE_ATOMIC_OR:
+	case BUILTIN_IMAGE_ATOMIC_XOR:
+	case BUILTIN_IMAGE_ATOMIC_EXCHANGE:
+	case BUILTIN_IMAGE_ATOMIC_COMP_SWAP:
+		return builtin_result_image_atomic(sym->builtin_kind, args, argc);
 	case BUILTIN_LESS_THAN:
 	case BUILTIN_LESS_THAN_EQUAL:
 	case BUILTIN_GREATER_THAN:
@@ -1918,118 +1933,9 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_any_all(args, argc);
 	default:
 		break;
-		case BUILTIN_TEXTURE:
-		case BUILTIN_TEXTURE_LOD:
-		case BUILTIN_TEXTURE_PROJ:
-		case BUILTIN_TEXTURE_GRAD:
-		case BUILTIN_TEXTURE_OFFSET:
-		case BUILTIN_TEXTURE_LOD_OFFSET:
-		case BUILTIN_TEXTURE_PROJ_OFFSET:
-		case BUILTIN_TEXTURE_PROJ_LOD:
-		case BUILTIN_TEXTURE_PROJ_LOD_OFFSET:
-		case BUILTIN_TEXTURE_GRAD_OFFSET:
-		case BUILTIN_TEXTURE_PROJ_GRAD:
-		case BUILTIN_TEXTURE_PROJ_GRAD_OFFSET:
-		case BUILTIN_TEXTURE_GATHER:
-		case BUILTIN_TEXTURE_GATHER_OFFSET:
-		case BUILTIN_TEXTURE_GATHER_OFFSETS:
-			return builtin_result_texture(args, argc);
-		case BUILTIN_TEXTURE_SIZE:
-			return builtin_result_texture_size(args, argc);
-		case BUILTIN_TEXEL_FETCH:
-			return builtin_result_texel_fetch(args, argc, 0);
-		case BUILTIN_TEXEL_FETCH_OFFSET:
-			return builtin_result_texel_fetch(args, argc, 1);
-		case BUILTIN_TEXTURE_QUERY_LOD:
-			return builtin_result_texture_query_lod(args, argc);
-		case BUILTIN_TEXTURE_QUERY_LEVELS:
-			return builtin_result_texture_query_levels(args, argc);
-		case BUILTIN_DETERMINANT:
-			return builtin_result_determinant(args, argc);
-		case BUILTIN_OUTER_PRODUCT:
-			return builtin_result_outer_product(args, argc);
-		case BUILTIN_MATRIX_COMP_MULT:
-			return builtin_result_matrix_comp_mult(args, argc);
-		case BUILTIN_MIN:
-		case BUILTIN_MAX:
-		case BUILTIN_CLAMP:
-		case BUILTIN_ABS:
-		case BUILTIN_FLOOR:
-		case BUILTIN_CEIL:
-		case BUILTIN_FRACT:
-		case BUILTIN_MIX:
-		case BUILTIN_SIGN:
-		case BUILTIN_TRUNC:
-		case BUILTIN_ROUND:
-		case BUILTIN_ROUND_EVEN:
-		case BUILTIN_POW:
-		case BUILTIN_EXP:
-		case BUILTIN_EXP2:
-		case BUILTIN_LOG:
-		case BUILTIN_LOG2:
-		case BUILTIN_SQRT:
-		case BUILTIN_INVERSE_SQRT:
-		case BUILTIN_MOD:
-		case BUILTIN_SIN:
-		case BUILTIN_COS:
-		case BUILTIN_TAN:
-		case BUILTIN_ASIN:
-		case BUILTIN_ACOS:
-		case BUILTIN_ATAN:
-		case BUILTIN_NORMALIZE:
-		case BUILTIN_REFLECT:
-		case BUILTIN_REFRACT:
-			return builtin_result_same(args, argc, 0);
-		case BUILTIN_INVERSE:
-			return builtin_result_inverse(args, argc);
-		case BUILTIN_TRANSPOSE:
-			return builtin_result_transpose(args, argc);
-		case BUILTIN_STEP:
-			return builtin_result_same(args, argc, 1);
-		case BUILTIN_SMOOTHSTEP:
-			return builtin_result_same(args, argc, 2);
-		case BUILTIN_LENGTH:
-		case BUILTIN_DISTANCE:
-		case BUILTIN_DOT:
-			return builtin_result_scalar(args, argc, 0);
-		case BUILTIN_FWIDTH:
-		case BUILTIN_FWIDTH_FINE:
-		case BUILTIN_FWIDTH_COARSE:
-		case BUILTIN_DFDX:
-		case BUILTIN_DFDX_FINE:
-		case BUILTIN_DFDX_COARSE:
-		case BUILTIN_DFDY:
-		case BUILTIN_DFDY_FINE:
-		case BUILTIN_DFDY_COARSE:
-			return builtin_result_derivative(args, argc);
-		case BUILTIN_CROSS:
-			return builtin_result_vector(args, argc, 0, 3);
-		case BUILTIN_IMAGE_ATOMIC_ADD:
-		case BUILTIN_IMAGE_ATOMIC_MIN:
-		case BUILTIN_IMAGE_ATOMIC_MAX:
-		case BUILTIN_IMAGE_ATOMIC_AND:
-		case BUILTIN_IMAGE_ATOMIC_OR:
-		case BUILTIN_IMAGE_ATOMIC_XOR:
-		case BUILTIN_IMAGE_ATOMIC_EXCHANGE:
-		case BUILTIN_IMAGE_ATOMIC_COMP_SWAP:
-			return builtin_result_image_atomic(sym->builtin_kind, args, argc);
-		case BUILTIN_LESS_THAN:
-		case BUILTIN_LESS_THAN_EQUAL:
-		case BUILTIN_GREATER_THAN:
-		case BUILTIN_GREATER_THAN_EQUAL:
-			return builtin_result_relational(args, argc, 0);
-		case BUILTIN_EQUAL:
-		case BUILTIN_NOT_EQUAL:
-			return builtin_result_relational(args, argc, 1);
-		case BUILTIN_ANY:
-		case BUILTIN_ALL:
-			return builtin_result_any_all(args, argc);
-		default:
-			break;
 	}
 	return NULL;
 }
-
 int type_can_assign(const Type* dst, const Type* src)
 {
 	if (!dst || !src)
@@ -2901,7 +2807,8 @@ void type_check_ir()
 	dyna unsigned* qualifier_stack = NULL;
 	dyna unsigned* storage_stack = NULL;
 	dyna Symbol** symbol_stack = NULL;
-	Type* current_decl_type = NULL;
+Type* current_decl_type = NULL;
+const char* current_decl_name = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
@@ -3372,24 +3279,29 @@ void type_check_ir()
 			apush(symbol_stack, NULL);
 			break;
 		}
-		case IR_DECL_TYPE:
-			current_decl_type = type_system_get(inst->str0);
-			inst->type = current_decl_type;
-			break;
-		case IR_DECL_END:
-			current_decl_type = NULL;
-			break;
-		case IR_DECL_INIT_END:
-			if (acount(stack) > 0)
-			{
-				Type* value = type_stack_pop(stack, "initializer");
-				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
-				if (current_decl_type && value && !type_can_assign(current_decl_type, value))
-				{
-					type_check_error("initializer type %s cannot initialize %s", type_display(value), type_display(current_decl_type));
-				}
-			}
+case IR_DECL_TYPE:
+current_decl_type = type_system_get(inst->str0);
+inst->type = current_decl_type;
+current_decl_name = NULL;
+break;
+case IR_DECL_VAR:
+current_decl_name = inst->str0;
+break;
+case IR_DECL_END:
+current_decl_type = NULL;
+current_decl_name = NULL;
+break;
+case IR_DECL_INIT_END:
+if (acount(stack) > 0)
+{
+Type* value = type_stack_pop(stack, "initializer");
+if (acount(qualifier_stack))
+(void)apop(qualifier_stack);
+if (current_decl_type && value && !type_can_assign(current_decl_type, value))
+{
+type_check_error("initializer type %s cannot initialize %s %s", type_display(value), current_decl_name ? current_decl_name : "value", type_display(current_decl_type));
+}
+}
 			if (acount(stack) > 0)
 				aclear(stack);
 			if (acount(qualifier_stack) > 0)
