@@ -13,7 +13,7 @@
 #define SPINDLE_IMPLEMENTATION
 #include "spindle.h"
 
-void transpile(ShaderStage stage, const char* source)
+void compile(ShaderStage stage, const char* source)
 {
 	printf("Input : %s\n\n", source);
 	compiler_set_shader_stage(stage);
@@ -61,11 +61,13 @@ int main()
 		{ "stage_builtins_vertex", SHADER_STAGE_VERTEX, snippet_stage_builtins_vertex },
 		{ "stage_builtins_compute", SHADER_STAGE_COMPUTE, snippet_stage_builtins_compute },
 	};
+
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
-		transpile(snippets[i].stage, snippets[i].source);
+		compile(snippets[i].stage, snippets[i].source);
 		printf("\n");
 	}
+
 	return 0;
 }

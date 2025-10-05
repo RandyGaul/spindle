@@ -23,7 +23,8 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 typedef enum ShaderStage
@@ -36,10 +37,10 @@ typedef enum ShaderStage
 
 void compiler_set_shader_stage(ShaderStage stage);
 void compiler_setup(const char* source);
-void compiler_teardown(void);
-void dump_ir(void);
-void dump_symbols(void);
-void unit_test(void);
+void compiler_teardown();
+void dump_ir();
+void dump_symbols();
+void unit_test();
 
 #ifdef __cplusplus
 }
@@ -1680,7 +1681,6 @@ void parse_layout_block(TypeSpec* spec)
 	expect(TOK_RPAREN);
 }
 
-
 // Gather storage and qualifier keywords like uniform const.
 // ...uniform sampler2D u_image;
 void parse_type_qualifiers(TypeSpec* spec)
@@ -2175,7 +2175,7 @@ void stmt_decl()
 	TypeSpec spec = parse_type_specifier();
 	if (spec.is_stage_layout)
 	{
-			IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
+		IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
 		ir_apply_type_spec(begin, &spec);
 		int layout_count = spec.layout_identifiers ? acount(spec.layout_identifiers) : 0;
 		for (int i = 0; i < layout_count; ++i)
@@ -3770,16 +3770,12 @@ void type_system_init_builtins()
 #define SAMPLER(name, base_tag, dim_value) \
 	{ \
 		name, \
-		{ \
-			.tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 \
-		} \
+				{ .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
 	}
 #define IMAGE(name, base_tag, dim_value) \
 	{ \
 		name, \
-		{ \
-			.tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 \
-		} \
+				{ .tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
 	}
 	const TypeInit builtins[] = {
 		{ "void", { .tag = T_VOID, .cols = 1, .rows = 1, .base = T_VOID, .array_len = 0 } },
@@ -4300,40 +4296,39 @@ static const BuiltinSignature builtin_signatures[] = {
 };
 
 static const BuiltinSignature* builtin_find_signature(BuiltinFuncKind kind)
+{
+	for (int i = 0; i < ARRAY_COUNT(builtin_signatures); ++i)
 	{
-		for (int i = 0; i < ARRAY_COUNT(builtin_signatures); ++i)
-		{
-			const BuiltinSignature* signature = &builtin_signatures[i];
-			if (signature->kind == kind)
+		const BuiltinSignature* signature = &builtin_signatures[i];
+		if (signature->kind == kind)
 			return signature;
-		}
+	}
 	return NULL;
 }
 
 static Type* builtin_apply_signature(const BuiltinSignature* signature, const Symbol* sym, Type** args, int argc)
-	{
-		if (!signature)
+{
+	if (!signature)
 		return NULL;
-		builtin_validate_args(sym, args, argc, signature->constraints, signature->constraint_count);
-		switch (signature->result_kind)
-		{
-			case BUILTIN_SIGNATURE_RESULT_NONE:
-			return NULL;
-			case BUILTIN_SIGNATURE_RESULT_SAME:
-			return builtin_result_same(args, argc, signature->result_index);
-			case BUILTIN_SIGNATURE_RESULT_SCALAR:
-			return builtin_result_scalar(args, argc, signature->result_index);
-			case BUILTIN_SIGNATURE_RESULT_VECTOR:
-			return builtin_result_vector(args, argc, signature->result_index, signature->result_components);
-			case BUILTIN_SIGNATURE_RESULT_CUSTOM:
-			if (signature->custom_result)
+	builtin_validate_args(sym, args, argc, signature->constraints, signature->constraint_count);
+	switch (signature->result_kind)
+	{
+	case BUILTIN_SIGNATURE_RESULT_NONE:
+		return NULL;
+	case BUILTIN_SIGNATURE_RESULT_SAME:
+		return builtin_result_same(args, argc, signature->result_index);
+	case BUILTIN_SIGNATURE_RESULT_SCALAR:
+		return builtin_result_scalar(args, argc, signature->result_index);
+	case BUILTIN_SIGNATURE_RESULT_VECTOR:
+		return builtin_result_vector(args, argc, signature->result_index, signature->result_components);
+	case BUILTIN_SIGNATURE_RESULT_CUSTOM:
+		if (signature->custom_result)
 			return signature->custom_result(sym, args, argc);
-			return NULL;
-			default:
-			return NULL;
-		}
+		return NULL;
+	default:
+		return NULL;
+	}
 }
-
 
 // Validate a builtin invocation against per-argument rules before resolving it.
 // ...error: distance requires second argument to match first argument shape, got vec3 and vec2
@@ -7308,9 +7303,7 @@ const char* snippet_stage_builtins_compute = SPINDLE_SNIPPET(
 			uvec3 lid = gl_LocalInvocationID;
 			uint index = gl_LocalInvocationIndex;
 			tile[index] = float(gid.x + lid.y);
-		}
-);
-
+		});
 
 const char* snippet_builtin_funcs = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -7472,7 +7465,6 @@ const char* snippet_extended_types = SPINDLE_SNIPPET(
 			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
 		});
 #undef SPINDLE_SNIPPET
-
 
 void dump_storage_flags(unsigned flags)
 {
@@ -7790,14 +7782,14 @@ DEFINE_TEST(test_builtin_function_metadata)
 		int params;
 	} cases[] = {
 		{ sintern("textureLod"), BUILTIN_TEXTURE_LOD, 3 },
-{ sintern("textureGrad"), BUILTIN_TEXTURE_GRAD, 4 },
-{ sintern("normalize"), BUILTIN_NORMALIZE, 1 },
-{ sintern("distance"), BUILTIN_DISTANCE, 2 },
-{ sintern("textureQueryLod"), BUILTIN_TEXTURE_QUERY_LOD, 2 },
-{ sintern("texelFetchOffset"), BUILTIN_TEXEL_FETCH_OFFSET, -1 },
-{ sintern("determinant"), BUILTIN_DETERMINANT, 1 },
-{ sintern("imageAtomicAdd"), BUILTIN_IMAGE_ATOMIC_ADD, -1 },
-};
+		{ sintern("textureGrad"), BUILTIN_TEXTURE_GRAD, 4 },
+		{ sintern("normalize"), BUILTIN_NORMALIZE, 1 },
+		{ sintern("distance"), BUILTIN_DISTANCE, 2 },
+		{ sintern("textureQueryLod"), BUILTIN_TEXTURE_QUERY_LOD, 2 },
+		{ sintern("texelFetchOffset"), BUILTIN_TEXEL_FETCH_OFFSET, -1 },
+		{ sintern("determinant"), BUILTIN_DETERMINANT, 1 },
+		{ sintern("imageAtomicAdd"), BUILTIN_IMAGE_ATOMIC_ADD, -1 },
+	};
 	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
 	{
 		Symbol* sym = symbol_table_find(cases[i].name);
@@ -8593,7 +8585,7 @@ DEFINE_TEST(test_builtin_function_calls)
 
 DEFINE_TEST(test_texture_query_builtins)
 {
-const char* texture_size_name = sintern("textureSize");
+	const char* texture_size_name = sintern("textureSize");
 	const char* texel_fetch_name = sintern("texelFetch");
 	const char* inverse_name = sintern("inverse");
 	const char* transpose_name = sintern("transpose");
@@ -8795,10 +8787,10 @@ DEFINE_TEST(test_compute_layout_and_storage)
 {
 	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
 	const char* source =
-	"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
-	"coherent readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
-	"shared coherent float tile[64];"
-	"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
+			"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
+			"coherent readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
+			"shared coherent float tile[64];"
+			"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
 	compiler_setup(source);
 	int saw_stage_layout = 0;
 	int saw_x = 0;
