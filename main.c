@@ -751,6 +751,25 @@ const char* snippet_builtin_funcs = STR(
 			out_color = vec4(unit * (f + shade), sampled.a);
 		});
 
+const char* snippet_resource_types = STR(
+		layout(location = 0) out vec4 out_color;
+		layout(set = 2, binding = 0) uniform sampler1D u_sampler1d;
+		layout(set = 2, binding = 1) uniform sampler3D u_sampler3d;
+		layout(set = 2, binding = 2) uniform sampler2DShadow u_sampler_shadow;
+		layout(set = 2, binding = 3) uniform isampler2D u_sampler_int;
+		layout(set = 2, binding = 4) uniform usamplerCubeArray u_sampler_uint_array;
+		layout(set = 2, binding = 5) uniform image2D u_image2d;
+		layout(set = 2, binding = 6) uniform iimage3D u_image3d;
+		layout(set = 2, binding = 7) uniform uimageBuffer u_image_buffer;
+		void main() {
+			vec4 base = texture(u_sampler1d, 0.5);
+			vec4 volume = texture(u_sampler3d, vec3(0.0));
+			float depth = texture(u_sampler_shadow, vec3(0.0, 0.0, 1.0));
+			ivec4 ints = texture(u_sampler_int, vec2(0.0, 0.0));
+			uvec4 uints = texture(u_sampler_uint_array, vec4(0.0, 0.0, 1.0, 0.0));
+			out_color = vec4(base.rgb + volume.rgb, depth);
+		});
+
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -788,6 +807,7 @@ int main()
 		{ "discard", snippet_discard },
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
+		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
 	};
 
