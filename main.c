@@ -183,6 +183,8 @@ typedef enum TypeTag
 	T_BOOL,
 	T_INT,
 	T_UINT,
+	T_INT64,
+	T_UINT64,
 	T_FLOAT,
 	T_DOUBLE,
 	T_VEC,
@@ -208,12 +210,19 @@ struct Type
 	const char* name;
 };
 
+typedef struct StructMemberArrayDim
+{
+	Type type;
+	int size;
+	int unsized;
+} StructMemberArrayDim;
+
 typedef struct StructMember
 {
 	const char* name;
 	Type* declared_type;
 	Type* type;
-	Type array_type;
+	dyna StructMemberArrayDim* array_dims;
 	int has_array;
 	int array_len;
 	int array_unsized;
@@ -235,7 +244,7 @@ StructInfo* type_struct_info(Type* type);
 void type_struct_clear(Type* type);
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type);
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location);
-void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized);
+void type_struct_member_mark_array(StructMember* member, int size, int unsized);
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count);
 StructMember* type_struct_find_member(Type* type, const char* name);
 int type_struct_member_count(Type* type);
@@ -594,6 +603,8 @@ Type* g_type_void;
 Type* g_type_bool;
 Type* g_type_int;
 Type* g_type_uint;
+Type* g_type_int64;
+Type* g_type_uint64;
 Type* g_type_float;
 Type* g_type_double;
 
@@ -629,6 +640,17 @@ const char* snippet_basic_io = STR(
 			vec4 sampled = texture(u_texture, in_uv);
 			out_color = sampled * u_tint;
 		});
+
+const char* snippet_stage_builtins_vertex = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			float base = float(gl_VertexIndex + gl_BaseInstance);
+			gl_Position = vec4(base, 0.0, 0.0, 1.0);
+			gl_PointSize = 1.0;
+			gl_ClipDistance[0] = base;
+			out_color = vec4(base);
+		}
+		);
 
 const char* snippet_control_flow = STR(
 		layout(location = 0) out vec4 out_color;
@@ -847,6 +869,20 @@ const char* snippet_discard = STR(
 			out_color = color;
 		});
 
+const char* snippet_stage_builtins_fragment = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			vec4 coord = gl_FragCoord;
+			int sample_id = gl_SampleID;
+			int sample_mask = gl_SampleMaskIn[0];
+			if (gl_HelperInvocation)
+			{
+				gl_SampleMask[0] = 0;
+			}
+			out_color = coord + vec4(float(sample_id + sample_mask));
+		}
+		);
+
 const char* snippet_builtin_funcs = STR(
 		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_tex;
@@ -956,30 +992,52 @@ const char* snippet_resource_types = STR(
 
 const char* snippet_struct_constructor = STR(
 		struct Inner {
-			vec2 coords[2];
+			vec2 coords[2][2];
 		};
 		struct Outer {
 			float weight;
 			Inner segments[2];
-			float thresholds[4];
+			float thresholds[2][2];
 		};
 		layout(location = 0) out vec4 out_color;
 		void main() {
-			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0));
+			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0),
+					vec2(4.0, 5.0), vec2(6.0, 7.0));
 			Outer combo = Outer(1.0,
-					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
-					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
+					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25),
+							vec2(0.125, 0.875), vec2(0.625, 0.375)),
+					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5),
+							vec2(0.9, 0.1), vec2(0.2, 0.8)),
 					0.0, 1.0, 2.0, 3.0);
-			out_color = vec4(combo.segments[0].coords[1], combo.thresholds[3], combo.weight);
+			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
+		});
+
+const char* snippet_extended_types = STR(
+		layout(location = 0) out dvec4 out_color;
+		void main() {
+			dvec2 dv = dvec2(1.0, 2.0);
+			dmat2 dm = dmat2(1.0);
+			dvec2 transformed = dm * dv;
+			dmat2x3 dm2 = dmat2x3(1.0);
+			dvec3 projected = dvec3(dm2 * transformed);
+			dmat3x2 dm3 = dmat3x2(1.0);
+			dvec3 expanded = dvec3(transformed * dm3);
+			int64_t big = int64_t(1);
+			i64vec2 ivec = i64vec2(big);
+			uint64_t ubig = uint64_t(2u);
+			u64vec3 uvec = u64vec3(ubig);
+			atomic_uint counter = atomic_uint(0u);
+			double compare = double(ivec.x < int64_t(uvec.x) ? 1 : 0);
+			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
 		});
 
 // Directly include all of our source for a unity build.
 #include "testing.c"
 
-void transpile(const char* source)
+void transpile(ShaderStage stage, const char* source)
 {
 	printf("Input : %s\n\n", source);
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_set_shader_stage(stage);
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");
@@ -994,6 +1052,7 @@ int main()
 	typedef struct ShaderSnippet
 	{
 		const char* name;
+		ShaderStage stage;
 		const char* source;
 	} ShaderSnippet;
 
@@ -1018,12 +1077,14 @@ int main()
 		{ "struct_block", snippet_struct_block },
 		{ "struct_constructor", snippet_struct_constructor },
 		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
+		{ "extended_types", snippet_extended_types },
+		{ "stage_builtins_fragment", SHADER_STAGE_FRAGMENT, snippet_stage_builtins_fragment },
+		{ "stage_builtins_vertex", SHADER_STAGE_VERTEX, snippet_stage_builtins_vertex },
 	};
-
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
-		transpile(snippets[i].source);
+		transpile(snippets[i].stage, snippets[i].source);
 		printf("\n");
 	}
 	return 0;

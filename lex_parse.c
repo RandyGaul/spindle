@@ -113,12 +113,17 @@ dyna Symbol** function_overload_buffer;
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
 void symbol_add_storage(Symbol* sym, unsigned flags);
 void symbol_add_qualifier(Symbol* sym, unsigned flags);
+void symbol_mark_array(Symbol* sym, Type* element_type);
 
+// Create a fresh scope for blocks like function bodies or if-statements.
+// ...if (use_shadows) { vec3 atten = vec3(0.0); }
 void symbol_table_enter_scope()
 {
 	apush(st->scopes, (SymbolScope){ 0 });
 }
 
+// Discard the innermost scope once we leave a block.
+// ...}
 void symbol_table_leave_scope()
 {
 	int count = acount(st->scopes);
@@ -177,6 +182,8 @@ static uint64_t symbol_function_signature_hash(Type** params, int param_count)
 	return hash;
 }
 
+// Look up an overload that matches a call site like light(in_pos).
+// ...float intensity = light(v_uv);
 static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Type** params, int param_count, int scope_depth)
 {
 	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 0);
@@ -191,6 +198,8 @@ static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Ty
 	return &st->symbols[(int)mapped - 1];
 }
 
+// Register a symbol for declarations such as float roughness; or void shade().
+// ...float roughness;
 static Symbol* symbol_table_add_internal(const char* name, const char* type_name, Type* type, SymbolKind kind, int scope_depth)
 {
 	if (!acount(st->scopes))
@@ -249,10 +258,12 @@ typedef struct BuiltinFunctionInit
 typedef struct BuiltinVariableInit
 {
 	const char* name;
-	ShaderStage stage;
+	unsigned stage_mask;
 	const char* type_name;
 	unsigned storage_flags;
 	unsigned qualifier_flags;
+	int array_dimensions;
+	int array_length;
 } BuiltinVariableInit;
 
 /*
@@ -267,15 +278,35 @@ typedef struct BuiltinVariableInit
 | gl_PointCoord    | Fragment (input)  | vec2  | read (in)    |
 | gl_FragDepth     | Fragment (output) | float | write (out)  |
 */
+#define STAGE_MASK(stage) (1u << (stage))
+#define STAGE_MASK_VERTEX STAGE_MASK(SHADER_STAGE_VERTEX)
+#define STAGE_MASK_FRAGMENT STAGE_MASK(SHADER_STAGE_FRAGMENT)
+
 static const BuiltinVariableInit builtin_variables[] = {
-	{ "gl_Position", SHADER_STAGE_VERTEX, "vec4", SYM_STORAGE_OUT, 0 },
-	{ "gl_PointSize", SHADER_STAGE_VERTEX, "float", SYM_STORAGE_OUT, 0 },
-	{ "gl_VertexIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
-	{ "gl_InstanceIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
-	{ "gl_FragCoord", SHADER_STAGE_FRAGMENT, "vec4", SYM_STORAGE_IN, SYM_QUAL_CONST },
-	{ "gl_FrontFacing", SHADER_STAGE_FRAGMENT, "bool", SYM_STORAGE_IN, SYM_QUAL_CONST },
-	{ "gl_PointCoord", SHADER_STAGE_FRAGMENT, "vec2", SYM_STORAGE_IN, SYM_QUAL_CONST },
-	{ "gl_FragDepth", SHADER_STAGE_FRAGMENT, "float", SYM_STORAGE_OUT, 0 },
+	{ "gl_Position", STAGE_MASK_VERTEX, "vec4", SYM_STORAGE_OUT, 0, 0, -1 },
+	{ "gl_PointSize", STAGE_MASK_VERTEX, "float", SYM_STORAGE_OUT, 0, 0, -1 },
+	{ "gl_ClipDistance", STAGE_MASK_VERTEX, "float", SYM_STORAGE_OUT, 0, 1, -1 },
+	{ "gl_CullDistance", STAGE_MASK_VERTEX, "float", SYM_STORAGE_OUT, 0, 1, -1 },
+	{ "gl_VertexIndex", STAGE_MASK_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_InstanceIndex", STAGE_MASK_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_DrawID", STAGE_MASK_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_BaseVertex", STAGE_MASK_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_BaseInstance", STAGE_MASK_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_ViewIndex", STAGE_MASK_VERTEX | STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_FragCoord", STAGE_MASK_FRAGMENT, "vec4", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_FrontFacing", STAGE_MASK_FRAGMENT, "bool", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_PointCoord", STAGE_MASK_FRAGMENT, "vec2", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_PrimitiveID", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_SampleID", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_SamplePosition", STAGE_MASK_FRAGMENT, "vec2", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_SampleMaskIn", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 1, -1 },
+	{ "gl_HelperInvocation", STAGE_MASK_FRAGMENT, "bool", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_Layer", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_ViewportIndex", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_ClipDistance", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_IN, SYM_QUAL_CONST, 1, -1 },
+	{ "gl_CullDistance", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_IN, SYM_QUAL_CONST, 1, -1 },
+	{ "gl_FragDepth", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_OUT, 0, 0, -1 },
+	{ "gl_SampleMask", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_OUT, 0, 1, -1 },
 };
 
 static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
@@ -386,19 +417,28 @@ static void symbol_table_register_builtins()
 
 static void symbol_table_register_builtin_variables()
 {
+	unsigned current_stage_mask = STAGE_MASK(g_shader_stage);
 	for (size_t i = 0; i < sizeof(builtin_variables) / sizeof(builtin_variables[0]); ++i)
 	{
 		const BuiltinVariableInit* init = &builtin_variables[i];
-		if (init->stage != g_shader_stage)
+		if (!(init->stage_mask & current_stage_mask))
 			continue;
 		const char* name = sintern(init->name);
 		const char* type_name = sintern(init->type_name);
 		Type* type = type_system_get(type_name);
 		Symbol* sym = symbol_table_add(name, type_name, type, SYM_VAR);
 		sym->is_builtin = 1;
-		sym->builtin_stage = init->stage;
+		sym->builtin_stage = g_shader_stage;
 		symbol_add_storage(sym, init->storage_flags);
 		symbol_add_qualifier(sym, init->qualifier_flags);
+		Type* element_type = type;
+		for (int dim = 0; dim < init->array_dimensions; ++dim)
+		{
+			symbol_mark_array(sym, element_type);
+			if (sym->type && init->array_length >= 0)
+				sym->type->array_len = init->array_length;
+			element_type = sym->type;
+		}
 	}
 }
 
@@ -859,6 +899,8 @@ int is_type_token()
 	return 0;
 }
 
+// Consume layout(...) annotations that precede declarations.
+// ...layout(location = 0) out vec4 result;
 void parse_layout_block(TypeSpec* spec)
 {
 	next();
@@ -896,6 +938,8 @@ void parse_layout_block(TypeSpec* spec)
 	expect(TOK_RPAREN);
 }
 
+// Gather storage and qualifier keywords like uniform const.
+// ...uniform sampler2D u_image;
 void parse_type_qualifiers(TypeSpec* spec)
 {
 	while (tok.kind == TOK_IDENTIFIER)
@@ -995,33 +1039,12 @@ TypeSpec parse_type_specifier()
 
 void parse_struct_member_array_suffix(StructMember* member)
 {
-	if (!member)
-	{
-		while (tok.kind == TOK_LBRACK)
-		{
-			next();
-			if (tok.kind != TOK_RBRACK)
-			{
-				if (tok.kind != TOK_INT)
-					parse_error("expected integer array size");
-				next();
-				expect(TOK_RBRACK);
-			}
-			else
-			{
-				next();
-			}
-		}
-		return;
-	}
 	while (tok.kind == TOK_LBRACK)
 	{
-		if (member->has_array)
-			parse_error("multiple array dimensions in struct member not supported");
 		next();
-		int unsized = 0;
-		int size = -1;
-		if (tok.kind == TOK_RBRACK)
+	int unsized = 0;
+	int size = -1;
+	if (tok.kind == TOK_RBRACK)
 		{
 			unsized = 1;
 		}
@@ -1033,7 +1056,8 @@ void parse_struct_member_array_suffix(StructMember* member)
 			next();
 		}
 		expect(TOK_RBRACK);
-		type_struct_member_mark_array(member, member->type, size, unsized);
+		if (member)
+			type_struct_member_mark_array(member, size, unsized);
 	}
 }
 

@@ -955,11 +955,33 @@ DEFINE_TEST(test_struct_constructor_ir)
 			continue;
 		if (!inst->type || inst->type->tag != T_STRUCT)
 			continue;
-		if (inst->str0 == inner_name && inst->arg0 == 2)
+		if (inst->str0 == inner_name && inst->arg0 == 4)
 			saw_inner_ctor = 1;
 		if (inst->str0 == outer_name && inst->arg0 == 7)
 			saw_outer_ctor = 1;
 	}
+	Type* inner_type = type_system_get(inner_name);
+	const char* coords_name = sintern("coords");
+	StructMember* coords_member = type_struct_find_member(inner_type, coords_name);
+	assert(coords_member);
+	assert(coords_member->has_array);
+	assert(acount(coords_member->array_dims) == 2);
+	assert(coords_member->type && coords_member->type->tag == T_ARRAY);
+	Type* coords_inner = coords_member->type->user ? (Type*)coords_member->type->user : NULL;
+	assert(coords_inner && coords_inner->tag == T_ARRAY);
+	Type* coords_element = coords_inner->user ? (Type*)coords_inner->user : NULL;
+	assert(coords_element && coords_element->tag == T_VEC && coords_element->cols == 2);
+	Type* outer_type = type_system_get(outer_name);
+	const char* thresholds_name = sintern("thresholds");
+	StructMember* thresholds_member = type_struct_find_member(outer_type, thresholds_name);
+	assert(thresholds_member);
+	assert(thresholds_member->has_array);
+	assert(acount(thresholds_member->array_dims) == 2);
+	assert(thresholds_member->type && thresholds_member->type->tag == T_ARRAY);
+	Type* thresholds_inner = thresholds_member->type->user ? (Type*)thresholds_member->type->user : NULL;
+	assert(thresholds_inner && thresholds_inner->tag == T_ARRAY);
+	Type* thresholds_element = thresholds_inner->user ? (Type*)thresholds_inner->user : NULL;
+	assert(thresholds_element && type_base_type(thresholds_element) == T_FLOAT);
 	compiler_teardown();
 	assert(saw_inner_ctor);
 	assert(saw_outer_ctor);
@@ -1164,8 +1186,25 @@ DEFINE_TEST(test_builtin_variables_vertex_stage)
 	assert(gl_position->builtin_stage == SHADER_STAGE_VERTEX);
 	assert(symbol_has_storage(gl_position, SYM_STORAGE_OUT));
 	assert(!(gl_position->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* clip_distance = symbol_table_find(sintern("gl_ClipDistance"));
+	assert(clip_distance);
+	assert(symbol_has_storage(clip_distance, SYM_STORAGE_OUT));
+	assert(!(clip_distance->qualifier_flags & SYM_QUAL_CONST));
+	assert(clip_distance->array_dimensions == 1);
+	Symbol* draw_id = symbol_table_find(sintern("gl_DrawID"));
+	assert(draw_id);
+	assert(symbol_has_storage(draw_id, SYM_STORAGE_IN));
+	assert(draw_id->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* view_index = symbol_table_find(sintern("gl_ViewIndex"));
+	assert(view_index);
+	assert(symbol_has_storage(view_index, SYM_STORAGE_IN));
+	assert(view_index->qualifier_flags & SYM_QUAL_CONST);
 	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
 	assert(!frag_coord);
+	Symbol* sample_id = symbol_table_find(sintern("gl_SampleID"));
+	assert(!sample_id);
+	Symbol* sample_mask = symbol_table_find(sintern("gl_SampleMask"));
+	assert(!sample_mask);
 	compiler_teardown();
 }
 
@@ -1183,6 +1222,25 @@ DEFINE_TEST(test_builtin_variables_fragment_stage)
 	assert(frag_depth);
 	assert(symbol_has_storage(frag_depth, SYM_STORAGE_OUT));
 	assert(!(frag_depth->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* sample_id = symbol_table_find(sintern("gl_SampleID"));
+	assert(sample_id);
+	assert(symbol_has_storage(sample_id, SYM_STORAGE_IN));
+	assert(sample_id->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* sample_mask_in = symbol_table_find(sintern("gl_SampleMaskIn"));
+	assert(sample_mask_in);
+	assert(symbol_has_storage(sample_mask_in, SYM_STORAGE_IN));
+	assert(sample_mask_in->qualifier_flags & SYM_QUAL_CONST);
+	assert(sample_mask_in->array_dimensions == 1);
+	Symbol* sample_mask = symbol_table_find(sintern("gl_SampleMask"));
+	assert(sample_mask);
+	assert(symbol_has_storage(sample_mask, SYM_STORAGE_OUT));
+	assert(!(sample_mask->qualifier_flags & SYM_QUAL_CONST));
+	assert(sample_mask->array_dimensions == 1);
+	Symbol* clip_distance = symbol_table_find(sintern("gl_ClipDistance"));
+	assert(clip_distance);
+	assert(symbol_has_storage(clip_distance, SYM_STORAGE_IN));
+	assert(clip_distance->qualifier_flags & SYM_QUAL_CONST);
+	assert(clip_distance->array_dimensions == 1);
 	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
 	assert(!gl_position);
 	compiler_teardown();
