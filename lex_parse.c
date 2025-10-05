@@ -114,11 +114,15 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 void symbol_add_storage(Symbol* sym, unsigned flags);
 void symbol_add_qualifier(Symbol* sym, unsigned flags);
 
+// Create a fresh scope for blocks like function bodies or if-statements.
+// ...if (use_shadows) { vec3 atten = vec3(0.0); }
 void symbol_table_enter_scope()
 {
 	apush(st->scopes, (SymbolScope){ 0 });
 }
 
+// Discard the innermost scope once we leave a block.
+// ...}
 void symbol_table_leave_scope()
 {
 	int count = acount(st->scopes);
@@ -177,6 +181,8 @@ static uint64_t symbol_function_signature_hash(Type** params, int param_count)
 	return hash;
 }
 
+// Look up an overload that matches a call site like light(in_pos).
+// ...float intensity = light(v_uv);
 static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Type** params, int param_count, int scope_depth)
 {
 	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 0);
@@ -191,6 +197,8 @@ static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Ty
 	return &st->symbols[(int)mapped - 1];
 }
 
+// Register a symbol for declarations such as float roughness; or void shade().
+// ...float roughness;
 static Symbol* symbol_table_add_internal(const char* name, const char* type_name, Type* type, SymbolKind kind, int scope_depth)
 {
 	if (!acount(st->scopes))
@@ -828,6 +836,8 @@ int is_type_token()
 	return 0;
 }
 
+// Consume layout(...) annotations that precede declarations.
+// ...layout(location = 0) out vec4 result;
 void parse_layout_block(TypeSpec* spec)
 {
 	next();
@@ -865,6 +875,8 @@ void parse_layout_block(TypeSpec* spec)
 	expect(TOK_RPAREN);
 }
 
+// Gather storage and qualifier keywords like uniform const.
+// ...uniform sampler2D u_image;
 void parse_type_qualifiers(TypeSpec* spec)
 {
 	while (tok.kind == TOK_IDENTIFIER)
