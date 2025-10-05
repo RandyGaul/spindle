@@ -619,6 +619,245 @@ static Type* builtin_result_texture(Type** args, int argc)
 	return type_system_get(sintern("vec4"));
 }
 
+static int sampler_base_dimension(const Type* sampler)
+{
+	if (!sampler || sampler->tag != T_SAMPLER)
+		return TYPE_DIM_UNKNOWN;
+	return sampler->dim & 0xF;
+}
+
+static int sampler_coord_components(const Type* sampler)
+{
+	int base_dim = sampler_base_dimension(sampler);
+	int components = 0;
+	switch (base_dim)
+	{
+	case TYPE_DIM_1D:
+		components = 1;
+		break;
+	case TYPE_DIM_2D:
+	case TYPE_DIM_RECT:
+	case TYPE_DIM_CUBE:
+	case TYPE_DIM_2D_MS:
+		components = 2;
+		break;
+	case TYPE_DIM_3D:
+		components = 3;
+		break;
+	case TYPE_DIM_BUFFER:
+		components = 1;
+		break;
+	default:
+		return 0;
+	}
+	if (sampler->dim & TYPE_DIM_FLAG_ARRAY)
+		components += 1;
+	return components;
+}
+
+static Type* builtin_result_texture_size(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("textureSize requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		return type_get_scalar(T_INT);
+	}
+	int base_dim = sampler_base_dimension(sampler);
+	int expected_args = 1;
+	switch (base_dim)
+	{
+	case TYPE_DIM_RECT:
+	case TYPE_DIM_BUFFER:
+	case TYPE_DIM_2D_MS:
+		expected_args = 1;
+		break;
+	case TYPE_DIM_UNKNOWN:
+		type_check_error("textureSize unsupported sampler type %s", type_display(sampler));
+		break;
+	default:
+		expected_args = 2;
+		break;
+	}
+	if (argc != expected_args)
+	{
+		type_check_error("textureSize expects %d arguments but received %d", expected_args, argc);
+	}
+	if (expected_args == 2)
+	{
+		Type* lod = (argc > 1) ? args[1] : NULL;
+		if (!lod || !type_is_scalar(lod) || !type_is_integer(lod))
+		{
+			type_check_error("textureSize LOD must be integer scalar, got %s", lod ? type_display(lod) : "<null>");
+		}
+	}
+	int components = sampler_coord_components(sampler);
+	if (!components)
+	{
+		type_check_error("textureSize cannot determine dimensions for sampler %s", type_display(sampler));
+		return type_get_scalar(T_INT);
+	}
+	if (components <= 1)
+		return type_get_scalar(T_INT);
+	Type* result = type_get_vector(T_INT, components);
+	return result ? result : type_get_scalar(T_INT);
+}
+
+static Type* builtin_result_texel_fetch(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("texelFetch requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		return builtin_result_texture(args, argc);
+	}
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
+	{
+		type_check_error("texelFetch does not support shadow samplers (%s)", type_display(sampler));
+	}
+	int base_dim = sampler_base_dimension(sampler);
+	int coord_components = sampler_coord_components(sampler);
+	int expected_args = 0;
+	switch (base_dim)
+	{
+	case TYPE_DIM_BUFFER:
+		expected_args = 2;
+		coord_components = 1;
+		break;
+	case TYPE_DIM_1D:
+	case TYPE_DIM_2D:
+	case TYPE_DIM_3D:
+		expected_args = 3;
+		break;
+	case TYPE_DIM_RECT:
+		expected_args = 2;
+		break;
+	case TYPE_DIM_2D_MS:
+		expected_args = 3;
+		break;
+	default:
+		type_check_error("texelFetch unsupported sampler type %s", type_display(sampler));
+		return builtin_result_texture(args, argc);
+	}
+	if (argc != expected_args)
+	{
+		type_check_error("texelFetch expects %d arguments but received %d", expected_args, argc);
+	}
+	Type* coord = (argc > 1) ? args[1] : NULL;
+	if (coord_components <= 1)
+	{
+		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
+		{
+			type_check_error("texelFetch coordinate must be integer scalar, got %s", coord ? type_display(coord) : "<null>");
+		}
+	}
+	else
+	{
+		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
+		{
+			type_check_error("texelFetch coordinate must be ivec%d, got %s", coord_components, coord ? type_display(coord) : "<null>");
+		}
+	}
+	int requires_level = 0;
+	if (base_dim == TYPE_DIM_1D || base_dim == TYPE_DIM_2D || base_dim == TYPE_DIM_3D)
+		requires_level = 1;
+	else if (base_dim == TYPE_DIM_2D_MS || base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_RECT)
+		requires_level = 0;
+	Type* level = (argc > 2) ? args[2] : NULL;
+	if (requires_level)
+	{
+		if (!level || !type_is_scalar(level) || !type_is_integer(level))
+		{
+			type_check_error("texelFetch LOD must be integer scalar, got %s", level ? type_display(level) : "<null>");
+		}
+	}
+	else if (level)
+	{
+		if (!type_is_scalar(level) || !type_is_integer(level))
+		{
+			type_check_error("texelFetch sample index must be integer scalar, got %s", type_display(level));
+		}
+	}
+	return builtin_result_texture(args, argc);
+}
+
+static Type* builtin_result_inverse(Type** args, int argc)
+{
+	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	if (!mat || !type_is_matrix(mat))
+	{
+		type_check_error("inverse requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		return mat;
+	}
+	if (mat->cols != mat->rows)
+	{
+		type_check_error("inverse requires square matrix, got %s", type_display(mat));
+	}
+	return mat;
+}
+
+static Type* builtin_result_transpose(Type** args, int argc)
+{
+	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	if (!mat || !type_is_matrix(mat))
+	{
+		type_check_error("transpose requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		return mat;
+	}
+	Type* result = type_get_matrix(type_base_type(mat), mat->rows, mat->cols);
+	return result ? result : mat;
+}
+
+static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
+{
+	Type* lhs = (args && argc > 0) ? args[0] : NULL;
+	Type* rhs = (args && argc > 1) ? args[1] : NULL;
+	if (!lhs || !rhs)
+		return type_get_scalar(T_BOOL);
+	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
+	{
+		type_check_error("relational functions require scalar or vector arguments, got %s and %s", type_display(lhs), type_display(rhs));
+		return type_get_scalar(T_BOOL);
+	}
+	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs)))
+	{
+		type_check_error("relational functions require matching argument shapes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols)
+	{
+		type_check_error("relational functions require matching vector sizes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	TypeTag lhs_base = type_base_type(lhs);
+	TypeTag rhs_base = type_base_type(rhs);
+	if (lhs_base != rhs_base)
+	{
+		type_check_error("relational functions require matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (!allow_bool && lhs_base == T_BOOL)
+	{
+		type_check_error("ordering relational functions do not support boolean arguments");
+	}
+	int components = type_is_vector(lhs) ? lhs->cols : 1;
+	if (components <= 1)
+		return type_get_scalar(T_BOOL);
+	return type_get_vector(T_BOOL, components);
+}
+
+static Type* builtin_result_any_all(Type** args, int argc)
+{
+	Type* arg = (args && argc > 0) ? args[0] : NULL;
+	if (!arg)
+		return type_get_scalar(T_BOOL);
+	if (!type_is_vector(arg) || type_base_type(arg) != T_BOOL)
+	{
+		type_check_error("any/all require boolean vector argument, got %s", type_display(arg));
+	}
+	return type_get_scalar(T_BOOL);
+}
+
+
+
+
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
@@ -630,6 +869,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_TEXTURE_PROJ:
 	case BUILTIN_TEXTURE_GRAD:
 		return builtin_result_texture(args, argc);
+	case BUILTIN_TEXTURE_SIZE:
+		return builtin_result_texture_size(args, argc);
+	case BUILTIN_TEXEL_FETCH:
+		return builtin_result_texel_fetch(args, argc);
 	case BUILTIN_MIN:
 	case BUILTIN_MAX:
 	case BUILTIN_CLAMP:
@@ -660,6 +903,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_REFLECT:
 	case BUILTIN_REFRACT:
 		return builtin_result_same(args, argc, 0);
+	case BUILTIN_INVERSE:
+		return builtin_result_inverse(args, argc);
+	case BUILTIN_TRANSPOSE:
+		return builtin_result_transpose(args, argc);
 	case BUILTIN_STEP:
 		return builtin_result_same(args, argc, 1);
 	case BUILTIN_SMOOTHSTEP:
@@ -673,6 +920,17 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_scalar(args, argc, 0);
 	case BUILTIN_CROSS:
 		return builtin_result_vector(args, argc, 0, 3);
+	case BUILTIN_LESS_THAN:
+	case BUILTIN_LESS_THAN_EQUAL:
+	case BUILTIN_GREATER_THAN:
+	case BUILTIN_GREATER_THAN_EQUAL:
+		return builtin_result_relational(args, argc, 0);
+	case BUILTIN_EQUAL:
+	case BUILTIN_NOT_EQUAL:
+		return builtin_result_relational(args, argc, 1);
+	case BUILTIN_ANY:
+	case BUILTIN_ALL:
+		return builtin_result_any_all(args, argc);
 	default:
 		break;
 	}
@@ -728,6 +986,90 @@ Type* type_bool_type(int components)
 	return type_get_vector(T_BOOL, components);
 }
 
+static Type* type_promote_scalar_to_components(Type* type, int components)
+{
+	if (!type || components <= 1)
+		return type;
+	if (!type_is_scalar(type))
+		return type;
+	TypeTag base = type_base_type(type);
+	Type* vector = type_get_vector(base, components);
+	return vector ? vector : type;
+}
+
+static int type_align_component_counts(Type** a, Type** b)
+{
+	if (!a || !b || !*a || !*b)
+		return 0;
+	Type* lhs = *a;
+	Type* rhs = *b;
+	if (type_is_matrix(lhs) || type_is_matrix(rhs))
+	{
+		if (type_is_matrix(lhs) && type_is_matrix(rhs) && lhs->cols == rhs->cols && lhs->rows == rhs->rows)
+			return 1;
+		return 0;
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs))
+		return lhs->cols == rhs->cols;
+	if (type_is_vector(lhs) && type_is_scalar(rhs))
+	{
+		Type* promoted = type_promote_scalar_to_components(rhs, lhs->cols);
+		if (!promoted || !type_is_vector(promoted) || promoted->cols != lhs->cols)
+			return 0;
+		*b = promoted;
+		return 1;
+	}
+	if (type_is_scalar(lhs) && type_is_vector(rhs))
+	{
+		Type* promoted = type_promote_scalar_to_components(lhs, rhs->cols);
+		if (!promoted || !type_is_vector(promoted) || promoted->cols != rhs->cols)
+			return 0;
+		*a = promoted;
+		return 1;
+	}
+	if (type_is_scalar(lhs) && type_is_scalar(rhs))
+		return 1;
+	return 0;
+}
+
+static int type_numeric_rank(TypeTag tag)
+{
+	switch (tag)
+	{
+	case T_DOUBLE:
+		return 4;
+	case T_FLOAT:
+		return 3;
+	case T_UINT:
+		return 2;
+	case T_INT:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
+{
+	if (!type_base_is_numeric(a) || !type_base_is_numeric(b))
+		return T_VOID;
+	int rank_a = type_numeric_rank(a);
+	int rank_b = type_numeric_rank(b);
+	TypeTag preferred = rank_a >= rank_b ? a : b;
+	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
+		return preferred;
+	preferred = rank_a < rank_b ? a : b;
+	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
+		return preferred;
+	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT, T_INT };
+	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)
+	{
+		TypeTag candidate = fallback[i];
+		if (type_base_can_convert(a, candidate) && type_base_can_convert(b, candidate))
+			return candidate;
+	}
+	return T_VOID;
+}
 void type_check_error(const char* fmt, ...);
 
 Type* type_check_unary(const IR_Cmd* inst, Type* operand)
@@ -1142,6 +1484,26 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 		Type* sum = type_binary_add_sub(TOK_PLUS, lhs, rhs);
 		return type_binary_assign(lhs, sum);
 	}
+	case TOK_MINUS_ASSIGN:
+	{
+		Type* diff = type_binary_add_sub(TOK_MINUS, lhs, rhs);
+		return type_binary_assign(lhs, diff);
+	}
+	case TOK_STAR_ASSIGN:
+	{
+		Type* value = type_binary_mul(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_SLASH_ASSIGN:
+	{
+		Type* value = type_binary_div(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_PERCENT_ASSIGN:
+	{
+		Type* value = type_binary_mod(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
 	case TOK_AND_ASSIGN:
 	{
 		Type* value = type_binary_bitwise(TOK_AMP, lhs, rhs);
@@ -1181,13 +1543,33 @@ Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 	}
 	if (!true_type || !false_type)
 		return true_type ? true_type : false_type;
-	if (!type_equal(true_type, false_type))
+	if (type_equal(true_type, false_type))
+		return true_type;
+	if (type_base_type(true_type) == T_BOOL && type_base_type(false_type) == T_BOOL)
 	{
-		type_check_error("ternary branches must match types, got %s and %s", type_display(true_type), type_display(false_type));
+		Type* aligned_true = true_type;
+		Type* aligned_false = false_type;
+		if (type_align_component_counts(&aligned_true, &aligned_false))
+			return aligned_true;
 	}
+	Type* aligned_true = true_type;
+	Type* aligned_false = false_type;
+	if (type_align_component_counts(&aligned_true, &aligned_false))
+	{
+		TypeTag shared_base = type_shared_numeric_base(type_base_type(true_type), type_base_type(false_type));
+		if (shared_base != T_VOID)
+		{
+			if (type_is_scalar(aligned_true) && type_is_scalar(aligned_false))
+				return type_get_scalar(shared_base);
+			if (type_is_vector(aligned_true) && type_is_vector(aligned_false))
+				return type_get_vector(shared_base, aligned_true->cols);
+			if (type_is_matrix(aligned_true) && type_is_matrix(aligned_false))
+				return type_get_matrix(shared_base, aligned_true->cols, aligned_true->rows);
+		}
+	}
+	type_check_error("ternary branches must match types, got %s and %s", type_display(true_type), type_display(false_type));
 	return true_type;
 }
-
 static void type_constructor_error(const Type* target, const char* owner, const char* member, const char* fmt, ...)
 {
 	const char* type_name = type_display(target);
@@ -1266,103 +1648,103 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 	}
 	case T_MAT:
 	{
-			int needed = target->cols * target->rows;
-			TypeTag base = type_base_type(target);
-			if (needed > 1 && remaining == 1)
+		int needed = target->cols * target->rows;
+		TypeTag base = type_base_type(target);
+		if (needed > 1 && remaining == 1)
+		{
+			Type* arg = args[start];
+			if (arg && type_is_scalar(arg))
 			{
-				Type* arg = args[start];
-				if (arg && type_is_scalar(arg))
-				{
-					if (!type_base_can_convert(type_base_type(arg), base))
-						type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
-					return 1;
-				}
-			}
-			int count = 0;
-			int consumed = 0;
-			while (count < needed)
-			{
-				if (start + consumed >= argc)
-					type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
-				Type* arg = args[start + consumed];
 				if (!type_base_can_convert(type_base_type(arg), base))
 					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
-				if (type_is_scalar(arg))
-				{
-					count += 1;
-				}
-				else if (type_is_vector(arg))
-				{
-					if (arg->cols != target->rows)
-						type_constructor_error(target, owner, member, "column argument expected %d components, got %d", target->rows, arg->cols);
-					count += arg->cols;
-				}
-				else
-				{
-					type_constructor_error(target, owner, member, "arguments must be scalars or column vectors, got %s", type_display(arg));
-				}
-				if (count > needed)
-					type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
-				consumed++;
+				return 1;
 			}
-			return consumed;
+		}
+		int count = 0;
+		int consumed = 0;
+		while (count < needed)
+		{
+			if (start + consumed >= argc)
+				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+			Type* arg = args[start + consumed];
+			if (!type_base_can_convert(type_base_type(arg), base))
+				type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
+			if (type_is_scalar(arg))
+			{
+				count += 1;
+			}
+			else if (type_is_vector(arg))
+			{
+				if (arg->cols != target->rows)
+					type_constructor_error(target, owner, member, "column argument expected %d components, got %d", target->rows, arg->cols);
+				count += arg->cols;
+			}
+			else
+			{
+				type_constructor_error(target, owner, member, "arguments must be scalars or column vectors, got %s", type_display(arg));
+			}
+			if (count > needed)
+				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+			consumed++;
+		}
+		return consumed;
 	}
 	case T_ARRAY:
 	{
-			if (target->array_len < 0)
-				type_constructor_error(target, owner, member, "requires known array size");
-			Type* element = target->user ? (Type*)target->user : NULL;
-			if (!element)
-				type_constructor_error(target, owner, member, "has unknown element type");
-			if (remaining > 0)
-			{
-				Type* arg0 = args[start];
-				if (arg0 && arg0 == target)
-					return 1;
-			}
-			int consumed = 0;
-			for (int i = 0; i < target->array_len; ++i)
-			{
-				consumed += type_constructor_validate(element, args, argc, start + consumed, owner, member);
-			}
-			return consumed;
+		if (target->array_len < 0)
+			type_constructor_error(target, owner, member, "requires known array size");
+		Type* element = target->user ? (Type*)target->user : NULL;
+		if (!element)
+			type_constructor_error(target, owner, member, "has unknown element type");
+		if (remaining > 0)
+		{
+			Type* arg0 = args[start];
+			if (arg0 && arg0 == target)
+				return 1;
+		}
+		int consumed = 0;
+		for (int i = 0; i < target->array_len; ++i)
+		{
+			consumed += type_constructor_validate(element, args, argc, start + consumed, owner, member);
+		}
+		return consumed;
 	}
 	case T_STRUCT:
 	{
-			StructInfo* info = type_struct_info(target);
-			if (!info)
-				type_constructor_error(target, owner, member, "is incomplete");
-			const char* struct_name = target->name ? target->name : type_display(target);
-			if (remaining > 0)
-			{
-				Type* arg0 = args[start];
-				if (arg0 && arg0 == target)
-					return 1;
-			}
-			int consumed = 0;
-			int member_count = type_struct_member_count(target);
-			for (int i = 0; i < member_count; ++i)
-			{
-				StructMember* field = type_struct_member_at(target, i);
-				if (!field)
-					continue;
-				Type* field_type = field->type ? field->type : field->declared_type;
-				if (!field_type)
-					type_constructor_error(target, struct_name, field->name, "has unknown type");
-				consumed += type_constructor_validate(field_type, args, argc, start + consumed, struct_name, field->name);
-			}
-			return consumed;
+		StructInfo* info = type_struct_info(target);
+		if (!info)
+			type_constructor_error(target, owner, member, "is incomplete");
+		const char* struct_name = target->name ? target->name : type_display(target);
+		if (remaining > 0)
+		{
+			Type* arg0 = args[start];
+			if (arg0 && arg0 == target)
+				return 1;
+		}
+		int consumed = 0;
+		int member_count = type_struct_member_count(target);
+		for (int i = 0; i < member_count; ++i)
+		{
+			StructMember* field = type_struct_member_at(target, i);
+			if (!field)
+				continue;
+			Type* field_type = field->type ? field->type : field->declared_type;
+			if (!field_type)
+				type_constructor_error(target, struct_name, field->name, "has unknown type");
+			consumed += type_constructor_validate(field_type, args, argc, start + consumed, struct_name, field->name);
+		}
+		return consumed;
 	}
 	default:
 	{
-			if (!type_is_scalar(target))
-				type_constructor_error(target, owner, member, "unsupported target");
-			if (remaining <= 0)
-				type_constructor_error(target, owner, member, "expects 1 argument but received 0");
-			Type* arg = args[start];
-			if (!type_scalar_can_convert(arg, target))
-				type_constructor_error(target, owner, member, "cannot convert %s to %s", type_display(arg), type_display(target));
-			return 1;
+		if (!type_is_scalar(target))
+			type_constructor_error(target, owner, member, "unsupported target");
+		if (remaining <= 0)
+			type_constructor_error(target, owner, member, "expects 1 argument but received 0");
+		Type* arg = args[start];
+		if (!type_scalar_can_convert(arg, target))
+			type_constructor_error(target, owner, member, "cannot convert %s to %s", type_display(arg), type_display(target));
+		return 1;
 	}
 	}
 }
@@ -1420,6 +1802,8 @@ void type_check_ir()
 	dyna Type** func_stack = NULL;
 	dyna TypeCheckSwitch* switch_stack = NULL;
 	dyna unsigned* qualifier_stack = NULL;
+	dyna unsigned* storage_stack = NULL;
+	dyna Symbol** symbol_stack = NULL;
 	Type* current_decl_type = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
@@ -1427,22 +1811,28 @@ void type_check_ir()
 		switch (inst->op)
 		{
 		case IR_PUSH_INT:
-			inst->type = g_type_int;
+			inst->type = inst->is_unsigned_literal ? g_type_uint : g_type_int;
 			apush(stack, inst->type);
 			inst->qualifier_flags = 0;
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		case IR_PUSH_FLOAT:
 			inst->type = g_type_float;
 			apush(stack, inst->type);
 			inst->qualifier_flags = 0;
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		case IR_PUSH_BOOL:
 			inst->type = g_type_bool;
 			apush(stack, inst->type);
 			inst->qualifier_flags = 0;
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		case IR_PUSH_IDENT:
 		{
@@ -1473,16 +1863,24 @@ void type_check_ir()
 				}
 			}
 			unsigned qualifier_flags = sym ? sym->qualifier_flags : 0;
+			unsigned storage_flags = sym ? sym->storage_flags : 0;
 			inst->qualifier_flags = qualifier_flags;
+			inst->storage_flags = storage_flags;
 			inst->type = type;
 			apush(stack, type);
 			apush(qualifier_stack, qualifier_flags);
+			apush(storage_stack, storage_flags);
+			apush(symbol_stack, sym);
 			break;
 		}
 		case IR_UNARY:
 		{
 			Type* operand = type_stack_pop(stack, "unary expression");
 			unsigned operand_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* result = type_check_unary(inst, operand);
 			if ((inst->tok == TOK_PLUS_PLUS || inst->tok == TOK_MINUS_MINUS) && (operand_qualifier & SYM_QUAL_CONST))
 			{
@@ -1494,12 +1892,20 @@ void type_check_ir()
 			inst->qualifier_flags = 0;
 			apush(stack, result);
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		}
 		case IR_BINARY:
 		{
 			Type* rhs = type_stack_pop(stack, "binary rhs");
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* lhs = type_stack_pop(stack, "binary lhs");
+			unsigned lhs_storage = acount(storage_stack) ? apop(storage_stack) : 0;
+			Symbol* lhs_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
 			unsigned lhs_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
@@ -1508,6 +1914,10 @@ void type_check_ir()
 			{
 			case TOK_ASSIGN:
 			case TOK_PLUS_ASSIGN:
+			case TOK_MINUS_ASSIGN:
+			case TOK_STAR_ASSIGN:
+			case TOK_SLASH_ASSIGN:
+			case TOK_PERCENT_ASSIGN:
 			case TOK_AND_ASSIGN:
 			case TOK_OR_ASSIGN:
 			case TOK_XOR_ASSIGN:
@@ -1518,18 +1928,30 @@ void type_check_ir()
 			default:
 				break;
 			}
-			if (is_assignment && (lhs_qualifier & SYM_QUAL_CONST))
+			if (is_assignment)
 			{
-				type_check_error("cannot assign to const-qualified value");
+				if (lhs_qualifier & SYM_QUAL_CONST)
+				{
+					type_check_error("cannot assign to const-qualified value");
+				}
+				if ((lhs_storage & SYM_STORAGE_IN) && !(lhs_storage & SYM_STORAGE_OUT))
+				{
+					const char* target = lhs_symbol ? lhs_symbol->name : "value";
+					type_check_error("cannot assign to input %s", target);
+				}
 			}
 			Type* result = type_check_binary(inst->tok, lhs, rhs);
 			if (!result)
 				result = lhs ? lhs : rhs;
 			inst->type = result;
 			unsigned result_qualifier = is_assignment ? lhs_qualifier : 0;
+			unsigned result_storage = is_assignment ? lhs_storage : 0;
 			inst->qualifier_flags = result_qualifier;
+			inst->storage_flags = result_storage;
 			apush(stack, result);
 			apush(qualifier_stack, result_qualifier);
+			apush(storage_stack, result_storage);
+			apush(symbol_stack, is_assignment ? lhs_symbol : NULL);
 			break;
 		}
 		case IR_CALL:
@@ -1540,6 +1962,10 @@ void type_check_ir()
 				Type* arg_type = type_stack_pop(stack, "call argument");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
+				if (acount(storage_stack))
+					(void)apop(storage_stack);
+				if (acount(symbol_stack))
+					(void)apop(symbol_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -1552,6 +1978,10 @@ void type_check_ir()
 			Type* callee = type_stack_pop(stack, "call target");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* result = callee;
 			Symbol* sym = NULL;
 			if (inst->str0)
@@ -1663,6 +2093,8 @@ void type_check_ir()
 			inst->qualifier_flags = 0;
 			apush(stack, result);
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		}
 		case IR_CONSTRUCT:
@@ -1673,6 +2105,10 @@ void type_check_ir()
 				Type* arg_type = type_stack_pop(stack, "constructor argument");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
+				if (acount(storage_stack))
+					(void)apop(storage_stack);
+				if (acount(symbol_stack))
+					(void)apop(symbol_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -1684,6 +2120,10 @@ void type_check_ir()
 			}
 			Type* target = type_stack_pop(stack, "constructor target");
 			Type* result = inst->type ? inst->type : target;
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			inst->type = result;
 			if (result)
 				type_check_constructor(result, args, argc);
@@ -1691,6 +2131,8 @@ void type_check_ir()
 			inst->qualifier_flags = 0;
 			apush(stack, result);
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		}
 		case IR_INDEX:
@@ -1698,8 +2140,14 @@ void type_check_ir()
 			Type* index = type_stack_pop(stack, "index expression");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* base = type_stack_pop(stack, "index base");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
+			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
+			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			if (index && (!type_is_scalar(index) || !type_is_integer(index)))
 			{
 				type_check_error("index expression must be integer scalar, got %s", type_display(index));
@@ -1728,12 +2176,17 @@ void type_check_ir()
 			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
 			apush(qualifier_stack, base_qualifier);
+			inst->storage_flags = base_storage;
+			apush(storage_stack, base_storage);
+			apush(symbol_stack, base_symbol);
 			break;
 		}
 		case IR_SWIZZLE:
 		{
 			Type* base = type_stack_pop(stack, "swizzle base");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
+			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
+			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			if (base && !type_is_vector(base))
 			{
 				type_check_error("cannot swizzle non-vector type %s", type_display(base));
@@ -1758,12 +2211,17 @@ void type_check_ir()
 			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
 			apush(qualifier_stack, base_qualifier);
+			inst->storage_flags = base_storage;
+			apush(storage_stack, base_storage);
+			apush(symbol_stack, base_symbol);
 			break;
 		}
 		case IR_MEMBER:
 		{
 			Type* base = type_stack_pop(stack, "member access");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
+			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
+			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			Type* result = base;
 			if (base && base->tag == T_STRUCT)
 			{
@@ -1778,6 +2236,9 @@ void type_check_ir()
 			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
 			apush(qualifier_stack, base_qualifier);
+			inst->storage_flags = base_storage;
+			apush(storage_stack, base_storage);
+			apush(symbol_stack, base_symbol);
 			break;
 		}
 		case IR_SELECT:
@@ -1785,12 +2246,24 @@ void type_check_ir()
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* true_type = type_stack_pop(stack, "ternary true branch");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* cond_type = type_stack_pop(stack, "ternary condition");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			Type* result = type_select_result(cond_type, true_type, false_type);
 			if (!result)
 				result = true_type ? true_type : false_type;
@@ -1798,6 +2271,8 @@ void type_check_ir()
 			inst->qualifier_flags = 0;
 			apush(stack, result);
 			apush(qualifier_stack, 0);
+			apush(storage_stack, 0);
+			apush(symbol_stack, NULL);
 			break;
 		}
 		case IR_DECL_TYPE:
@@ -1928,17 +2403,29 @@ void type_check_ir()
 				type_stack_pop(stack, "expression result");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
+				if (acount(storage_stack))
+					(void)apop(storage_stack);
+				if (acount(symbol_stack))
+					(void)apop(symbol_stack);
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
 			if (acount(qualifier_stack) > 0)
 				aclear(qualifier_stack);
+			if (acount(storage_stack) > 0)
+				aclear(storage_stack);
+			if (acount(symbol_stack) > 0)
+				aclear(symbol_stack);
 			break;
 		case IR_IF_THEN:
 		{
 			Type* cond = type_stack_pop(stack, "if condition");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
+			if (acount(storage_stack))
+				(void)apop(storage_stack);
+			if (acount(symbol_stack))
+				(void)apop(symbol_stack);
 			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
 			{
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
@@ -1953,6 +2440,10 @@ void type_check_ir()
 				Type* value = type_stack_pop(stack, "return value");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
+				if (acount(storage_stack))
+					(void)apop(storage_stack);
+				if (acount(symbol_stack))
+					(void)apop(symbol_stack);
 				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value))
 				{
 					type_check_error("return type mismatch: expected %s got %s", type_display(ret_type), type_display(value));
@@ -1985,6 +2476,8 @@ void type_check_ir()
 		afree(switch_stack[i].cases);
 	}
 	afree(switch_stack);
+	afree(storage_stack);
+	afree(symbol_stack);
 	afree(stack);
 	afree(func_stack);
 	afree(qualifier_stack);
