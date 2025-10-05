@@ -116,3 +116,21 @@ Don't worry about format. You may run clang-format on the code before the commit
 For each major change I should see if a unit test is appropriate and add it to the unit tests, documenting what the test purpose is and expectations of the test. We must also update main to include a test shader to try out any new features we're working on, and inspect the output of stdout to ensure it matches expectations given the input shader.
 
 Make sure to run the output executable of main.c and make sure all the unit tests pass, and that stdout is printing expected output for the given snippets we are running.
+
+# Commenting
+
+It's important to pick confusing or high priority functions and document what is going on in relation to actual GLSL code snippets.	Here's an example:
+
+// Resolve the return type for sampling functions like `texture()`.
+// ...vec4 color = texture(u_image, v_uv);
+static Type* builtin_result_texture(Type** args, int argc)
+
+The ... means a note related to the above comment. If you want a multi-line note do this:
+
+// Resolve the return type for sampling functions like `texture()`.
+// ...vec4 color = texture(u_image, v_uv);
+//    more code here
+// ...this is a new note
+static Type* builtin_result_texture(Type** args, int argc)
+
+In order for the code to be easier to read we must attach some context to key function definitions by comments like this.

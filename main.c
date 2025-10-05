@@ -183,6 +183,8 @@ typedef enum TypeTag
 	T_BOOL,
 	T_INT,
 	T_UINT,
+	T_INT64,
+	T_UINT64,
 	T_FLOAT,
 	T_DOUBLE,
 	T_VEC,
@@ -208,12 +210,19 @@ struct Type
 	const char* name;
 };
 
+typedef struct StructMemberArrayDim
+{
+	Type type;
+	int size;
+	int unsized;
+} StructMemberArrayDim;
+
 typedef struct StructMember
 {
 	const char* name;
 	Type* declared_type;
 	Type* type;
-	Type array_type;
+	dyna StructMemberArrayDim* array_dims;
 	int has_array;
 	int array_len;
 	int array_unsized;
@@ -235,7 +244,7 @@ StructInfo* type_struct_info(Type* type);
 void type_struct_clear(Type* type);
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type);
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location);
-void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized);
+void type_struct_member_mark_array(StructMember* member, int size, int unsized);
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count);
 StructMember* type_struct_find_member(Type* type, const char* name);
 int type_struct_member_count(Type* type);
@@ -244,12 +253,23 @@ StructMember* type_struct_member_at(Type* type, int index);
 typedef enum BuiltinFuncKind
 {
 	BUILTIN_NONE,
-	BUILTIN_TEXTURE,
-	BUILTIN_TEXTURE_LOD,
-	BUILTIN_TEXTURE_PROJ,
-	BUILTIN_TEXTURE_GRAD,
-	BUILTIN_MIN,
-	BUILTIN_MAX,
+BUILTIN_TEXTURE,
+BUILTIN_TEXTURE_LOD,
+BUILTIN_TEXTURE_PROJ,
+BUILTIN_TEXTURE_GRAD,
+BUILTIN_TEXTURE_OFFSET,
+BUILTIN_TEXTURE_LOD_OFFSET,
+BUILTIN_TEXTURE_PROJ_OFFSET,
+BUILTIN_TEXTURE_PROJ_LOD,
+BUILTIN_TEXTURE_PROJ_LOD_OFFSET,
+BUILTIN_TEXTURE_GRAD_OFFSET,
+BUILTIN_TEXTURE_PROJ_GRAD,
+BUILTIN_TEXTURE_PROJ_GRAD_OFFSET,
+BUILTIN_TEXTURE_GATHER,
+BUILTIN_TEXTURE_GATHER_OFFSET,
+BUILTIN_TEXTURE_GATHER_OFFSETS,
+BUILTIN_MIN,
+BUILTIN_MAX,
 	BUILTIN_CLAMP,
 	BUILTIN_ABS,
 	BUILTIN_FLOOR,
@@ -281,23 +301,43 @@ typedef enum BuiltinFuncKind
 	BUILTIN_ATAN,
 	BUILTIN_SIGN,
 	BUILTIN_TRUNC,
-	BUILTIN_ROUND,
-	BUILTIN_ROUND_EVEN,
-	BUILTIN_DFDX,
-	BUILTIN_DFDY,
-	BUILTIN_FWIDTH,
-	BUILTIN_TEXTURE_SIZE,
-	BUILTIN_TEXEL_FETCH,
-	BUILTIN_INVERSE,
-	BUILTIN_TRANSPOSE,
-	BUILTIN_LESS_THAN,
-	BUILTIN_LESS_THAN_EQUAL,
+BUILTIN_ROUND,
+BUILTIN_ROUND_EVEN,
+BUILTIN_DFDX,
+BUILTIN_DFDX_FINE,
+BUILTIN_DFDX_COARSE,
+BUILTIN_DFDY,
+BUILTIN_DFDY_FINE,
+BUILTIN_DFDY_COARSE,
+BUILTIN_FWIDTH,
+BUILTIN_FWIDTH_FINE,
+BUILTIN_FWIDTH_COARSE,
+BUILTIN_TEXTURE_SIZE,
+BUILTIN_TEXEL_FETCH,
+BUILTIN_TEXEL_FETCH_OFFSET,
+BUILTIN_TEXTURE_QUERY_LOD,
+BUILTIN_TEXTURE_QUERY_LEVELS,
+BUILTIN_INVERSE,
+BUILTIN_TRANSPOSE,
+BUILTIN_DETERMINANT,
+BUILTIN_OUTER_PRODUCT,
+BUILTIN_MATRIX_COMP_MULT,
+BUILTIN_LESS_THAN,
+BUILTIN_LESS_THAN_EQUAL,
 	BUILTIN_GREATER_THAN,
 	BUILTIN_GREATER_THAN_EQUAL,
 	BUILTIN_EQUAL,
-	BUILTIN_NOT_EQUAL,
-	BUILTIN_ANY,
-	BUILTIN_ALL
+BUILTIN_NOT_EQUAL,
+BUILTIN_ANY,
+BUILTIN_ALL,
+BUILTIN_IMAGE_ATOMIC_ADD,
+BUILTIN_IMAGE_ATOMIC_MIN,
+BUILTIN_IMAGE_ATOMIC_MAX,
+BUILTIN_IMAGE_ATOMIC_AND,
+BUILTIN_IMAGE_ATOMIC_OR,
+BUILTIN_IMAGE_ATOMIC_XOR,
+BUILTIN_IMAGE_ATOMIC_EXCHANGE,
+BUILTIN_IMAGE_ATOMIC_COMP_SWAP
 } BuiltinFuncKind;
 
 typedef struct Symbol
@@ -563,6 +603,8 @@ Type* g_type_void;
 Type* g_type_bool;
 Type* g_type_int;
 Type* g_type_uint;
+Type* g_type_int64;
+Type* g_type_uint64;
 Type* g_type_float;
 Type* g_type_double;
 
@@ -598,6 +640,17 @@ const char* snippet_basic_io = STR(
 			vec4 sampled = texture(u_texture, in_uv);
 			out_color = sampled * u_tint;
 		});
+
+const char* snippet_stage_builtins_vertex = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			float base = float(gl_VertexIndex + gl_BaseInstance);
+			gl_Position = vec4(base, 0.0, 0.0, 1.0);
+			gl_PointSize = 1.0;
+			gl_ClipDistance[0] = base;
+			out_color = vec4(base);
+		}
+		);
 
 const char* snippet_control_flow = STR(
 		layout(location = 0) out vec4 out_color;
@@ -816,6 +869,20 @@ const char* snippet_discard = STR(
 			out_color = color;
 		});
 
+const char* snippet_stage_builtins_fragment = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			vec4 coord = gl_FragCoord;
+			int sample_id = gl_SampleID;
+			int sample_mask = gl_SampleMaskIn[0];
+			if (gl_HelperInvocation)
+			{
+				gl_SampleMask[0] = 0;
+			}
+			out_color = coord + vec4(float(sample_id + sample_mask));
+		}
+		);
+
 const char* snippet_builtin_funcs = STR(
 		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_tex;
@@ -860,24 +927,57 @@ const char* snippet_builtin_funcs = STR(
 		});
 
 const char* snippet_texture_queries = STR(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 0, binding = 0) uniform sampler2D u_tex;
-		void main() {
-			ivec2 tex_size = textureSize(u_tex, 0);
-			vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
-			mat3 identity = mat3(1.0);
-			mat3 inv_identity = inverse(identity);
-			mat3 trans_identity = transpose(identity);
-			bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
-			bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
-			bvec2 eq_mask = equal(less_mask, ge_mask);
-			bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
-			bool all_true = all(eq_mask);
-			bool any_true = any(ne_mask);
-			float texel_extent = float(tex_size.x + tex_size.y);
-			vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
-			out_color = texel + vec4(basis, 0.0);
-		});
+	layout(location = 0) out vec4 out_color;
+	layout(set = 0, binding = 0) uniform sampler2D u_tex;
+	void main() {
+		ivec2 tex_size = textureSize(u_tex, 0);
+		vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
+		mat3 identity = mat3(1.0);
+		mat3 inv_identity = inverse(identity);
+		mat3 trans_identity = transpose(identity);
+		bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
+		bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
+		bvec2 eq_mask = equal(less_mask, ge_mask);
+		bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
+		bool all_true = all(eq_mask);
+		bool any_true = any(ne_mask);
+		float texel_extent = float(tex_size.x + tex_size.y);
+		vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
+		out_color = texel + vec4(basis, 0.0);
+	}
+);
+
+const char* snippet_extended_intrinsics = STR(
+	layout(location = 0) out vec4 out_color;
+	layout(set = 2, binding = 0) uniform sampler2D u_tex;
+	layout(set = 2, binding = 1) uniform iimage2D u_image;
+	void main() {
+		vec2 uv = vec2(0.25, 0.75);
+		vec4 offset_sample = textureOffset(u_tex, uv, ivec2(1, -1));
+		vec4 lod_offset = textureLodOffset(u_tex, uv, 0.0, ivec2(0, 1));
+		vec4 grad_offset = textureGradOffset(u_tex, uv, vec2(1.0, 0.0), vec2(0.0, 1.0), ivec2(1, 0));
+		vec4 gather0 = textureGather(u_tex, uv, 0);
+		vec4 gather_offset = textureGatherOffset(u_tex, uv, ivec2(1, 0), 0);
+		vec2 lod_info = textureQueryLod(u_tex, uv);
+		int level_count = textureQueryLevels(u_tex);
+		vec4 fetch_offset = texelFetchOffset(u_tex, ivec2(0, 0), 0, ivec2(1, 0));
+		vec2 fine_width = fwidthFine(uv);
+		vec2 coarse_width = fwidthCoarse(uv);
+		vec2 deriv_mix = dFdxFine(uv) + dFdyCoarse(uv);
+		mat3 base = mat3(1.0);
+		float det = determinant(base);
+		mat3 comp = matrixCompMult(base, transpose(base));
+		mat3 outer = outerProduct(vec3(1.0, 0.0, 1.0), vec3(0.5, 0.25, 0.75));
+		ivec2 pixel = ivec2(0, 0);
+		int previous = imageAtomicAdd(u_image, pixel, 1);
+		int swapped = imageAtomicCompSwap(u_image, pixel, previous, previous + 1);
+		float derivative_sum = fine_width.x + coarse_width.y + deriv_mix.x;
+		float matrix_sum = comp[0][0] + outer[0][0];
+		vec4 accum = offset_sample + lod_offset + grad_offset;
+		accum += gather0 + gather_offset + fetch_offset;
+		out_color = accum + vec4(vec3(det + matrix_sum + derivative_sum + float(level_count) + float(swapped), lod_info), 1.0);
+	}
+);
 
 const char* snippet_preprocessor_passthrough =
 		"#define UNUSED_CONSTANT 1\n"
@@ -922,30 +1022,52 @@ const char* snippet_resource_types = STR(
 
 const char* snippet_struct_constructor = STR(
 		struct Inner {
-			vec2 coords[2];
+			vec2 coords[2][2];
 		};
 		struct Outer {
 			float weight;
 			Inner segments[2];
-			float thresholds[4];
+			float thresholds[2][2];
 		};
 		layout(location = 0) out vec4 out_color;
 		void main() {
-			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0));
+			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0),
+					vec2(4.0, 5.0), vec2(6.0, 7.0));
 			Outer combo = Outer(1.0,
-					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
-					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
+					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25),
+							vec2(0.125, 0.875), vec2(0.625, 0.375)),
+					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5),
+							vec2(0.9, 0.1), vec2(0.2, 0.8)),
 					0.0, 1.0, 2.0, 3.0);
-			out_color = vec4(combo.segments[0].coords[1], combo.thresholds[3], combo.weight);
+			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
+		});
+
+const char* snippet_extended_types = STR(
+		layout(location = 0) out dvec4 out_color;
+		void main() {
+			dvec2 dv = dvec2(1.0, 2.0);
+			dmat2 dm = dmat2(1.0);
+			dvec2 transformed = dm * dv;
+			dmat2x3 dm2 = dmat2x3(1.0);
+			dvec3 projected = dvec3(dm2 * transformed);
+			dmat3x2 dm3 = dmat3x2(1.0);
+			dvec3 expanded = dvec3(transformed * dm3);
+			int64_t big = int64_t(1);
+			i64vec2 ivec = i64vec2(big);
+			uint64_t ubig = uint64_t(2u);
+			u64vec3 uvec = u64vec3(ubig);
+			atomic_uint counter = atomic_uint(0u);
+			double compare = double(ivec.x < int64_t(uvec.x) ? 1 : 0);
+			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
 		});
 
 // Directly include all of our source for a unity build.
 #include "testing.c"
 
-void transpile(const char* source)
+void transpile(ShaderStage stage, const char* source)
 {
 	printf("Input : %s\n\n", source);
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_set_shader_stage(stage);
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");
@@ -960,35 +1082,39 @@ int main()
 	typedef struct ShaderSnippet
 	{
 		const char* name;
+		ShaderStage stage;
 		const char* source;
 	} ShaderSnippet;
 
 	const ShaderSnippet snippets[] = {
-		{ "basic_io", snippet_basic_io },
-		{ "control_flow", snippet_control_flow },
-		{ "ternary_vectors", snippet_ternary_vectors },
-		{ "array_indexing", snippet_array_indexing },
-		{ "swizzle_usage", snippet_swizzle },
-		{ "function_calls", snippet_function_calls },
-		{ "matrix_ops", snippet_matrix_ops },
-		{ "looping", snippet_looping },
-		{ "bitwise", snippet_bitwise },
-		{ "numeric_literals", snippet_numeric_literals },
-		{ "discard", snippet_discard },
-		{ "switch", snippet_switch_stmt },
-		{ "builtin_funcs", snippet_builtin_funcs },
-		{ "texture_queries", snippet_texture_queries },
-		{ "const_qualifier", snippet_const_qualifier },
-		{ "resource_types", snippet_resource_types },
-		{ "struct_block", snippet_struct_block },
-		{ "struct_constructor", snippet_struct_constructor },
-		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
+		{ "basic_io", SHADER_STAGE_FRAGMENT, snippet_basic_io },
+		{ "control_flow", SHADER_STAGE_FRAGMENT, snippet_control_flow },
+		{ "ternary_vectors", SHADER_STAGE_FRAGMENT, snippet_ternary_vectors },
+		{ "array_indexing", SHADER_STAGE_FRAGMENT, snippet_array_indexing },
+		{ "swizzle_usage", SHADER_STAGE_FRAGMENT, snippet_swizzle },
+		{ "function_calls", SHADER_STAGE_FRAGMENT, snippet_function_calls },
+		{ "matrix_ops", SHADER_STAGE_FRAGMENT, snippet_matrix_ops },
+		{ "looping", SHADER_STAGE_FRAGMENT, snippet_looping },
+		{ "bitwise", SHADER_STAGE_FRAGMENT, snippet_bitwise },
+		{ "numeric_literals", SHADER_STAGE_FRAGMENT, snippet_numeric_literals },
+		{ "discard", SHADER_STAGE_FRAGMENT, snippet_discard },
+		{ "switch", SHADER_STAGE_FRAGMENT, snippet_switch_stmt },
+		{ "builtin_funcs", SHADER_STAGE_FRAGMENT, snippet_builtin_funcs },
+		{ "texture_queries", SHADER_STAGE_FRAGMENT, snippet_texture_queries },
+		{ "extended_intrinsics", SHADER_STAGE_FRAGMENT, snippet_extended_intrinsics },
+		{ "const_qualifier", SHADER_STAGE_FRAGMENT, snippet_const_qualifier },
+		{ "resource_types", SHADER_STAGE_FRAGMENT, snippet_resource_types },
+		{ "struct_block", SHADER_STAGE_FRAGMENT, snippet_struct_block },
+		{ "struct_constructor", SHADER_STAGE_FRAGMENT, snippet_struct_constructor },
+		{ "preprocessor_passthrough", SHADER_STAGE_FRAGMENT, snippet_preprocessor_passthrough },
+		{ "extended_types", SHADER_STAGE_FRAGMENT, snippet_extended_types },
+		{ "stage_builtins_fragment", SHADER_STAGE_FRAGMENT, snippet_stage_builtins_fragment },
+		{ "stage_builtins_vertex", SHADER_STAGE_VERTEX, snippet_stage_builtins_vertex },
 	};
-
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
-		transpile(snippets[i].source);
+		transpile(snippets[i].stage, snippets[i].source);
 		printf("\n");
 	}
 	return 0;
