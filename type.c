@@ -9,6 +9,8 @@ const char* type_tag_name(TypeTag tag)
 		[T_BOOL] = "bool",
 		[T_INT] = "int",
 		[T_UINT] = "uint",
+		[T_INT64] = "int64_t",
+		[T_UINT64] = "uint64_t",
 		[T_FLOAT] = "float",
 		[T_DOUBLE] = "double",
 		[T_VEC] = "vec",
@@ -288,17 +290,29 @@ void type_system_init_builtins()
 		{ "bool", { .tag = T_BOOL, .cols = 1, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "int", { .tag = T_INT, .cols = 1, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "uint", { .tag = T_UINT, .cols = 1, .rows = 1, .base = T_UINT, .array_len = 0 } },
+		{ "int64_t", { .tag = T_INT64, .cols = 1, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "uint64_t", { .tag = T_UINT64, .cols = 1, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "atomic_uint", { .tag = T_UINT, .cols = 1, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "float", { .tag = T_FLOAT, .cols = 1, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "double", { .tag = T_DOUBLE, .cols = 1, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
 		{ "vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
 		{ "vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_FLOAT, .array_len = 0 } },
+		{ "dvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_DOUBLE, .array_len = 0 } },
 		{ "ivec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "ivec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "ivec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_INT, .array_len = 0 } },
 		{ "uvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "uvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_UINT, .array_len = 0 } },
 		{ "uvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_UINT, .array_len = 0 } },
+		{ "i64vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "i64vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "i64vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_INT64, .array_len = 0 } },
+		{ "u64vec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "u64vec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_UINT64, .array_len = 0 } },
+		{ "u64vec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_UINT64, .array_len = 0 } },
 		{ "bvec2", { .tag = T_VEC, .cols = 2, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "bvec3", { .tag = T_VEC, .cols = 3, .rows = 1, .base = T_BOOL, .array_len = 0 } },
 		{ "bvec4", { .tag = T_VEC, .cols = 4, .rows = 1, .base = T_BOOL, .array_len = 0 } },
@@ -311,6 +325,15 @@ void type_system_init_builtins()
 		{ "mat3x4", { .tag = T_MAT, .cols = 3, .rows = 4, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x2", { .tag = T_MAT, .cols = 4, .rows = 2, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x3", { .tag = T_MAT, .cols = 4, .rows = 3, .base = T_FLOAT, .array_len = 0 } },
+		{ "dmat2", { .tag = T_MAT, .cols = 2, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3", { .tag = T_MAT, .cols = 3, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4", { .tag = T_MAT, .cols = 4, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat2x3", { .tag = T_MAT, .cols = 2, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat2x4", { .tag = T_MAT, .cols = 2, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3x2", { .tag = T_MAT, .cols = 3, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat3x4", { .tag = T_MAT, .cols = 3, .rows = 4, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4x2", { .tag = T_MAT, .cols = 4, .rows = 2, .base = T_DOUBLE, .array_len = 0 } },
+		{ "dmat4x3", { .tag = T_MAT, .cols = 4, .rows = 3, .base = T_DOUBLE, .array_len = 0 } },
 		SAMPLER("sampler1D", T_FLOAT, TYPE_DIM_1D),
 		SAMPLER("sampler2D", T_FLOAT, TYPE_DIM_2D),
 		SAMPLER("sampler3D", T_FLOAT, TYPE_DIM_3D),
@@ -396,6 +419,8 @@ void type_system_init_builtins()
 	g_type_bool = type_system_get(sintern("bool"));
 	g_type_int = type_system_get(sintern("int"));
 	g_type_uint = type_system_get(sintern("uint"));
+	g_type_int64 = type_system_get(sintern("int64_t"));
+	g_type_uint64 = type_system_get(sintern("uint64_t"));
 	g_type_float = type_system_get(sintern("float"));
 	g_type_double = type_system_get(sintern("double"));
 }
@@ -481,6 +506,8 @@ int type_base_is_numeric(TypeTag tag)
 	{
 	case T_INT:
 	case T_UINT:
+	case T_INT64:
+	case T_UINT64:
 	case T_FLOAT:
 	case T_DOUBLE:
 		return 1;
@@ -491,7 +518,7 @@ int type_base_is_numeric(TypeTag tag)
 
 int type_base_is_integer(TypeTag tag)
 {
-	return tag == T_INT || tag == T_UINT;
+	return tag == T_INT || tag == T_UINT || tag == T_INT64 || tag == T_UINT64;
 }
 
 int type_is_numeric(const Type* type)
@@ -554,6 +581,15 @@ const char* type_vector_name(TypeTag base, int cols)
 	case T_UINT:
 		prefix = "uvec";
 		break;
+	case T_DOUBLE:
+		prefix = "dvec";
+		break;
+	case T_INT64:
+		prefix = "i64vec";
+		break;
+	case T_UINT64:
+		prefix = "u64vec";
+		break;
 	case T_BOOL:
 		prefix = "bvec";
 		break;
@@ -596,6 +632,10 @@ Type* type_get_scalar(TypeTag base)
 		return g_type_int;
 	case T_UINT:
 		return g_type_uint;
+	case T_INT64:
+		return g_type_int64;
+	case T_UINT64:
+		return g_type_uint64;
 	case T_FLOAT:
 		return g_type_float;
 	case T_DOUBLE:
@@ -1095,8 +1135,12 @@ static int type_numeric_rank(TypeTag tag)
 	switch (tag)
 	{
 	case T_DOUBLE:
-		return 4;
+		return 6;
 	case T_FLOAT:
+		return 5;
+	case T_UINT64:
+		return 4;
+	case T_INT64:
 		return 3;
 	case T_UINT:
 		return 2;
@@ -1119,7 +1163,7 @@ static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
 	preferred = rank_a < rank_b ? a : b;
 	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
 		return preferred;
-	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT, T_INT };
+	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT64, T_INT64, T_UINT, T_INT };
 	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)
 	{
 		TypeTag candidate = fallback[i];

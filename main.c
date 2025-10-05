@@ -183,6 +183,8 @@ typedef enum TypeTag
 	T_BOOL,
 	T_INT,
 	T_UINT,
+	T_INT64,
+	T_UINT64,
 	T_FLOAT,
 	T_DOUBLE,
 	T_VEC,
@@ -570,6 +572,8 @@ Type* g_type_void;
 Type* g_type_bool;
 Type* g_type_int;
 Type* g_type_uint;
+Type* g_type_int64;
+Type* g_type_uint64;
 Type* g_type_float;
 Type* g_type_double;
 
@@ -919,6 +923,25 @@ const char* snippet_struct_constructor = STR(
 			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
 		});
 
+const char* snippet_extended_types = STR(
+		layout(location = 0) out dvec4 out_color;
+		void main() {
+			dvec2 dv = dvec2(1.0, 2.0);
+			dmat2 dm = dmat2(1.0);
+			dvec2 transformed = dm * dv;
+			dmat2x3 dm2 = dmat2x3(1.0);
+			dvec3 projected = dvec3(dm2 * transformed);
+			dmat3x2 dm3 = dmat3x2(1.0);
+			dvec3 expanded = dvec3(transformed * dm3);
+			int64_t big = int64_t(1);
+			i64vec2 ivec = i64vec2(big);
+			uint64_t ubig = uint64_t(2u);
+			u64vec3 uvec = u64vec3(ubig);
+			atomic_uint counter = atomic_uint(0u);
+			double compare = double(ivec.x < int64_t(uvec.x) ? 1 : 0);
+			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
+		});
+
 // Directly include all of our source for a unity build.
 #include "testing.c"
 
@@ -962,9 +985,9 @@ int main()
 		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
 		{ "struct_constructor", snippet_struct_constructor },
+		{ "extended_types", snippet_extended_types },
 		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
 	};
-
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
