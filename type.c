@@ -252,6 +252,8 @@ static void append_cstr(dyna char** buffer, const char* str)
 		apush(*buffer, *it);
 }
 
+// Format a comma-separated argument list for diagnostics such as:
+// ...error: dot requires second argument to match first argument base type, got vec3, ivec3
 static const char* format_argument_type_list(Type** args, int count)
 {
 	static dyna char* buffer = NULL;
@@ -713,6 +715,8 @@ enum
 	BUILTIN_ARG_MATCH_SHAPE = 1 << 6,
 };
 
+// Validate a builtin invocation against per-argument rules before resolving it.
+// ...error: distance requires second argument to match first argument shape, got vec3 and vec2
 static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const BuiltinArgConstraint* constraints, int constraint_count)
 {
 	int all_ok = 1;
@@ -860,6 +864,8 @@ static Type* builtin_result_derivative(const Symbol* sym, Type** args, int argc)
 	return builtin_result_same(args, argc, 0);
 }
 
+// Enforce numeric scalar/vector arguments so min/max style builtins report clear errors.
+// ...error: min requires numeric second argument, got mat2
 static int builtin_validate_numeric_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
 {
 	const char* name = builtin_func_name(sym);
@@ -961,6 +967,8 @@ static Type* builtin_result_min_max(const Symbol* sym, Type** args, int argc)
 	return x;
 }
 
+// Validate clamp(x, min, max) and return the clamped value type.
+// ...vec3 lit = clamp(raw, vec3(0.0), vec3(1.0));
 static Type* builtin_result_clamp(const Symbol* sym, Type** args, int argc)
 {
 	Type* x = (argc > 0) ? args[0] : NULL;
@@ -1006,6 +1014,8 @@ static Type* builtin_result_clamp(const Symbol* sym, Type** args, int argc)
 	return x;
 }
 
+// Resolve abs/similar functions that mirror their argument type.
+// ...vec3 mag = abs(force);
 static Type* builtin_result_abs_like(const Symbol* sym, Type** args, int argc)
 {
 	Type* value = (argc > 0) ? args[0] : NULL;
