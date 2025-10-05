@@ -603,6 +603,36 @@ DEFINE_TEST(test_bitwise_operations)
 	assert(saw_shr_assign);
 }
 
+DEFINE_TEST(test_numeric_literal_bases)
+{
+	compiler_setup(snippet_numeric_literals);
+	int saw_hex = 0;
+	int saw_bin = 0;
+	int saw_oct = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_PUSH_INT)
+			continue;
+		if (inst->arg0 == 31)
+		{
+			saw_hex = 1;
+		}
+		else if (inst->arg0 == 10)
+		{
+			saw_bin = 1;
+		}
+		else if (inst->arg0 == 61)
+		{
+			saw_oct = 1;
+		}
+	}
+	compiler_teardown();
+	assert(saw_hex);
+	assert(saw_bin);
+	assert(saw_oct);
+}
+
 DEFINE_TEST(test_discard_instruction)
 {
 	compiler_setup(snippet_discard);
@@ -762,6 +792,7 @@ void unit_test()
 		TEST_ENTRY(test_matrix_operations_ir),
 		TEST_ENTRY(test_looping_constructs),
 		TEST_ENTRY(test_bitwise_operations),
+		TEST_ENTRY(test_numeric_literal_bases),
 		TEST_ENTRY(test_discard_instruction),
 		TEST_ENTRY(test_struct_block_layout),
 		TEST_ENTRY(test_switch_statement_cases),
