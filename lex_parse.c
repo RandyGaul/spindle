@@ -12,6 +12,11 @@ typedef enum SymbolLayout
 	SYM_LAYOUT_LOCATION = 1 << 2,
 } SymbolLayout;
 
+typedef enum SymbolQualifier
+{
+	SYM_QUAL_CONST = 1 << 0,
+} SymbolQualifier;
+
 typedef struct SymbolScope
 {
 	Map map;
@@ -50,6 +55,7 @@ const char* kw_case;
 const char* kw_default;
 const char* kw_true;
 const char* kw_false;
+const char* kw_const;
 
 void init_keyword_interns()
 {
@@ -80,6 +86,7 @@ void init_keyword_interns()
 	kw_default = sintern("default");
 	kw_true = sintern("true");
 	kw_false = sintern("false");
+	kw_const = sintern("const");
 }
 
 SymbolTable g_symbol_table;
@@ -225,9 +232,19 @@ void symbol_add_storage(Symbol* sym, unsigned flags)
 	sym->storage_flags |= flags;
 }
 
+void symbol_add_qualifier(Symbol* sym, unsigned flags)
+{
+	sym->qualifier_flags |= flags;
+}
+
 int symbol_has_storage(const Symbol* sym, unsigned flag)
 {
 	return (sym->storage_flags & flag) != 0;
+}
+
+int symbol_has_qualifier(const Symbol* sym, unsigned flag)
+{
+	return (sym->qualifier_flags & flag) != 0;
 }
 
 void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
@@ -275,6 +292,7 @@ int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
 void symbol_apply_type_spec(Symbol* sym, const TypeSpec* spec)
 {
 	symbol_add_storage(sym, spec->storage_flags);
+	symbol_add_qualifier(sym, spec->qualifier_flags);
 	if (spec->layout_flags & SYM_LAYOUT_SET)
 		symbol_set_layout(sym, SYM_LAYOUT_SET, spec->layout_set);
 	if (spec->layout_flags & SYM_LAYOUT_BINDING)
@@ -515,9 +533,21 @@ unsigned layout_flag_from_keyword(const char* s)
 	return 0;
 }
 
+unsigned qualifier_flag_from_keyword(const char* s)
+{
+	if (s == kw_const)
+		return SYM_QUAL_CONST;
+	return 0;
+}
+
 void type_spec_add_storage(TypeSpec* spec, unsigned flags)
 {
 	spec->storage_flags |= flags;
+}
+
+void type_spec_add_qualifier(TypeSpec* spec, unsigned flags)
+{
+	spec->qualifier_flags |= flags;
 }
 
 void type_spec_add_layout_identifier(TypeSpec* spec, const char* ident)
@@ -570,6 +600,8 @@ int is_type_token()
 		return 1;
 	if (storage_flag_from_keyword(tok.lexeme))
 		return 1;
+	if (qualifier_flag_from_keyword(tok.lexeme))
+		return 1;
 	if (tok.lexeme == kw_layout)
 		return 1;
 	return 0;
@@ -620,6 +652,13 @@ void parse_type_qualifiers(TypeSpec* spec)
 		if (storage_flag)
 		{
 			type_spec_add_storage(spec, storage_flag);
+			next();
+			continue;
+		}
+		unsigned qualifier_flag = qualifier_flag_from_keyword(tok.lexeme);
+		if (qualifier_flag)
+		{
+			type_spec_add_qualifier(spec, qualifier_flag);
 			next();
 			continue;
 		}
@@ -849,6 +888,7 @@ void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec)
 {
 	inst->storage_flags = spec->storage_flags;
+	inst->qualifier_flags = spec->qualifier_flags;
 	inst->layout_flags = spec->layout_flags;
 	inst->layout_set = spec->layout_set;
 	inst->layout_binding = spec->layout_binding;
@@ -999,6 +1039,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 	decl_emit_begin(&spec);
 	inst = ir_emit(IR_DECL_VAR);
 	inst->str0 = first_name;
+	inst->qualifier_flags = spec.qualifier_flags;
 	Symbol* sym = symbol_table_add(first_name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 	symbol_apply_type_spec(sym, &spec);
 	current_decl_symbol = sym;
@@ -1020,6 +1061,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
+		inst->qualifier_flags = spec.qualifier_flags;
 		sym = symbol_table_add(name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
 		current_decl_symbol = sym;
@@ -1114,6 +1156,7 @@ void stmt_decl()
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		inst = ir_emit(IR_DECL_VAR);
 		inst->str0 = name;
+		inst->qualifier_flags = spec.qualifier_flags;
 		Symbol* sym = symbol_table_add(name, current_decl_type_name, current_decl_type_type, SYM_VAR);
 		symbol_apply_type_spec(sym, &spec);
 		current_decl_symbol = sym;
@@ -1167,8 +1210,12 @@ void expr_ident()
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	Symbol* sym = symbol_table_find(inst->str0);
-	if (sym && (sym->kind == SYM_VAR || sym->kind == SYM_PARAM))
-		inst->is_lvalue = 1;
+	if (sym)
+	{
+		inst->qualifier_flags = sym->qualifier_flags;
+		if ((sym->kind == SYM_VAR || sym->kind == SYM_PARAM) && !symbol_has_qualifier(sym, SYM_QUAL_CONST))
+			inst->is_lvalue = 1;
+	}
 	next();
 }
 

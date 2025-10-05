@@ -21,6 +21,19 @@ void dump_storage_flags(unsigned flags)
 	}
 }
 
+void dump_qualifier_flags(unsigned flags)
+{
+	if (!flags)
+		return;
+	printf(" qualifiers=");
+	int first = 1;
+	if (flags & SYM_QUAL_CONST)
+	{
+		printf("%sconst", first ? "" : "|");
+		first = 0;
+	}
+}
+
 void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
 {
 	if (!layout_flags)
@@ -57,6 +70,7 @@ void dump_ir()
 		case IR_DECL_BEGIN:
 		case IR_FUNC_PARAM_BEGIN:
 			dump_storage_flags(inst->storage_flags);
+			dump_qualifier_flags(inst->qualifier_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		case IR_PUSH_INT:
@@ -75,6 +89,7 @@ void dump_ir()
 		case IR_FUNC_PARAM_TYPE:
 		case IR_FUNC_PARAM_NAME:
 			printf(" %s", inst->str0);
+			dump_qualifier_flags(inst->qualifier_flags);
 			break;
 		case IR_SWIZZLE:
 			printf(" %s count=%d mask=0x%x", inst->str0, inst->arg0, inst->arg1);
@@ -92,6 +107,7 @@ void dump_ir()
 		case IR_FUNC_BEGIN:
 			printf(" return=%s name=%s", inst->str0, inst->str1);
 			dump_storage_flags(inst->storage_flags);
+			dump_qualifier_flags(inst->qualifier_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		case IR_STRUCT_BEGIN:
@@ -101,6 +117,7 @@ void dump_ir()
 			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
 			if (inst->arg0)
 				printf(" array_len=%d", inst->arg0);
+			dump_qualifier_flags(inst->qualifier_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		case IR_STRUCT_END:
@@ -108,6 +125,7 @@ void dump_ir()
 		case IR_BLOCK_DECL_BEGIN:
 			printf(" type=%s", inst->str0 ? inst->str0 : "<anon>");
 			dump_storage_flags(inst->storage_flags);
+			dump_qualifier_flags(inst->qualifier_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		case IR_BLOCK_DECL_LAYOUT:
@@ -117,6 +135,7 @@ void dump_ir()
 			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
 			if (inst->arg0)
 				printf(" array_len=%d", inst->arg0);
+			dump_qualifier_flags(inst->qualifier_flags);
 			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
 			break;
 		case IR_BLOCK_DECL_INSTANCE:
@@ -150,6 +169,7 @@ void dump_symbols()
 			printf(" (tag=%s)", type_tag_name(sym->type->tag));
 		}
 		dump_storage_flags(sym->storage_flags);
+		dump_qualifier_flags(sym->qualifier_flags);
 		dump_layout_info(sym->layout_flags, sym->layout_set, sym->layout_binding, sym->layout_location);
 		printf("\n");
 	}
@@ -927,6 +947,64 @@ DEFINE_TEST(test_preprocessor_passthrough)
 	compiler_teardown();
 }
 
+DEFINE_TEST(test_const_qualifier_metadata)
+{
+	const char* factor = sintern("factor");
+	const char* mutable_val = sintern("mutable_val");
+	compiler_setup(snippet_const_qualifier);
+	int saw_const_symbol = 0;
+	int saw_mutable_symbol = 0;
+	for (int i = 0; i < acount(st->symbols); ++i)
+	{
+		Symbol* sym = &st->symbols[i];
+		if (sym->name == factor)
+		{
+			saw_const_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
+		}
+		if (sym->name == mutable_val)
+		{
+			saw_mutable_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
+		}
+	}
+	int saw_const_decl = 0;
+	int saw_mutable_decl = 0;
+	int saw_const_ident = 0;
+	int saw_const_lvalue = 0;
+	int saw_mutable_ident = 0;
+	int saw_mutable_lvalue = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op == IR_DECL_VAR && inst->str0 == factor)
+		{
+			saw_const_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
+		}
+		if (inst->op == IR_DECL_VAR && inst->str0 == mutable_val)
+		{
+			saw_mutable_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
+		}
+		if (inst->op == IR_PUSH_IDENT && inst->str0 == factor)
+		{
+			saw_const_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
+			saw_const_lvalue |= inst->is_lvalue;
+		}
+		if (inst->op == IR_PUSH_IDENT && inst->str0 == mutable_val)
+		{
+			saw_mutable_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
+			saw_mutable_lvalue |= inst->is_lvalue;
+		}
+	}
+	compiler_teardown();
+	assert(saw_const_symbol);
+	assert(!saw_mutable_symbol);
+	assert(saw_const_decl);
+	assert(!saw_mutable_decl);
+	assert(saw_const_ident);
+	assert(!saw_const_lvalue);
+	assert(!saw_mutable_ident);
+	assert(saw_mutable_lvalue);
+}
+
 void unit_test()
 {
 	init_keyword_interns();
@@ -951,6 +1029,7 @@ void unit_test()
 		TEST_ENTRY(test_builtin_function_calls),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_resource_texture_inference),
+		TEST_ENTRY(test_const_qualifier_metadata),
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
