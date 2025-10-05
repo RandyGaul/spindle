@@ -278,6 +278,7 @@ typedef struct Symbol
 	Type* type;
 	SymbolKind kind;
 	unsigned storage_flags;
+	unsigned qualifier_flags;
 	unsigned layout_flags;
 	int layout_set;
 	int layout_binding;
@@ -298,6 +299,7 @@ typedef struct TypeSpec
 	const char* type_name;
 	Type* type;
 	unsigned storage_flags;
+	unsigned qualifier_flags;
 	unsigned layout_flags;
 	int layout_set;
 	int layout_binding;
@@ -512,6 +514,7 @@ typedef struct IR_Cmd
 	double float_val;
 	Tok tok;
 	unsigned storage_flags;
+	unsigned qualifier_flags;
 	unsigned layout_flags;
 	int layout_set;
 	int layout_binding;
@@ -773,6 +776,15 @@ const char* snippet_preprocessor_passthrough =
 		"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
 		"}\n";
 
+const char* snippet_const_qualifier = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			const float factor = 0.5;
+			float mutable_val = 1.0;
+			mutable_val = mutable_val + factor;
+			out_color = vec4(mutable_val);
+		});
+
 const char* snippet_resource_types = STR(
 		layout(location = 0) out vec4 out_color;
 		layout(set = 2, binding = 0) uniform sampler1D u_sampler1d;
@@ -830,6 +842,7 @@ int main()
 		{ "discard", snippet_discard },
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
+		{ "const_qualifier", snippet_const_qualifier },
 		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
 		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },

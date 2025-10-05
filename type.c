@@ -1239,6 +1239,7 @@ void type_check_ir()
 	dyna Type** stack = NULL;
 	dyna Type** func_stack = NULL;
 	dyna TypeCheckSwitch* switch_stack = NULL;
+	dyna unsigned* qualifier_stack = NULL;
 	Type* current_decl_type = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
@@ -1248,21 +1249,28 @@ void type_check_ir()
 		case IR_PUSH_INT:
 			inst->type = g_type_int;
 			apush(stack, inst->type);
+			inst->qualifier_flags = 0;
+			apush(qualifier_stack, 0);
 			break;
 		case IR_PUSH_FLOAT:
 			inst->type = g_type_float;
 			apush(stack, inst->type);
+			inst->qualifier_flags = 0;
+			apush(qualifier_stack, 0);
 			break;
 		case IR_PUSH_BOOL:
 			inst->type = g_type_bool;
 			apush(stack, inst->type);
+			inst->qualifier_flags = 0;
+			apush(qualifier_stack, 0);
 			break;
 		case IR_PUSH_IDENT:
 		{
 			Type* type = NULL;
+			Symbol* sym = NULL;
 			if (inst->str0)
 			{
-				Symbol* sym = symbol_table_find(inst->str0);
+				sym = symbol_table_find(inst->str0);
 				if (!sym)
 				{
 					for (int j = acount(st->symbols) - 1; j >= 0; --j)
@@ -1284,29 +1292,64 @@ void type_check_ir()
 					type = type_system_get(inst->str0);
 				}
 			}
+			unsigned qualifier_flags = sym ? sym->qualifier_flags : 0;
+			inst->qualifier_flags = qualifier_flags;
 			inst->type = type;
 			apush(stack, type);
+			apush(qualifier_stack, qualifier_flags);
 			break;
 		}
 		case IR_UNARY:
 		{
 			Type* operand = type_stack_pop(stack, "unary expression");
+			unsigned operand_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			Type* result = type_check_unary(inst, operand);
+			if ((inst->tok == TOK_PLUS_PLUS || inst->tok == TOK_MINUS_MINUS) && (operand_qualifier & SYM_QUAL_CONST))
+			{
+				type_check_error("cannot modify const-qualified value");
+			}
 			if (!result)
 				result = operand;
 			inst->type = result;
+			inst->qualifier_flags = 0;
 			apush(stack, result);
+			apush(qualifier_stack, 0);
 			break;
 		}
 		case IR_BINARY:
 		{
 			Type* rhs = type_stack_pop(stack, "binary rhs");
 			Type* lhs = type_stack_pop(stack, "binary lhs");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
+			unsigned lhs_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
+			int is_assignment = 0;
+			switch (inst->tok)
+			{
+			case TOK_ASSIGN:
+			case TOK_PLUS_ASSIGN:
+			case TOK_AND_ASSIGN:
+			case TOK_OR_ASSIGN:
+			case TOK_XOR_ASSIGN:
+			case TOK_LSHIFT_ASSIGN:
+			case TOK_RSHIFT_ASSIGN:
+				is_assignment = 1;
+				break;
+			default:
+				break;
+			}
+			if (is_assignment && (lhs_qualifier & SYM_QUAL_CONST))
+			{
+				type_check_error("cannot assign to const-qualified value");
+			}
 			Type* result = type_check_binary(inst->tok, lhs, rhs);
 			if (!result)
 				result = lhs ? lhs : rhs;
 			inst->type = result;
+			unsigned result_qualifier = is_assignment ? lhs_qualifier : 0;
+			inst->qualifier_flags = result_qualifier;
 			apush(stack, result);
+			apush(qualifier_stack, result_qualifier);
 			break;
 		}
 		case IR_CALL:
@@ -1315,6 +1358,8 @@ void type_check_ir()
 			for (int arg = 0; arg < inst->arg0; ++arg)
 			{
 				Type* arg_type = type_stack_pop(stack, "call argument");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -1325,6 +1370,8 @@ void type_check_ir()
 				args[r] = tmp;
 			}
 			Type* callee = type_stack_pop(stack, "call target");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			Type* result = callee;
 			if (inst->str0)
 			{
@@ -1374,7 +1421,9 @@ void type_check_ir()
 			}
 			inst->type = result;
 			afree(args);
+			inst->qualifier_flags = 0;
 			apush(stack, result);
+			apush(qualifier_stack, 0);
 			break;
 		}
 		case IR_CONSTRUCT:
@@ -1383,6 +1432,8 @@ void type_check_ir()
 			for (int arg = 0; arg < inst->arg0; ++arg)
 			{
 				Type* arg_type = type_stack_pop(stack, "constructor argument");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -1398,13 +1449,18 @@ void type_check_ir()
 			if (result)
 				type_check_constructor(result, args, argc);
 			afree(args);
+			inst->qualifier_flags = 0;
 			apush(stack, result);
+			apush(qualifier_stack, 0);
 			break;
 		}
 		case IR_INDEX:
 		{
 			Type* index = type_stack_pop(stack, "index expression");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			Type* base = type_stack_pop(stack, "index base");
+			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			if (index && (!type_is_scalar(index) || !type_is_integer(index)))
 			{
 				type_check_error("index expression must be integer scalar, got %s", type_display(index));
@@ -1430,12 +1486,15 @@ void type_check_ir()
 				}
 			}
 			inst->type = result;
+			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
+			apush(qualifier_stack, base_qualifier);
 			break;
 		}
 		case IR_SWIZZLE:
 		{
 			Type* base = type_stack_pop(stack, "swizzle base");
+			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			if (base && !type_is_vector(base))
 			{
 				type_check_error("cannot swizzle non-vector type %s", type_display(base));
@@ -1457,12 +1516,15 @@ void type_check_ir()
 				type_check_error("unsupported swizzle size %d on %s", inst->arg0, type_display(base));
 			}
 			inst->type = result;
+			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
+			apush(qualifier_stack, base_qualifier);
 			break;
 		}
 		case IR_MEMBER:
 		{
 			Type* base = type_stack_pop(stack, "member access");
+			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			Type* result = base;
 			if (base && base->tag == T_STRUCT)
 			{
@@ -1474,19 +1536,29 @@ void type_check_ir()
 				result = member->type;
 			}
 			inst->type = result;
+			inst->qualifier_flags = base_qualifier;
 			apush(stack, result);
+			apush(qualifier_stack, base_qualifier);
 			break;
 		}
 		case IR_SELECT:
 		{
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			Type* true_type = type_stack_pop(stack, "ternary true branch");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			Type* cond_type = type_stack_pop(stack, "ternary condition");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			Type* result = type_select_result(cond_type, true_type, false_type);
 			if (!result)
 				result = true_type ? true_type : false_type;
 			inst->type = result;
+			inst->qualifier_flags = 0;
 			apush(stack, result);
+			apush(qualifier_stack, 0);
 			break;
 		}
 		case IR_DECL_TYPE:
@@ -1500,6 +1572,8 @@ void type_check_ir()
 			if (acount(stack) > 0)
 			{
 				Type* value = type_stack_pop(stack, "initializer");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
 				if (current_decl_type && value && !type_can_assign(current_decl_type, value))
 				{
 					type_check_error("initializer type %s cannot initialize %s", type_display(value), type_display(current_decl_type));
@@ -1507,12 +1581,16 @@ void type_check_ir()
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(qualifier_stack) > 0)
+				aclear(qualifier_stack);
 			break;
 		case IR_DECL_ARRAY_SIZE_END:
 		case IR_FUNC_PARAM_ARRAY_SIZE_END:
 			if (acount(stack) > 0)
 			{
 				Type* size = type_stack_pop(stack, "array size");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
 				if (size && (!type_is_scalar(size) || !type_is_integer(size)))
 				{
 					type_check_error("array size must be integer scalar, got %s", type_display(size));
@@ -1520,6 +1598,8 @@ void type_check_ir()
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(qualifier_stack) > 0)
+				aclear(qualifier_stack);
 			break;
 		case IR_SWITCH_BEGIN:
 			apush(switch_stack, (TypeCheckSwitch){ 0 });
@@ -1529,6 +1609,8 @@ void type_check_ir()
 		case IR_SWITCH_SELECTOR_END:
 		{
 			Type* selector = type_stack_pop(stack, "switch selector");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector)))
 			{
 				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
@@ -1603,13 +1685,21 @@ void type_check_ir()
 		}
 		case IR_STMT_EXPR:
 			if (acount(stack) > 0)
+			{
 				type_stack_pop(stack, "expression result");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
+			}
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(qualifier_stack) > 0)
+				aclear(qualifier_stack);
 			break;
 		case IR_IF_THEN:
 		{
 			Type* cond = type_stack_pop(stack, "if condition");
+			if (acount(qualifier_stack))
+				(void)apop(qualifier_stack);
 			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
 			{
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
@@ -1622,6 +1712,8 @@ void type_check_ir()
 			if (inst->arg0)
 			{
 				Type* value = type_stack_pop(stack, "return value");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
 				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value))
 				{
 					type_check_error("return type mismatch: expected %s got %s", type_display(ret_type), type_display(value));
@@ -1656,4 +1748,5 @@ void type_check_ir()
 	afree(switch_stack);
 	afree(stack);
 	afree(func_stack);
+	afree(qualifier_stack);
 }
