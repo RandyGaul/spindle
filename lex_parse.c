@@ -964,33 +964,12 @@ TypeSpec parse_type_specifier()
 
 void parse_struct_member_array_suffix(StructMember* member)
 {
-	if (!member)
-	{
-		while (tok.kind == TOK_LBRACK)
-		{
-			next();
-			if (tok.kind != TOK_RBRACK)
-			{
-				if (tok.kind != TOK_INT)
-					parse_error("expected integer array size");
-				next();
-				expect(TOK_RBRACK);
-			}
-			else
-			{
-				next();
-			}
-		}
-		return;
-	}
 	while (tok.kind == TOK_LBRACK)
 	{
-		if (member->has_array)
-			parse_error("multiple array dimensions in struct member not supported");
 		next();
-		int unsized = 0;
-		int size = -1;
-		if (tok.kind == TOK_RBRACK)
+	int unsized = 0;
+	int size = -1;
+	if (tok.kind == TOK_RBRACK)
 		{
 			unsized = 1;
 		}
@@ -1002,7 +981,8 @@ void parse_struct_member_array_suffix(StructMember* member)
 			next();
 		}
 		expect(TOK_RBRACK);
-		type_struct_member_mark_array(member, member->type, size, unsized);
+		if (member)
+			type_struct_member_mark_array(member, size, unsized);
 	}
 }
 
