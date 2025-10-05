@@ -610,6 +610,17 @@ const char* snippet_basic_io = STR(
 			out_color = sampled * u_tint;
 		});
 
+const char* snippet_stage_builtins_vertex = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			float base = float(gl_VertexIndex + gl_BaseInstance);
+			gl_Position = vec4(base, 0.0, 0.0, 1.0);
+			gl_PointSize = 1.0;
+			gl_ClipDistance[0] = base;
+			out_color = vec4(base);
+		}
+		);
+
 const char* snippet_control_flow = STR(
 		layout(location = 0) out vec4 out_color;
 		void main() {
@@ -827,6 +838,20 @@ const char* snippet_discard = STR(
 			out_color = color;
 		});
 
+const char* snippet_stage_builtins_fragment = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			vec4 coord = gl_FragCoord;
+			int sample_id = gl_SampleID;
+			int sample_mask = gl_SampleMaskIn[0];
+			if (gl_HelperInvocation)
+			{
+				gl_SampleMask[0] = 0;
+			}
+			out_color = coord + vec4(float(sample_id + sample_mask));
+		}
+		);
+
 const char* snippet_builtin_funcs = STR(
 		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_tex;
@@ -945,10 +970,10 @@ const char* snippet_extended_types = STR(
 // Directly include all of our source for a unity build.
 #include "testing.c"
 
-void transpile(const char* source)
+void transpile(ShaderStage stage, const char* source)
 {
 	printf("Input : %s\n\n", source);
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_set_shader_stage(stage);
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");
@@ -963,35 +988,38 @@ int main()
 	typedef struct ShaderSnippet
 	{
 		const char* name;
+		ShaderStage stage;
 		const char* source;
 	} ShaderSnippet;
 
 	const ShaderSnippet snippets[] = {
-		{ "basic_io", snippet_basic_io },
-		{ "control_flow", snippet_control_flow },
-		{ "ternary_vectors", snippet_ternary_vectors },
-		{ "array_indexing", snippet_array_indexing },
-		{ "swizzle_usage", snippet_swizzle },
-		{ "function_calls", snippet_function_calls },
-		{ "matrix_ops", snippet_matrix_ops },
-		{ "looping", snippet_looping },
-		{ "bitwise", snippet_bitwise },
-		{ "numeric_literals", snippet_numeric_literals },
-		{ "discard", snippet_discard },
-		{ "switch", snippet_switch_stmt },
-		{ "builtin_funcs", snippet_builtin_funcs },
-		{ "texture_queries", snippet_texture_queries },
-		{ "const_qualifier", snippet_const_qualifier },
-		{ "resource_types", snippet_resource_types },
-		{ "struct_block", snippet_struct_block },
-		{ "struct_constructor", snippet_struct_constructor },
+		{ "basic_io", SHADER_STAGE_VERTEX, snippet_basic_io },
+		{ "stage_builtins_vertex", SHADER_STAGE_VERTEX, snippet_stage_builtins_vertex },
+		{ "control_flow", SHADER_STAGE_VERTEX, snippet_control_flow },
+		{ "ternary_vectors", SHADER_STAGE_VERTEX, snippet_ternary_vectors },
+		{ "array_indexing", SHADER_STAGE_VERTEX, snippet_array_indexing },
+		{ "swizzle_usage", SHADER_STAGE_VERTEX, snippet_swizzle },
+		{ "function_calls", SHADER_STAGE_VERTEX, snippet_function_calls },
+		{ "matrix_ops", SHADER_STAGE_VERTEX, snippet_matrix_ops },
+		{ "looping", SHADER_STAGE_VERTEX, snippet_looping },
+		{ "bitwise", SHADER_STAGE_VERTEX, snippet_bitwise },
+		{ "numeric_literals", SHADER_STAGE_VERTEX, snippet_numeric_literals },
+		{ "discard", SHADER_STAGE_FRAGMENT, snippet_discard },
+		{ "stage_builtins_fragment", SHADER_STAGE_FRAGMENT, snippet_stage_builtins_fragment },
+		{ "switch", SHADER_STAGE_VERTEX, snippet_switch_stmt },
+		{ "builtin_funcs", SHADER_STAGE_VERTEX, snippet_builtin_funcs },
+		{ "texture_queries", SHADER_STAGE_VERTEX, snippet_texture_queries },
+		{ "const_qualifier", SHADER_STAGE_VERTEX, snippet_const_qualifier },
+		{ "resource_types", SHADER_STAGE_VERTEX, snippet_resource_types },
+		{ "struct_block", SHADER_STAGE_VERTEX, snippet_struct_block },
+		{ "struct_constructor", SHADER_STAGE_VERTEX, snippet_struct_constructor },
+		{ "preprocessor_passthrough", SHADER_STAGE_VERTEX, snippet_preprocessor_passthrough },
 		{ "extended_types", snippet_extended_types },
-		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
 	};
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
 		printf("=== %s ===\n", snippets[i].name);
-		transpile(snippets[i].source);
+		transpile(snippets[i].stage, snippets[i].source);
 		printf("\n");
 	}
 	return 0;
