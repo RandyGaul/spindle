@@ -266,10 +266,14 @@ DEFINE_TEST(test_builtin_function_metadata)
 		int params;
 	} cases[] = {
 		{ sintern("textureLod"), BUILTIN_TEXTURE_LOD, 3 },
-		{ sintern("textureGrad"), BUILTIN_TEXTURE_GRAD, 4 },
-		{ sintern("normalize"), BUILTIN_NORMALIZE, 1 },
-		{ sintern("distance"), BUILTIN_DISTANCE, 2 },
-	};
+{ sintern("textureGrad"), BUILTIN_TEXTURE_GRAD, 4 },
+{ sintern("normalize"), BUILTIN_NORMALIZE, 1 },
+{ sintern("distance"), BUILTIN_DISTANCE, 2 },
+{ sintern("textureQueryLod"), BUILTIN_TEXTURE_QUERY_LOD, 2 },
+{ sintern("texelFetchOffset"), BUILTIN_TEXEL_FETCH_OFFSET, -1 },
+{ sintern("determinant"), BUILTIN_DETERMINANT, 1 },
+{ sintern("imageAtomicAdd"), BUILTIN_IMAGE_ATOMIC_ADD, -1 },
+};
 	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
 	{
 		Symbol* sym = symbol_table_find(cases[i].name);
@@ -1125,6 +1129,53 @@ DEFINE_TEST(test_texture_query_builtins)
 	assert(saw_all);
 }
 
+DEFINE_TEST(test_extended_intrinsic_calls)
+{
+	const char* determinant_name = sintern("determinant");
+	const char* texture_query_lod_name = sintern("textureQueryLod");
+	const char* texel_fetch_offset_name = sintern("texelFetchOffset");
+	const char* image_atomic_add_name = sintern("imageAtomicAdd");
+	const char* image_atomic_comp_swap_name = sintern("imageAtomicCompSwap");
+	const char* outer_product_name = sintern("outerProduct");
+	const char* fwidth_fine_name = sintern("fwidthFine");
+	compiler_setup(snippet_extended_intrinsics);
+	int saw_determinant = 0;
+	int saw_texture_query_lod = 0;
+	int saw_texel_fetch_offset = 0;
+	int saw_image_atomic_add = 0;
+	int saw_image_atomic_comp_swap = 0;
+	int saw_outer_product = 0;
+	int saw_fwidth_fine = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_CALL)
+			continue;
+		if (inst->str0 == determinant_name)
+			saw_determinant = 1;
+		if (inst->str0 == texture_query_lod_name)
+			saw_texture_query_lod = 1;
+		if (inst->str0 == texel_fetch_offset_name)
+			saw_texel_fetch_offset = 1;
+		if (inst->str0 == image_atomic_add_name)
+			saw_image_atomic_add = 1;
+		if (inst->str0 == image_atomic_comp_swap_name)
+			saw_image_atomic_comp_swap = 1;
+		if (inst->str0 == outer_product_name)
+			saw_outer_product = 1;
+		if (inst->str0 == fwidth_fine_name)
+			saw_fwidth_fine = 1;
+	}
+	compiler_teardown();
+	assert(saw_determinant);
+	assert(saw_texture_query_lod);
+	assert(saw_texel_fetch_offset);
+	assert(saw_image_atomic_add);
+	assert(saw_image_atomic_comp_swap);
+	assert(saw_outer_product);
+	assert(saw_fwidth_fine);
+}
+
 DEFINE_TEST(test_builtin_variables_vertex_stage)
 {
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
@@ -1301,9 +1352,10 @@ void unit_test()
 		TEST_ENTRY(test_struct_constructor_ir),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
-		TEST_ENTRY(test_texture_query_builtins),
-		TEST_ENTRY(test_builtin_variables_vertex_stage),
-		TEST_ENTRY(test_builtin_variables_fragment_stage),
+TEST_ENTRY(test_texture_query_builtins),
+TEST_ENTRY(test_extended_intrinsic_calls),
+TEST_ENTRY(test_builtin_variables_vertex_stage),
+TEST_ENTRY(test_builtin_variables_fragment_stage),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_const_qualifier_metadata),

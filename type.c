@@ -705,7 +705,7 @@ static Type* builtin_result_texture(Type** args, int argc)
 
 static int sampler_base_dimension(const Type* sampler)
 {
-	if (!sampler || sampler->tag != T_SAMPLER)
+	if (!sampler || (sampler->tag != T_SAMPLER && sampler->tag != T_IMAGE))
 		return TYPE_DIM_UNKNOWN;
 	return sampler->dim & 0xF;
 }
@@ -791,21 +791,24 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 
 // Check texelFetch() coordinates, lod/sample, and sampler compatibility.
 // ...ivec4 texel = texelFetch(u_image, ivec2(gl_FragCoord.xy), 0);
-static Type* builtin_result_texel_fetch(Type** args, int argc)
+static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 {
+	const char* func_name = has_offset ? "texelFetchOffset" : "texelFetch";
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
 	if (!sampler || sampler->tag != T_SAMPLER)
 	{
-		type_check_error("texelFetch requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		type_check_error("%s requires sampler argument, got %s", func_name, sampler ? type_display(sampler) : "<null>");
 		return builtin_result_texture(args, argc);
 	}
 	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
 	{
-		type_check_error("texelFetch does not support shadow samplers (%s)", type_display(sampler));
+		type_check_error("%s does not support shadow samplers (%s)", func_name, type_display(sampler));
 	}
 	int base_dim = sampler_base_dimension(sampler);
 	int coord_components = sampler_coord_components(sampler);
 	int expected_args = 0;
+	int level_index = -1;
+	int sample_index = -1;
 	switch (base_dim)
 	{
 	case TYPE_DIM_BUFFER:
@@ -816,54 +819,78 @@ static Type* builtin_result_texel_fetch(Type** args, int argc)
 	case TYPE_DIM_2D:
 	case TYPE_DIM_3D:
 		expected_args = 3;
+		level_index = 2;
 		break;
 	case TYPE_DIM_RECT:
 		expected_args = 2;
 		break;
 	case TYPE_DIM_2D_MS:
 		expected_args = 3;
+		sample_index = 2;
 		break;
 	default:
-		type_check_error("texelFetch unsupported sampler type %s", type_display(sampler));
+		type_check_error("%s unsupported sampler type %s", func_name, type_display(sampler));
 		return builtin_result_texture(args, argc);
+	}
+	if (has_offset)
+	{
+		expected_args += 1;
+		if (base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_2D_MS)
+		{
+			type_check_error("%s does not support sampler type %s", func_name, type_display(sampler));
+		}
 	}
 	if (argc != expected_args)
 	{
-		type_check_error("texelFetch expects %d arguments but received %d", expected_args, argc);
+		type_check_error("%s expects %d arguments but received %d", func_name, expected_args, argc);
 	}
 	Type* coord = (argc > 1) ? args[1] : NULL;
 	if (coord_components <= 1)
 	{
 		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
 		{
-			type_check_error("texelFetch coordinate must be integer scalar, got %s", coord ? type_display(coord) : "<null>");
+			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
 		}
 	}
 	else
 	{
 		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
 		{
-			type_check_error("texelFetch coordinate must be ivec%d, got %s", coord_components, coord ? type_display(coord) : "<null>");
+			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
 		}
 	}
-	int requires_level = 0;
-	if (base_dim == TYPE_DIM_1D || base_dim == TYPE_DIM_2D || base_dim == TYPE_DIM_3D)
-		requires_level = 1;
-	else if (base_dim == TYPE_DIM_2D_MS || base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_RECT)
-		requires_level = 0;
-	Type* level = (argc > 2) ? args[2] : NULL;
-	if (requires_level)
+	if (level_index >= 0)
 	{
+		Type* level = args[level_index];
 		if (!level || !type_is_scalar(level) || !type_is_integer(level))
 		{
-			type_check_error("texelFetch LOD must be integer scalar, got %s", level ? type_display(level) : "<null>");
+			type_check_error("%s LOD must be integer scalar, got %s", func_name, level ? type_display(level) : "<null>");
 		}
 	}
-	else if (level)
+	else if (sample_index >= 0)
 	{
-		if (!type_is_scalar(level) || !type_is_integer(level))
+		Type* sample = args[sample_index];
+		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample))
 		{
-			type_check_error("texelFetch sample index must be integer scalar, got %s", type_display(level));
+			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
+		}
+	}
+	if (has_offset)
+	{
+		Type* offset = args[expected_args - 1];
+		if (coord_components <= 1)
+		{
+			if (!offset || !type_is_scalar(offset) || !type_is_integer(offset))
+			{
+				type_check_error("%s offset must be integer scalar, got %s", func_name, offset ? type_display(offset) : "<null>");
+			}
+		}
+		else
+		{
+			if (!offset || !type_is_vector(offset) || offset->cols != coord_components || !type_is_integer(offset))
+			{
+				type_check_error("%s offset must be ivec%d, got %s", func_name, coord_components, offset ? type_display(offset) : "<null>");
+			}
 		}
 	}
 	return builtin_result_texture(args, argc);
@@ -900,13 +927,236 @@ static Type* builtin_result_transpose(Type** args, int argc)
 	return result ? result : mat;
 }
 
+static Type* builtin_result_determinant(Type** args, int argc)
+{
+	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	if (!mat || !type_is_matrix(mat))
+	{
+		type_check_error("determinant requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		return type_get_scalar(T_FLOAT);
+	}
+	if (mat->cols != mat->rows)
+	{
+		type_check_error("determinant requires square matrix, got %s", type_display(mat));
+	}
+	TypeTag base = type_base_type(mat);
+	if (base != T_FLOAT && base != T_DOUBLE)
+	{
+		type_check_error("determinant requires floating-point matrix, got %s", type_display(mat));
+		base = T_FLOAT;
+	}
+	return type_get_scalar(base);
+}
+
+static Type* builtin_result_outer_product(Type** args, int argc)
+{
+  // TODO
+  return NULL;
+}
+
 // Enforce matching shapes for relational helpers like lessThan().
 // ...bvec3 mask = lessThan(a.xyz, b.xyz);
 static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 {
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
-	if (!lhs || !rhs)
+	if (!lhs || !rhs || !type_is_vector(lhs) || !type_is_vector(rhs))
+	{
+		type_check_error("outerProduct requires vector arguments, got %s and %s", lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
+		return type_get_matrix(T_FLOAT, 2, 2);
+	}
+	TypeTag lhs_base = type_base_type(lhs);
+	TypeTag rhs_base = type_base_type(rhs);
+	if (lhs_base != rhs_base)
+	{
+		type_check_error("outerProduct requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if ((lhs_base != T_FLOAT && lhs_base != T_DOUBLE) || (rhs_base != T_FLOAT && rhs_base != T_DOUBLE))
+	{
+		type_check_error("outerProduct requires floating-point vectors, got %s and %s", type_display(lhs), type_display(rhs));
+		lhs_base = T_FLOAT;
+	}
+	int cols = lhs->cols;
+	int rows = rhs->cols;
+	Type* result = type_get_matrix(lhs_base, cols, rows);
+	if (!result)
+		result = type_get_matrix(T_FLOAT, cols, rows);
+	return result;
+}
+
+static Type* builtin_result_matrix_comp_mult(Type** args, int argc)
+{
+	Type* lhs = (args && argc > 0) ? args[0] : NULL;
+	Type* rhs = (args && argc > 1) ? args[1] : NULL;
+	if (!lhs || !rhs || !type_is_matrix(lhs) || !type_is_matrix(rhs))
+	{
+		type_check_error("matrixCompMult requires matrix arguments, got %s and %s", lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
+		return lhs ? lhs : rhs;
+	}
+	if (lhs->cols != rhs->cols || lhs->rows != rhs->rows)
+	{
+		type_check_error("matrixCompMult requires matching matrix dimensions, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	TypeTag lhs_base = type_base_type(lhs);
+	TypeTag rhs_base = type_base_type(rhs);
+	if (lhs_base != rhs_base)
+	{
+		type_check_error("matrixCompMult requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (lhs_base != T_FLOAT && lhs_base != T_DOUBLE)
+	{
+		type_check_error("matrixCompMult requires floating-point matrices, got %s", type_display(lhs));
+	}
+	return lhs;
+}
+
+static Type* builtin_result_texture_query_lod(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("textureQueryLod requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		return type_get_vector(T_FLOAT, 2);
+	}
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
+	{
+		type_check_error("textureQueryLod does not support shadow samplers (%s)", type_display(sampler));
+	}
+	return type_get_vector(T_FLOAT, 2);
+}
+
+static Type* builtin_result_texture_query_levels(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("textureQueryLevels requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+	}
+	return type_get_scalar(T_INT);
+}
+
+static Type* builtin_result_derivative(Type** args, int argc)
+{
+	Type* arg = (args && argc > 0) ? args[0] : NULL;
+	if (!arg)
+		return NULL;
+	if (!type_is_scalar(arg) && !type_is_vector(arg))
+	{
+		type_check_error("derivative functions require scalar or vector arguments, got %s", type_display(arg));
+		return arg;
+	}
+	TypeTag base = type_base_type(arg);
+	if (base != T_FLOAT && base != T_DOUBLE)
+	{
+		type_check_error("derivative functions require floating-point arguments, got %s", type_display(arg));
+	}
+	return arg;
+}
+
+static const char* image_atomic_name(BuiltinFuncKind kind)
+{
+	switch (kind)
+	{
+	case BUILTIN_IMAGE_ATOMIC_ADD:
+		return "imageAtomicAdd";
+	case BUILTIN_IMAGE_ATOMIC_MIN:
+		return "imageAtomicMin";
+	case BUILTIN_IMAGE_ATOMIC_MAX:
+		return "imageAtomicMax";
+	case BUILTIN_IMAGE_ATOMIC_AND:
+		return "imageAtomicAnd";
+	case BUILTIN_IMAGE_ATOMIC_OR:
+		return "imageAtomicOr";
+	case BUILTIN_IMAGE_ATOMIC_XOR:
+		return "imageAtomicXor";
+	case BUILTIN_IMAGE_ATOMIC_EXCHANGE:
+		return "imageAtomicExchange";
+	case BUILTIN_IMAGE_ATOMIC_COMP_SWAP:
+		return "imageAtomicCompSwap";
+	default:
+		return "imageAtomic";
+	}
+}
+
+static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int argc)
+{
+	const char* func_name = image_atomic_name(kind);
+	Type* image = (args && argc > 0) ? args[0] : NULL;
+	if (!image || image->tag != T_IMAGE)
+	{
+		type_check_error("%s requires image argument, got %s", func_name, image ? type_display(image) : "<null>");
+		return type_get_scalar(T_INT);
+	}
+TypeTag base = (TypeTag)image->base;
+	if (base != T_INT && base != T_UINT)
+	{
+		type_check_error("%s requires integer image types, got %s", func_name, type_display(image));
+		base = T_INT;
+	}
+	int coord_components = sampler_coord_components(image);
+	if (!coord_components)
+	{
+		type_check_error("%s cannot determine coordinate size for %s", func_name, type_display(image));
+		coord_components = 1;
+	}
+	int base_dim = sampler_base_dimension(image);
+	int is_ms = (base_dim == TYPE_DIM_2D_MS);
+	int value_params = (kind == BUILTIN_IMAGE_ATOMIC_COMP_SWAP) ? 2 : 1;
+	int expected_args = 2 + value_params + (is_ms ? 1 : 0);
+	if (argc != expected_args)
+	{
+		type_check_error("%s expects %d arguments but received %d", func_name, expected_args, argc);
+	}
+	Type* coord = (argc > 1) ? args[1] : NULL;
+	if (coord_components <= 1)
+	{
+		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
+		{
+			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
+		}
+	}
+	else
+	{
+		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
+		{
+			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
+		}
+	}
+	int index = 2;
+	if (is_ms)
+	{
+		Type* sample = (argc > index) ? args[index] : NULL;
+		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample))
+		{
+			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
+		}
+		index += 1;
+	}
+	Type* compare = NULL;
+	if (kind == BUILTIN_IMAGE_ATOMIC_COMP_SWAP)
+	{
+		compare = (argc > index) ? args[index] : NULL;
+		if (!compare || !type_is_scalar(compare) || type_base_type(compare) != base)
+		{
+			const char* expected = (base == T_UINT) ? "uint" : "int";
+			type_check_error("%s compare value must be %s scalar, got %s", func_name, expected, compare ? type_display(compare) : "<null>");
+		}
+		index += 1;
+	}
+	Type* value = (argc > index) ? args[index] : NULL;
+	if (!value || !type_is_scalar(value) || type_base_type(value) != base)
+	{
+		const char* expected = (base == T_UINT) ? "uint" : "int";
+		type_check_error("%s value must be %s scalar, got %s", func_name, expected, value ? type_display(value) : "<null>");
+	}
+	return type_get_scalar(base);
+}
+
+static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
+{
+Type* lhs = (args && argc > 0) ? args[0] : NULL;
+Type* rhs = (args && argc > 1) ? args[1] : NULL;
+if (!lhs || !rhs)
 		return type_get_scalar(T_BOOL);
 	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
 	{
@@ -962,75 +1212,114 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return NULL;
 	switch (sym->builtin_kind)
 	{
-	case BUILTIN_TEXTURE:
-	case BUILTIN_TEXTURE_LOD:
-	case BUILTIN_TEXTURE_PROJ:
-	case BUILTIN_TEXTURE_GRAD:
-		return builtin_result_texture(args, argc);
-	case BUILTIN_TEXTURE_SIZE:
-		return builtin_result_texture_size(args, argc);
-	case BUILTIN_TEXEL_FETCH:
-		return builtin_result_texel_fetch(args, argc);
-	case BUILTIN_MIN:
-	case BUILTIN_MAX:
-	case BUILTIN_CLAMP:
-	case BUILTIN_ABS:
-	case BUILTIN_FLOOR:
-	case BUILTIN_CEIL:
-	case BUILTIN_FRACT:
-	case BUILTIN_MIX:
-	case BUILTIN_SIGN:
-	case BUILTIN_TRUNC:
-	case BUILTIN_ROUND:
-	case BUILTIN_ROUND_EVEN:
-	case BUILTIN_POW:
-	case BUILTIN_EXP:
-	case BUILTIN_EXP2:
-	case BUILTIN_LOG:
-	case BUILTIN_LOG2:
-	case BUILTIN_SQRT:
-	case BUILTIN_INVERSE_SQRT:
-	case BUILTIN_MOD:
-	case BUILTIN_SIN:
-	case BUILTIN_COS:
-	case BUILTIN_TAN:
-	case BUILTIN_ASIN:
-	case BUILTIN_ACOS:
-	case BUILTIN_ATAN:
-	case BUILTIN_NORMALIZE:
-	case BUILTIN_REFLECT:
-	case BUILTIN_REFRACT:
-		return builtin_result_same(args, argc, 0);
-	case BUILTIN_INVERSE:
-		return builtin_result_inverse(args, argc);
-	case BUILTIN_TRANSPOSE:
-		return builtin_result_transpose(args, argc);
-	case BUILTIN_STEP:
-		return builtin_result_same(args, argc, 1);
-	case BUILTIN_SMOOTHSTEP:
-		return builtin_result_same(args, argc, 2);
-	case BUILTIN_LENGTH:
-	case BUILTIN_DISTANCE:
-	case BUILTIN_DOT:
-	case BUILTIN_FWIDTH:
-	case BUILTIN_DFDX:
-	case BUILTIN_DFDY:
-		return builtin_result_scalar(args, argc, 0);
-	case BUILTIN_CROSS:
-		return builtin_result_vector(args, argc, 0, 3);
-	case BUILTIN_LESS_THAN:
-	case BUILTIN_LESS_THAN_EQUAL:
-	case BUILTIN_GREATER_THAN:
-	case BUILTIN_GREATER_THAN_EQUAL:
-		return builtin_result_relational(args, argc, 0);
-	case BUILTIN_EQUAL:
-	case BUILTIN_NOT_EQUAL:
-		return builtin_result_relational(args, argc, 1);
-	case BUILTIN_ANY:
-	case BUILTIN_ALL:
-		return builtin_result_any_all(args, argc);
-	default:
-		break;
+		case BUILTIN_TEXTURE:
+		case BUILTIN_TEXTURE_LOD:
+		case BUILTIN_TEXTURE_PROJ:
+		case BUILTIN_TEXTURE_GRAD:
+		case BUILTIN_TEXTURE_OFFSET:
+		case BUILTIN_TEXTURE_LOD_OFFSET:
+		case BUILTIN_TEXTURE_PROJ_OFFSET:
+		case BUILTIN_TEXTURE_PROJ_LOD:
+		case BUILTIN_TEXTURE_PROJ_LOD_OFFSET:
+		case BUILTIN_TEXTURE_GRAD_OFFSET:
+		case BUILTIN_TEXTURE_PROJ_GRAD:
+		case BUILTIN_TEXTURE_PROJ_GRAD_OFFSET:
+		case BUILTIN_TEXTURE_GATHER:
+		case BUILTIN_TEXTURE_GATHER_OFFSET:
+		case BUILTIN_TEXTURE_GATHER_OFFSETS:
+			return builtin_result_texture(args, argc);
+		case BUILTIN_TEXTURE_SIZE:
+			return builtin_result_texture_size(args, argc);
+		case BUILTIN_TEXEL_FETCH:
+			return builtin_result_texel_fetch(args, argc, 0);
+		case BUILTIN_TEXEL_FETCH_OFFSET:
+			return builtin_result_texel_fetch(args, argc, 1);
+		case BUILTIN_TEXTURE_QUERY_LOD:
+			return builtin_result_texture_query_lod(args, argc);
+		case BUILTIN_TEXTURE_QUERY_LEVELS:
+			return builtin_result_texture_query_levels(args, argc);
+		case BUILTIN_DETERMINANT:
+			return builtin_result_determinant(args, argc);
+		case BUILTIN_OUTER_PRODUCT:
+			return builtin_result_outer_product(args, argc);
+		case BUILTIN_MATRIX_COMP_MULT:
+			return builtin_result_matrix_comp_mult(args, argc);
+		case BUILTIN_MIN:
+		case BUILTIN_MAX:
+		case BUILTIN_CLAMP:
+		case BUILTIN_ABS:
+		case BUILTIN_FLOOR:
+		case BUILTIN_CEIL:
+		case BUILTIN_FRACT:
+		case BUILTIN_MIX:
+		case BUILTIN_SIGN:
+		case BUILTIN_TRUNC:
+		case BUILTIN_ROUND:
+		case BUILTIN_ROUND_EVEN:
+		case BUILTIN_POW:
+		case BUILTIN_EXP:
+		case BUILTIN_EXP2:
+		case BUILTIN_LOG:
+		case BUILTIN_LOG2:
+		case BUILTIN_SQRT:
+		case BUILTIN_INVERSE_SQRT:
+		case BUILTIN_MOD:
+		case BUILTIN_SIN:
+		case BUILTIN_COS:
+		case BUILTIN_TAN:
+		case BUILTIN_ASIN:
+		case BUILTIN_ACOS:
+		case BUILTIN_ATAN:
+		case BUILTIN_NORMALIZE:
+		case BUILTIN_REFLECT:
+		case BUILTIN_REFRACT:
+			return builtin_result_same(args, argc, 0);
+		case BUILTIN_INVERSE:
+			return builtin_result_inverse(args, argc);
+		case BUILTIN_TRANSPOSE:
+			return builtin_result_transpose(args, argc);
+		case BUILTIN_STEP:
+			return builtin_result_same(args, argc, 1);
+		case BUILTIN_SMOOTHSTEP:
+			return builtin_result_same(args, argc, 2);
+		case BUILTIN_LENGTH:
+		case BUILTIN_DISTANCE:
+		case BUILTIN_DOT:
+			return builtin_result_scalar(args, argc, 0);
+		case BUILTIN_FWIDTH:
+		case BUILTIN_FWIDTH_FINE:
+		case BUILTIN_FWIDTH_COARSE:
+		case BUILTIN_DFDX:
+		case BUILTIN_DFDX_FINE:
+		case BUILTIN_DFDX_COARSE:
+		case BUILTIN_DFDY:
+		case BUILTIN_DFDY_FINE:
+		case BUILTIN_DFDY_COARSE:
+			return builtin_result_derivative(args, argc);
+		case BUILTIN_CROSS:
+			return builtin_result_vector(args, argc, 0, 3);
+		case BUILTIN_IMAGE_ATOMIC_ADD:
+		case BUILTIN_IMAGE_ATOMIC_MIN:
+		case BUILTIN_IMAGE_ATOMIC_MAX:
+		case BUILTIN_IMAGE_ATOMIC_AND:
+		case BUILTIN_IMAGE_ATOMIC_OR:
+		case BUILTIN_IMAGE_ATOMIC_XOR:
+		case BUILTIN_IMAGE_ATOMIC_EXCHANGE:
+		case BUILTIN_IMAGE_ATOMIC_COMP_SWAP:
+			return builtin_result_image_atomic(sym->builtin_kind, args, argc);
+		case BUILTIN_LESS_THAN:
+		case BUILTIN_LESS_THAN_EQUAL:
+		case BUILTIN_GREATER_THAN:
+		case BUILTIN_GREATER_THAN_EQUAL:
+			return builtin_result_relational(args, argc, 0);
+		case BUILTIN_EQUAL:
+		case BUILTIN_NOT_EQUAL:
+			return builtin_result_relational(args, argc, 1);
+		case BUILTIN_ANY:
+		case BUILTIN_ALL:
+			return builtin_result_any_all(args, argc);
+		default:
+			break;
 	}
 	return NULL;
 }
