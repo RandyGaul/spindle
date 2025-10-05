@@ -1042,9 +1042,9 @@ void parse_struct_member_array_suffix(StructMember* member)
 	while (tok.kind == TOK_LBRACK)
 	{
 		next();
-	int unsized = 0;
-	int size = -1;
-	if (tok.kind == TOK_RBRACK)
+		int unsized = 0;
+		int size = -1;
+		if (tok.kind == TOK_RBRACK)
 		{
 			unsized = 1;
 		}

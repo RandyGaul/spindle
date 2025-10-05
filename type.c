@@ -280,11 +280,17 @@ void type_system_init_builtins()
 	} TypeInit;
 #define SAMPLER(name, base_tag, dim_value) \
 	{ \
-		name, { .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+		name, \
+		{ \
+			.tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 \
+		} \
 	}
 #define IMAGE(name, base_tag, dim_value) \
 	{ \
-		name, { .tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+		name, \
+		{ \
+			.tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 \
+		} \
 	}
 	const TypeInit builtins[] = {
 		{ "void", { .tag = T_VOID, .cols = 1, .rows = 1, .base = T_VOID, .array_len = 0 } },
@@ -445,11 +451,11 @@ void type_system_free()
 							afree(member->array_dims);
 					}
 					afree(info->members);
-}
+				}
 				if (info->layout_identifiers)
 					afree(info->layout_identifiers);
 				free(info);
-}
+			}
 			type->user = NULL;
 		}
 	}
@@ -670,14 +676,14 @@ static const char* builtin_func_name(const Symbol* sym)
 static int type_is_scalar_or_vector(const Type* type)
 {
 	if (!type)
-	return 0;
+		return 0;
 	return type_is_scalar(type) || type_is_vector(type);
 }
 
 static int type_is_floating_point(const Type* type)
 {
 	if (!type)
-	return 0;
+		return 0;
 	TypeTag base = type_base_type(type);
 	return base == T_FLOAT || base == T_DOUBLE;
 }
@@ -927,9 +933,9 @@ static Type* builtin_result_min_max(const Symbol* sym, Type** args, int argc)
 	Type* x = (argc > 0) ? args[0] : NULL;
 	Type* y = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_numeric_scalar_vector(sym, y, "second"))
-	return x;
+		return x;
 	if (type_base_type(x) != type_base_type(y))
 	{
 		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
@@ -961,11 +967,11 @@ static Type* builtin_result_clamp(const Symbol* sym, Type** args, int argc)
 	Type* min_val = (argc > 1) ? args[1] : NULL;
 	Type* max_val = (argc > 2) ? args[2] : NULL;
 	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_numeric_scalar_vector(sym, min_val, "second"))
-	return x;
+		return x;
 	if (!builtin_validate_numeric_scalar_vector(sym, max_val, "third"))
-	return x;
+		return x;
 	TypeTag base = type_base_type(x);
 	if (type_base_type(min_val) != base)
 	{
@@ -1005,16 +1011,16 @@ static Type* builtin_result_abs_like(const Symbol* sym, Type** args, int argc)
 	Type* value = (argc > 0) ? args[0] : NULL;
 	const char* name = builtin_func_name(sym);
 	if (!value)
-	return value;
+		return value;
 	if (!type_is_scalar_or_vector(value))
 	{
 		type_check_error("%s requires scalar or vector argument, got %s", name, type_display(value));
 		return value;
 	}
-if (!type_is_floating_point(value) && !type_is_integer(value))
-{
-type_check_error("%s requires floating-point or integer argument, got %s", name, type_display(value));
-}
+	if (!type_is_floating_point(value) && !type_is_integer(value))
+	{
+		type_check_error("%s requires floating-point or integer argument, got %s", name, type_display(value));
+	}
 	return value;
 }
 
@@ -1022,7 +1028,7 @@ static Type* builtin_result_unary_float(const Symbol* sym, Type** args, int argc
 {
 	Type* value = (argc > 0) ? args[0] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, value, "first"))
-	return value;
+		return value;
 	return value;
 }
 
@@ -1031,9 +1037,9 @@ static Type* builtin_result_pow(const Symbol* sym, Type** args, int argc)
 	Type* x = (argc > 0) ? args[0] : NULL;
 	Type* y = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-	return x;
+		return x;
 	if (type_base_type(x) != type_base_type(y))
 	{
 		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
@@ -1061,9 +1067,9 @@ static Type* builtin_result_mod(const Symbol* sym, Type** args, int argc)
 	Type* x = (argc > 0) ? args[0] : NULL;
 	Type* y = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-	return x;
+		return x;
 	if (type_base_type(x) != type_base_type(y))
 	{
 		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
@@ -1100,9 +1106,9 @@ static Type* builtin_result_atan(const Symbol* sym, Type** args, int argc)
 	}
 	Type* x = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, y_over_x, "first"))
-	return y_over_x;
+		return y_over_x;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "second"))
-	return y_over_x;
+		return y_over_x;
 	if (type_base_type(y_over_x) != type_base_type(x))
 	{
 		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(y_over_x), type_display(x));
@@ -1122,7 +1128,7 @@ static Type* builtin_result_normalize(const Symbol* sym, Type** args, int argc)
 {
 	Type* value = (argc > 0) ? args[0] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, value, "first"))
-	return value;
+		return value;
 	return value;
 }
 
@@ -1131,9 +1137,9 @@ static Type* builtin_result_reflect(const Symbol* sym, Type** args, int argc)
 	Type* I = (argc > 0) ? args[0] : NULL;
 	Type* N = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, I, "first"))
-	return I;
+		return I;
 	if (!builtin_validate_floating_scalar_vector(sym, N, "second"))
-	return I;
+		return I;
 	if (!type_is_vector(I))
 	{
 		type_check_error("%s requires vector arguments, got %s", builtin_func_name(sym), type_display(I));
@@ -1155,9 +1161,9 @@ static Type* builtin_result_refract(const Symbol* sym, Type** args, int argc)
 	Type* N = (argc > 1) ? args[1] : NULL;
 	Type* eta = (argc > 2) ? args[2] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, I, "first"))
-	return I;
+		return I;
 	if (!builtin_validate_floating_scalar_vector(sym, N, "second"))
-	return I;
+		return I;
 	if (!type_is_vector(I))
 	{
 		type_check_error("%s requires vector I argument, got %s", builtin_func_name(sym), type_display(I));
@@ -1171,7 +1177,7 @@ static Type* builtin_result_refract(const Symbol* sym, Type** args, int argc)
 		type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(I), type_display(N));
 	}
 	if (!builtin_validate_floating_scalar_vector(sym, eta, "third"))
-	return I;
+		return I;
 	if (!type_is_scalar(eta))
 	{
 		type_check_error("%s requires scalar eta argument, got %s", builtin_func_name(sym), type_display(eta));
@@ -1185,9 +1191,9 @@ static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc)
 	Type* y = (argc > 1) ? args[1] : NULL;
 	Type* a = (argc > 2) ? args[2] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-	return x;
+		return x;
 	if (type_base_type(x) != type_base_type(y))
 	{
 		type_check_error("%s requires matching base types for first two arguments, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
@@ -1241,9 +1247,9 @@ static Type* builtin_result_step(const Symbol* sym, Type** args, int argc)
 	Type* edge = (argc > 0) ? args[0] : NULL;
 	Type* x = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "second"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, edge, "first"))
-	return x;
+		return x;
 	if (type_base_type(edge) != type_base_type(x))
 	{
 		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(edge), type_display(x));
@@ -1268,11 +1274,11 @@ static Type* builtin_result_smoothstep(const Symbol* sym, Type** args, int argc)
 	Type* edge1 = (argc > 1) ? args[1] : NULL;
 	Type* x = (argc > 2) ? args[2] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, x, "third"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, edge0, "first"))
-	return x;
+		return x;
 	if (!builtin_validate_floating_scalar_vector(sym, edge1, "second"))
-	return x;
+		return x;
 	TypeTag base = type_base_type(x);
 	if (type_base_type(edge0) != base)
 	{
@@ -1786,7 +1792,6 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 	return type_get_scalar(base);
 }
 
-
 // Collapse boolean vectors for any()/all() reductions.
 // ...bool is_visible = all(greaterThanEqual(alpha.rgb, vec3(0.0)));
 static Type* builtin_result_any_all(Type** args, int argc)
@@ -1800,9 +1805,6 @@ static Type* builtin_result_any_all(Type** args, int argc)
 	}
 	return type_get_scalar(T_BOOL);
 }
-
-
-
 
 // Route builtin calls to the helper that checks their arguments.
 // ...float lighting = dot(normal, light_dir);
@@ -2807,8 +2809,8 @@ void type_check_ir()
 	dyna unsigned* qualifier_stack = NULL;
 	dyna unsigned* storage_stack = NULL;
 	dyna Symbol** symbol_stack = NULL;
-Type* current_decl_type = NULL;
-const char* current_decl_name = NULL;
+	Type* current_decl_type = NULL;
+	const char* current_decl_name = NULL;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
@@ -3279,29 +3281,29 @@ const char* current_decl_name = NULL;
 			apush(symbol_stack, NULL);
 			break;
 		}
-case IR_DECL_TYPE:
-current_decl_type = type_system_get(inst->str0);
-inst->type = current_decl_type;
-current_decl_name = NULL;
-break;
-case IR_DECL_VAR:
-current_decl_name = inst->str0;
-break;
-case IR_DECL_END:
-current_decl_type = NULL;
-current_decl_name = NULL;
-break;
-case IR_DECL_INIT_END:
-if (acount(stack) > 0)
-{
-Type* value = type_stack_pop(stack, "initializer");
-if (acount(qualifier_stack))
-(void)apop(qualifier_stack);
-if (current_decl_type && value && !type_can_assign(current_decl_type, value))
-{
-type_check_error("initializer type %s cannot initialize %s %s", type_display(value), current_decl_name ? current_decl_name : "value", type_display(current_decl_type));
-}
-}
+		case IR_DECL_TYPE:
+			current_decl_type = type_system_get(inst->str0);
+			inst->type = current_decl_type;
+			current_decl_name = NULL;
+			break;
+		case IR_DECL_VAR:
+			current_decl_name = inst->str0;
+			break;
+		case IR_DECL_END:
+			current_decl_type = NULL;
+			current_decl_name = NULL;
+			break;
+		case IR_DECL_INIT_END:
+			if (acount(stack) > 0)
+			{
+				Type* value = type_stack_pop(stack, "initializer");
+				if (acount(qualifier_stack))
+					(void)apop(qualifier_stack);
+				if (current_decl_type && value && !type_can_assign(current_decl_type, value))
+				{
+					type_check_error("initializer type %s cannot initialize %s %s", type_display(value), current_decl_name ? current_decl_name : "value", type_display(current_decl_type));
+				}
+			}
 			if (acount(stack) > 0)
 				aclear(stack);
 			if (acount(qualifier_stack) > 0)
