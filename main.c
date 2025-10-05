@@ -244,12 +244,23 @@ StructMember* type_struct_member_at(Type* type, int index);
 typedef enum BuiltinFuncKind
 {
 	BUILTIN_NONE,
-	BUILTIN_TEXTURE,
-	BUILTIN_TEXTURE_LOD,
-	BUILTIN_TEXTURE_PROJ,
-	BUILTIN_TEXTURE_GRAD,
-	BUILTIN_MIN,
-	BUILTIN_MAX,
+BUILTIN_TEXTURE,
+BUILTIN_TEXTURE_LOD,
+BUILTIN_TEXTURE_PROJ,
+BUILTIN_TEXTURE_GRAD,
+BUILTIN_TEXTURE_OFFSET,
+BUILTIN_TEXTURE_LOD_OFFSET,
+BUILTIN_TEXTURE_PROJ_OFFSET,
+BUILTIN_TEXTURE_PROJ_LOD,
+BUILTIN_TEXTURE_PROJ_LOD_OFFSET,
+BUILTIN_TEXTURE_GRAD_OFFSET,
+BUILTIN_TEXTURE_PROJ_GRAD,
+BUILTIN_TEXTURE_PROJ_GRAD_OFFSET,
+BUILTIN_TEXTURE_GATHER,
+BUILTIN_TEXTURE_GATHER_OFFSET,
+BUILTIN_TEXTURE_GATHER_OFFSETS,
+BUILTIN_MIN,
+BUILTIN_MAX,
 	BUILTIN_CLAMP,
 	BUILTIN_ABS,
 	BUILTIN_FLOOR,
@@ -281,23 +292,43 @@ typedef enum BuiltinFuncKind
 	BUILTIN_ATAN,
 	BUILTIN_SIGN,
 	BUILTIN_TRUNC,
-	BUILTIN_ROUND,
-	BUILTIN_ROUND_EVEN,
-	BUILTIN_DFDX,
-	BUILTIN_DFDY,
-	BUILTIN_FWIDTH,
-	BUILTIN_TEXTURE_SIZE,
-	BUILTIN_TEXEL_FETCH,
-	BUILTIN_INVERSE,
-	BUILTIN_TRANSPOSE,
-	BUILTIN_LESS_THAN,
-	BUILTIN_LESS_THAN_EQUAL,
+BUILTIN_ROUND,
+BUILTIN_ROUND_EVEN,
+BUILTIN_DFDX,
+BUILTIN_DFDX_FINE,
+BUILTIN_DFDX_COARSE,
+BUILTIN_DFDY,
+BUILTIN_DFDY_FINE,
+BUILTIN_DFDY_COARSE,
+BUILTIN_FWIDTH,
+BUILTIN_FWIDTH_FINE,
+BUILTIN_FWIDTH_COARSE,
+BUILTIN_TEXTURE_SIZE,
+BUILTIN_TEXEL_FETCH,
+BUILTIN_TEXEL_FETCH_OFFSET,
+BUILTIN_TEXTURE_QUERY_LOD,
+BUILTIN_TEXTURE_QUERY_LEVELS,
+BUILTIN_INVERSE,
+BUILTIN_TRANSPOSE,
+BUILTIN_DETERMINANT,
+BUILTIN_OUTER_PRODUCT,
+BUILTIN_MATRIX_COMP_MULT,
+BUILTIN_LESS_THAN,
+BUILTIN_LESS_THAN_EQUAL,
 	BUILTIN_GREATER_THAN,
 	BUILTIN_GREATER_THAN_EQUAL,
 	BUILTIN_EQUAL,
-	BUILTIN_NOT_EQUAL,
-	BUILTIN_ANY,
-	BUILTIN_ALL
+BUILTIN_NOT_EQUAL,
+BUILTIN_ANY,
+BUILTIN_ALL,
+BUILTIN_IMAGE_ATOMIC_ADD,
+BUILTIN_IMAGE_ATOMIC_MIN,
+BUILTIN_IMAGE_ATOMIC_MAX,
+BUILTIN_IMAGE_ATOMIC_AND,
+BUILTIN_IMAGE_ATOMIC_OR,
+BUILTIN_IMAGE_ATOMIC_XOR,
+BUILTIN_IMAGE_ATOMIC_EXCHANGE,
+BUILTIN_IMAGE_ATOMIC_COMP_SWAP
 } BuiltinFuncKind;
 
 typedef struct Symbol
@@ -830,24 +861,57 @@ const char* snippet_builtin_funcs = STR(
 		});
 
 const char* snippet_texture_queries = STR(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 0, binding = 0) uniform sampler2D u_tex;
-		void main() {
-			ivec2 tex_size = textureSize(u_tex, 0);
-			vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
-			mat3 identity = mat3(1.0);
-			mat3 inv_identity = inverse(identity);
-			mat3 trans_identity = transpose(identity);
-			bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
-			bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
-			bvec2 eq_mask = equal(less_mask, ge_mask);
-			bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
-			bool all_true = all(eq_mask);
-			bool any_true = any(ne_mask);
-			float texel_extent = float(tex_size.x + tex_size.y);
-			vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
-			out_color = texel + vec4(basis, 0.0);
-		});
+	layout(location = 0) out vec4 out_color;
+	layout(set = 0, binding = 0) uniform sampler2D u_tex;
+	void main() {
+		ivec2 tex_size = textureSize(u_tex, 0);
+		vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
+		mat3 identity = mat3(1.0);
+		mat3 inv_identity = inverse(identity);
+		mat3 trans_identity = transpose(identity);
+		bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
+		bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
+		bvec2 eq_mask = equal(less_mask, ge_mask);
+		bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
+		bool all_true = all(eq_mask);
+		bool any_true = any(ne_mask);
+		float texel_extent = float(tex_size.x + tex_size.y);
+		vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
+		out_color = texel + vec4(basis, 0.0);
+	}
+);
+
+const char* snippet_extended_intrinsics = STR(
+	layout(location = 0) out vec4 out_color;
+	layout(set = 2, binding = 0) uniform sampler2D u_tex;
+	layout(set = 2, binding = 1) uniform iimage2D u_image;
+	void main() {
+		vec2 uv = vec2(0.25, 0.75);
+		vec4 offset_sample = textureOffset(u_tex, uv, ivec2(1, -1));
+		vec4 lod_offset = textureLodOffset(u_tex, uv, 0.0, ivec2(0, 1));
+		vec4 grad_offset = textureGradOffset(u_tex, uv, vec2(1.0, 0.0), vec2(0.0, 1.0), ivec2(1, 0));
+		vec4 gather0 = textureGather(u_tex, uv, 0);
+		vec4 gather_offset = textureGatherOffset(u_tex, uv, ivec2(1, 0), 0);
+		vec2 lod_info = textureQueryLod(u_tex, uv);
+		int level_count = textureQueryLevels(u_tex);
+		vec4 fetch_offset = texelFetchOffset(u_tex, ivec2(0, 0), 0, ivec2(1, 0));
+		vec2 fine_width = fwidthFine(uv);
+		vec2 coarse_width = fwidthCoarse(uv);
+		vec2 deriv_mix = dFdxFine(uv) + dFdyCoarse(uv);
+		mat3 base = mat3(1.0);
+		float det = determinant(base);
+		mat3 comp = matrixCompMult(base, transpose(base));
+		mat3 outer = outerProduct(vec3(1.0, 0.0, 1.0), vec3(0.5, 0.25, 0.75));
+		ivec2 pixel = ivec2(0, 0);
+		int previous = imageAtomicAdd(u_image, pixel, 1);
+		int swapped = imageAtomicCompSwap(u_image, pixel, previous, previous + 1);
+		float derivative_sum = fine_width.x + coarse_width.y + deriv_mix.x;
+		float matrix_sum = comp[0][0] + outer[0][0];
+		vec4 accum = offset_sample + lod_offset + grad_offset;
+		accum += gather0 + gather_offset + fetch_offset;
+		out_color = accum + vec4(vec3(det + matrix_sum + derivative_sum + float(level_count) + float(swapped), lod_info), 1.0);
+	}
+);
 
 const char* snippet_preprocessor_passthrough =
 		"#define UNUSED_CONSTANT 1\n"
@@ -948,6 +1012,7 @@ int main()
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
 		{ "texture_queries", snippet_texture_queries },
+		{ "extended_intrinsics", snippet_extended_intrinsics },
 		{ "const_qualifier", snippet_const_qualifier },
 		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
