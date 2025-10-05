@@ -19,6 +19,16 @@ void dump_storage_flags(unsigned flags)
 		printf("%suniform", first ? "" : "|");
 		first = 0;
 	}
+	if (flags & SYM_STORAGE_BUFFER)
+	{
+		printf("%sbuffer", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_STORAGE_SHARED)
+	{
+		printf("%sshared", first ? "" : "|");
+		first = 0;
+	}
 }
 
 void dump_qualifier_flags(unsigned flags)
@@ -30,6 +40,31 @@ void dump_qualifier_flags(unsigned flags)
 	if (flags & SYM_QUAL_CONST)
 	{
 		printf("%sconst", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_QUAL_COHERENT)
+	{
+		printf("%scoherent", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_QUAL_VOLATILE)
+	{
+		printf("%svolatile", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_QUAL_RESTRICT)
+	{
+		printf("%srestrict", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_QUAL_READONLY)
+	{
+		printf("%sreadonly", first ? "" : "|");
+		first = 0;
+	}
+	if (flags & SYM_QUAL_WRITEONLY)
+	{
+		printf("%swriteonly", first ? "" : "|");
 		first = 0;
 	}
 }
@@ -144,6 +179,19 @@ void dump_ir()
 			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
 			break;
 		case IR_BLOCK_DECL_END:
+			break;
+		case IR_STAGE_LAYOUT_BEGIN:
+			dump_storage_flags(inst->storage_flags);
+			dump_qualifier_flags(inst->qualifier_flags);
+			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
+			break;
+		case IR_STAGE_LAYOUT_IDENTIFIER:
+			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
+			break;
+		case IR_STAGE_LAYOUT_VALUE:
+			printf(" %s=%d", inst->str0 ? inst->str0 : "<anon>", inst->arg0);
+			break;
+		case IR_STAGE_LAYOUT_END:
 			break;
 		case IR_RETURN:
 			printf(" has_value=%d", inst->arg0);
@@ -1247,6 +1295,75 @@ DEFINE_TEST(test_builtin_variables_fragment_stage)
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 }
 
+DEFINE_TEST(test_builtin_variables_compute_stage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
+	compiler_setup("layout(local_size_x = 1) in; void main() { uvec3 id = gl_GlobalInvocationID; }");
+	Symbol* global_id = symbol_table_find(sintern("gl_GlobalInvocationID"));
+	assert(global_id);
+	assert(symbol_has_storage(global_id, SYM_STORAGE_IN));
+	assert(global_id->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* local_index = symbol_table_find(sintern("gl_LocalInvocationIndex"));
+	assert(local_index);
+	assert(symbol_has_storage(local_index, SYM_STORAGE_IN));
+	assert(local_index->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* workgroup_size = symbol_table_find(sintern("gl_WorkGroupSize"));
+	assert(workgroup_size);
+	assert(symbol_has_storage(workgroup_size, SYM_STORAGE_IN));
+	assert(workgroup_size->qualifier_flags & SYM_QUAL_CONST);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
+DEFINE_TEST(test_compute_layout_and_storage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
+	const char* source =
+	"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
+	"coherent readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
+	"shared coherent float tile[64];"
+	"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
+	compiler_setup(source);
+	int saw_stage_layout = 0;
+	int saw_x = 0;
+	int saw_y = 0;
+	int saw_z = 0;
+	const char* local_size_x = sintern("local_size_x");
+	const char* local_size_y = sintern("local_size_y");
+	const char* local_size_z = sintern("local_size_z");
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op == IR_STAGE_LAYOUT_BEGIN)
+		{
+			saw_stage_layout = 1;
+			continue;
+		}
+		if (inst->op == IR_STAGE_LAYOUT_VALUE)
+		{
+			if (inst->str0 == local_size_x && inst->arg0 == 8)
+				saw_x = 1;
+			if (inst->str0 == local_size_y && inst->arg0 == 4)
+				saw_y = 1;
+			if (inst->str0 == local_size_z && inst->arg0 == 1)
+				saw_z = 1;
+		}
+	}
+	assert(saw_stage_layout);
+	assert(saw_x && saw_y && saw_z);
+	Symbol* data_block = symbol_table_find(sintern("data"));
+	assert(data_block);
+	assert(symbol_has_storage(data_block, SYM_STORAGE_BUFFER));
+	assert(data_block->qualifier_flags & SYM_QUAL_COHERENT);
+	assert(data_block->qualifier_flags & SYM_QUAL_READONLY);
+	Symbol* tile = symbol_table_find(sintern("tile"));
+	assert(tile);
+	assert(symbol_has_storage(tile, SYM_STORAGE_SHARED));
+	assert(tile->qualifier_flags & SYM_QUAL_COHERENT);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -1357,6 +1474,8 @@ void unit_test()
 		TEST_ENTRY(test_extended_intrinsic_calls),
 		TEST_ENTRY(test_builtin_variables_vertex_stage),
 		TEST_ENTRY(test_builtin_variables_fragment_stage),
+		TEST_ENTRY(test_builtin_variables_compute_stage),
+		TEST_ENTRY(test_compute_layout_and_storage),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_const_qualifier_metadata),
 	};

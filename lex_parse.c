@@ -3,6 +3,8 @@ typedef enum SymbolStorage
 	SYM_STORAGE_IN = 1 << 0,
 	SYM_STORAGE_OUT = 1 << 1,
 	SYM_STORAGE_UNIFORM = 1 << 2,
+	SYM_STORAGE_BUFFER = 1 << 3,
+	SYM_STORAGE_SHARED = 1 << 4,
 } SymbolStorage;
 
 typedef enum SymbolLayout
@@ -15,6 +17,11 @@ typedef enum SymbolLayout
 typedef enum SymbolQualifier
 {
 	SYM_QUAL_CONST = 1 << 0,
+	SYM_QUAL_COHERENT = 1 << 1,
+	SYM_QUAL_VOLATILE = 1 << 2,
+	SYM_QUAL_RESTRICT = 1 << 3,
+	SYM_QUAL_READONLY = 1 << 4,
+	SYM_QUAL_WRITEONLY = 1 << 5,
 } SymbolQualifier;
 
 typedef struct SymbolScopeEntry
@@ -46,10 +53,17 @@ const char* kw_set;
 const char* kw_binding;
 const char* kw_location;
 const char* kw_std140;
+const char* kw_std430;
 const char* kw_row_major;
 const char* kw_column_major;
 const char* kw_shared;
+const char* kw_buffer;
 const char* kw_packed;
+const char* kw_coherent;
+const char* kw_volatile;
+const char* kw_restrict;
+const char* kw_readonly;
+const char* kw_writeonly;
 const char* kw_if;
 const char* kw_else;
 const char* kw_return;
@@ -77,10 +91,17 @@ void init_keyword_interns()
 	kw_binding = sintern("binding");
 	kw_location = sintern("location");
 	kw_std140 = sintern("std140");
+	kw_std430 = sintern("std430");
 	kw_row_major = sintern("row_major");
 	kw_column_major = sintern("column_major");
 	kw_shared = sintern("shared");
+	kw_buffer = sintern("buffer");
 	kw_packed = sintern("packed");
+	kw_coherent = sintern("coherent");
+	kw_volatile = sintern("volatile");
+	kw_restrict = sintern("restrict");
+	kw_readonly = sintern("readonly");
+	kw_writeonly = sintern("writeonly");
 	kw_if = sintern("if");
 	kw_else = sintern("else");
 	kw_return = sintern("return");
@@ -281,6 +302,7 @@ typedef struct BuiltinVariableInit
 #define STAGE_MASK(stage) (1u << (stage))
 #define STAGE_MASK_VERTEX STAGE_MASK(SHADER_STAGE_VERTEX)
 #define STAGE_MASK_FRAGMENT STAGE_MASK(SHADER_STAGE_FRAGMENT)
+#define STAGE_MASK_COMPUTE STAGE_MASK(SHADER_STAGE_COMPUTE)
 
 static const BuiltinVariableInit builtin_variables[] = {
 	{ "gl_Position", STAGE_MASK_VERTEX, "vec4", SYM_STORAGE_OUT, 0, 0, -1 },
@@ -306,6 +328,12 @@ static const BuiltinVariableInit builtin_variables[] = {
 	{ "gl_ClipDistance", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_IN, SYM_QUAL_CONST, 1, -1 },
 	{ "gl_CullDistance", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_IN, SYM_QUAL_CONST, 1, -1 },
 	{ "gl_FragDepth", STAGE_MASK_FRAGMENT, "float", SYM_STORAGE_OUT, 0, 0, -1 },
+	{ "gl_GlobalInvocationID", STAGE_MASK_COMPUTE, "uvec3", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_WorkGroupID", STAGE_MASK_COMPUTE, "uvec3", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_NumWorkGroups", STAGE_MASK_COMPUTE, "uvec3", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_LocalInvocationID", STAGE_MASK_COMPUTE, "uvec3", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_LocalInvocationIndex", STAGE_MASK_COMPUTE, "uint", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
+	{ "gl_WorkGroupSize", STAGE_MASK_COMPUTE, "uvec3", SYM_STORAGE_IN, SYM_QUAL_CONST, 0, -1 },
 	{ "gl_SampleMask", STAGE_MASK_FRAGMENT, "int", SYM_STORAGE_OUT, 0, 1, -1 },
 };
 
@@ -811,6 +839,10 @@ unsigned storage_flag_from_keyword(const char* s)
 		return SYM_STORAGE_OUT;
 	if (s == kw_uniform)
 		return SYM_STORAGE_UNIFORM;
+	if (s == kw_buffer)
+		return SYM_STORAGE_BUFFER;
+	if (s == kw_shared)
+		return SYM_STORAGE_SHARED;
 	return 0;
 }
 
@@ -829,6 +861,16 @@ unsigned qualifier_flag_from_keyword(const char* s)
 {
 	if (s == kw_const)
 		return SYM_QUAL_CONST;
+	if (s == kw_coherent)
+		return SYM_QUAL_COHERENT;
+	if (s == kw_volatile)
+		return SYM_QUAL_VOLATILE;
+	if (s == kw_restrict)
+		return SYM_QUAL_RESTRICT;
+	if (s == kw_readonly)
+		return SYM_QUAL_READONLY;
+	if (s == kw_writeonly)
+		return SYM_QUAL_WRITEONLY;
 	return 0;
 }
 
@@ -847,6 +889,16 @@ void type_spec_add_layout_identifier(TypeSpec* spec, const char* ident)
 	if (!ident)
 		return;
 	apush(spec->layout_identifiers, ident);
+}
+
+void type_spec_add_layout_assignment(TypeSpec* spec, const char* ident, int value)
+{
+	if (!ident)
+		return;
+	TypeLayoutAssignment entry = { 0 };
+	entry.identifier = ident;
+	entry.value = value;
+	apush(spec->layout_assignments, entry);
 }
 
 void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
@@ -914,18 +966,22 @@ void parse_layout_block(TypeSpec* spec)
 		next();
 		if (tok.kind == TOK_ASSIGN)
 		{
-			if (!layout_flag)
-				parse_error("unknown layout identifier");
 			next();
 			if (tok.kind != TOK_INT)
 				parse_error("expected integer in layout assignment");
-			type_spec_set_layout(spec, layout_flag, tok.int_val);
+			int value = tok.int_val;
 			next();
+			if (layout_flag)
+			{
+				type_spec_set_layout(spec, layout_flag, value);
+			}
+			else
+			{
+				type_spec_add_layout_assignment(spec, ident, value);
+			}
 		}
 		else
 		{
-			if (ident != kw_std140)
-				parse_error("unsupported layout identifier");
 			type_spec_add_layout_identifier(spec, ident);
 		}
 		if (tok.kind == TOK_COMMA)
@@ -937,6 +993,7 @@ void parse_layout_block(TypeSpec* spec)
 	}
 	expect(TOK_RPAREN);
 }
+
 
 // Gather storage and qualifier keywords like uniform const.
 // ...uniform sampler2D u_image;
@@ -1007,9 +1064,17 @@ TypeSpec parse_type_specifier()
 		return spec;
 	}
 	if (tok.kind != TOK_IDENTIFIER)
+	{
+		int has_layout = (spec.layout_identifiers && acount(spec.layout_identifiers) > 0) || (spec.layout_assignments && acount(spec.layout_assignments) > 0);
+		if (tok.kind == TOK_SEMI && (spec.storage_flags || has_layout))
+		{
+			spec.is_stage_layout = 1;
+			return spec;
+		}
 		parse_error("expected type");
+	}
 	const char* type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-	if ((spec.storage_flags & SYM_STORAGE_UNIFORM))
+	if ((spec.storage_flags & (SYM_STORAGE_UNIFORM | SYM_STORAGE_BUFFER)))
 	{
 		Token lookahead = peek_token();
 		if (lookahead.kind == TOK_LBRACE)
@@ -1422,6 +1487,28 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 void stmt_decl()
 {
 	TypeSpec spec = parse_type_specifier();
+	if (spec.is_stage_layout)
+	{
+			IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
+		ir_apply_type_spec(begin, &spec);
+		int layout_count = spec.layout_identifiers ? acount(spec.layout_identifiers) : 0;
+		for (int i = 0; i < layout_count; ++i)
+		{
+			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
+			layout->str0 = spec.layout_identifiers[i];
+		}
+		int assignment_count = spec.layout_assignments ? acount(spec.layout_assignments) : 0;
+		for (int i = 0; i < assignment_count; ++i)
+		{
+			TypeLayoutAssignment* entry = &spec.layout_assignments[i];
+			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
+			layout->str0 = entry->identifier;
+			layout->arg0 = entry->value;
+		}
+		expect(TOK_SEMI);
+		ir_emit(IR_STAGE_LAYOUT_END);
+		return;
+	}
 	if (spec.is_interface_block)
 	{
 		const char* instance_name = NULL;
@@ -2122,6 +2209,28 @@ void top_level()
 	if (!is_type_token())
 		parse_error("expected type at top level");
 	TypeSpec type_spec = parse_type_specifier();
+	if (type_spec.is_stage_layout)
+	{
+		IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
+		ir_apply_type_spec(begin, &type_spec);
+		int layout_count = type_spec.layout_identifiers ? acount(type_spec.layout_identifiers) : 0;
+		for (int i = 0; i < layout_count; ++i)
+		{
+			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
+			layout->str0 = type_spec.layout_identifiers[i];
+		}
+		int assignment_count = type_spec.layout_assignments ? acount(type_spec.layout_assignments) : 0;
+		for (int i = 0; i < assignment_count; ++i)
+		{
+			TypeLayoutAssignment* entry = &type_spec.layout_assignments[i];
+			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
+			layout->str0 = entry->identifier;
+			layout->arg0 = entry->value;
+		}
+		expect(TOK_SEMI);
+		ir_emit(IR_STAGE_LAYOUT_END);
+		return;
+	}
 	if (type_spec.is_interface_block)
 	{
 		const char* instance_name = NULL;

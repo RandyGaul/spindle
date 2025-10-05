@@ -174,6 +174,7 @@ typedef enum ShaderStage
 {
 	SHADER_STAGE_VERTEX,
 	SHADER_STAGE_FRAGMENT,
+	SHADER_STAGE_COMPUTE,
 	SHADER_STAGE_COUNT
 } ShaderStage;
 
@@ -365,6 +366,12 @@ typedef struct Symbol
 	ShaderStage builtin_stage;
 } Symbol;
 
+typedef struct TypeLayoutAssignment
+{
+	const char* identifier;
+	int value;
+} TypeLayoutAssignment;
+
 typedef struct TypeSpec
 {
 	const char* type_name;
@@ -376,9 +383,11 @@ typedef struct TypeSpec
 	int layout_binding;
 	int layout_location;
 	dyna const char** layout_identifiers;
+	dyna TypeLayoutAssignment* layout_assignments;
 	StructInfo* struct_info;
 	int has_struct_definition;
 	int is_interface_block;
+	int is_stage_layout;
 } TypeSpec;
 
 typedef struct TypeSystem
@@ -475,6 +484,10 @@ typedef enum IR_Op
 	IR_BLOCK_DECL_MEMBER,
 	IR_BLOCK_DECL_INSTANCE,
 	IR_BLOCK_DECL_END,
+	IR_STAGE_LAYOUT_BEGIN,
+	IR_STAGE_LAYOUT_IDENTIFIER,
+	IR_STAGE_LAYOUT_VALUE,
+	IR_STAGE_LAYOUT_END,
 	IR_OP_COUNT
 } IR_Op;
 
@@ -572,6 +585,10 @@ const char* ir_op_name[IR_OP_COUNT] = {
 	[IR_BLOCK_DECL_MEMBER] = "block_decl_member",
 	[IR_BLOCK_DECL_INSTANCE] = "block_decl_instance",
 	[IR_BLOCK_DECL_END] = "block_decl_end",
+	[IR_STAGE_LAYOUT_BEGIN] = "stage_layout_begin",
+	[IR_STAGE_LAYOUT_IDENTIFIER] = "stage_layout_identifier",
+	[IR_STAGE_LAYOUT_VALUE] = "stage_layout_value",
+	[IR_STAGE_LAYOUT_END] = "stage_layout_end",
 };
 
 typedef struct IR_Cmd
@@ -880,6 +897,19 @@ const char* snippet_stage_builtins_fragment = STR(
 			out_color = coord + vec4(float(sample_id + sample_mask));
 		});
 
+const char* snippet_stage_builtins_compute = STR(
+		layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+		coherent readonly layout(std430, set = 0, binding = 0) buffer Globals { uvec4 data[]; } u_globals;
+		shared coherent float tile[64];
+		void main() {
+			uvec3 gid = gl_GlobalInvocationID;
+			uvec3 lid = gl_LocalInvocationID;
+			uint index = gl_LocalInvocationIndex;
+			tile[index] = float(gid.x + lid.y);
+		}
+);
+
+
 const char* snippet_builtin_funcs = STR(
 		layout(location = 0) out vec4 out_color;
 		layout(set = 0, binding = 0) uniform sampler2D u_tex;
@@ -1089,6 +1119,7 @@ int main()
 		{ "extended_types", SHADER_STAGE_FRAGMENT, snippet_extended_types },
 		{ "stage_builtins_fragment", SHADER_STAGE_FRAGMENT, snippet_stage_builtins_fragment },
 		{ "stage_builtins_vertex", SHADER_STAGE_VERTEX, snippet_stage_builtins_vertex },
+		{ "stage_builtins_compute", SHADER_STAGE_COMPUTE, snippet_stage_builtins_compute },
 	};
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
 	{
