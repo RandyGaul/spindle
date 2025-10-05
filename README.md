@@ -13,4 +13,5 @@ So far the compiler seems to handle a variety of valid vertex/fragment shader in
 - Try out a variety of hand-written shaders just to ensure it's all sane and working so far with more real-world use cases
 - Get in actual SPIRV output, this will not be optimized and only produce functionally equivalent shader blobs. Backends will be doing their own optimization passes anyways
 - If it's not much trouble it might be worth adding in some light optimization passes as a final step
+- A reflection table needs to be generated for the shader describing all of the various inputs (uniforms, vertex attributes, etc.)
 - Again, another final human massaging, audit, refactoring would be needed, especially in designing a user-facing API
