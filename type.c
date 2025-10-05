@@ -697,6 +697,90 @@ Type* type_bool_type(int components)
 	return type_get_vector(T_BOOL, components);
 }
 
+static Type* type_promote_scalar_to_components(Type* type, int components)
+{
+	if (!type || components <= 1)
+		return type;
+	if (!type_is_scalar(type))
+		return type;
+	TypeTag base = type_base_type(type);
+	Type* vector = type_get_vector(base, components);
+	return vector ? vector : type;
+}
+
+static int type_align_component_counts(Type** a, Type** b)
+{
+	if (!a || !b || !*a || !*b)
+		return 0;
+	Type* lhs = *a;
+	Type* rhs = *b;
+	if (type_is_matrix(lhs) || type_is_matrix(rhs))
+	{
+		if (type_is_matrix(lhs) && type_is_matrix(rhs) && lhs->cols == rhs->cols && lhs->rows == rhs->rows)
+			return 1;
+		return 0;
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs))
+		return lhs->cols == rhs->cols;
+	if (type_is_vector(lhs) && type_is_scalar(rhs))
+	{
+		Type* promoted = type_promote_scalar_to_components(rhs, lhs->cols);
+		if (!promoted || !type_is_vector(promoted) || promoted->cols != lhs->cols)
+			return 0;
+		*b = promoted;
+		return 1;
+	}
+	if (type_is_scalar(lhs) && type_is_vector(rhs))
+	{
+		Type* promoted = type_promote_scalar_to_components(lhs, rhs->cols);
+		if (!promoted || !type_is_vector(promoted) || promoted->cols != rhs->cols)
+			return 0;
+		*a = promoted;
+		return 1;
+	}
+	if (type_is_scalar(lhs) && type_is_scalar(rhs))
+		return 1;
+	return 0;
+}
+
+static int type_numeric_rank(TypeTag tag)
+{
+	switch (tag)
+	{
+	case T_DOUBLE:
+		return 4;
+	case T_FLOAT:
+		return 3;
+	case T_UINT:
+		return 2;
+	case T_INT:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
+{
+	if (!type_base_is_numeric(a) || !type_base_is_numeric(b))
+		return T_VOID;
+	int rank_a = type_numeric_rank(a);
+	int rank_b = type_numeric_rank(b);
+	TypeTag preferred = rank_a >= rank_b ? a : b;
+	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
+		return preferred;
+	preferred = rank_a < rank_b ? a : b;
+	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
+		return preferred;
+	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT, T_INT };
+	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)
+	{
+		TypeTag candidate = fallback[i];
+		if (type_base_can_convert(a, candidate) && type_base_can_convert(b, candidate))
+			return candidate;
+	}
+	return T_VOID;
+}
 void type_check_error(const char* fmt, ...);
 
 Type* type_check_unary(const IR_Cmd* inst, Type* operand)
@@ -1150,13 +1234,33 @@ Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 	}
 	if (!true_type || !false_type)
 		return true_type ? true_type : false_type;
-	if (!type_equal(true_type, false_type))
+	if (type_equal(true_type, false_type))
+		return true_type;
+	if (type_base_type(true_type) == T_BOOL && type_base_type(false_type) == T_BOOL)
 	{
-		type_check_error("ternary branches must match types, got %s and %s", type_display(true_type), type_display(false_type));
+		Type* aligned_true = true_type;
+		Type* aligned_false = false_type;
+		if (type_align_component_counts(&aligned_true, &aligned_false))
+			return aligned_true;
 	}
+	Type* aligned_true = true_type;
+	Type* aligned_false = false_type;
+	if (type_align_component_counts(&aligned_true, &aligned_false))
+	{
+		TypeTag shared_base = type_shared_numeric_base(type_base_type(true_type), type_base_type(false_type));
+		if (shared_base != T_VOID)
+		{
+			if (type_is_scalar(aligned_true) && type_is_scalar(aligned_false))
+				return type_get_scalar(shared_base);
+			if (type_is_vector(aligned_true) && type_is_vector(aligned_false))
+				return type_get_vector(shared_base, aligned_true->cols);
+			if (type_is_matrix(aligned_true) && type_is_matrix(aligned_false))
+				return type_get_matrix(shared_base, aligned_true->cols, aligned_true->rows);
+		}
+	}
+	type_check_error("ternary branches must match types, got %s and %s", type_display(true_type), type_display(false_type));
 	return true_type;
 }
-
 static void type_constructor_error(const Type* target, const char* owner, const char* member, const char* fmt, ...)
 {
 	const char* type_name = type_display(target);
