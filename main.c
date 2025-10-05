@@ -162,6 +162,13 @@ const char* symbol_kind_name[SYM_KIND_COUNT] = {
 	[SYM_BLOCK] = "block",
 };
 
+typedef enum ShaderStage
+{
+	SHADER_STAGE_VERTEX,
+	SHADER_STAGE_FRAGMENT,
+	SHADER_STAGE_COUNT
+} ShaderStage;
+
 typedef enum TypeTag
 {
 	T_VOID,
@@ -294,6 +301,8 @@ typedef struct Symbol
 	int array_dimensions;
 	BuiltinFuncKind builtin_kind;
 	int builtin_param_count;
+	int is_builtin;
+	ShaderStage builtin_stage;
 } Symbol;
 
 typedef struct TypeSpec
@@ -651,24 +660,24 @@ const char* snippet_function_calls = STR(
 		});
 
 const char* snippet_matrix_ops = STR(
-                layout(location = 0) out vec4 out_color;
-                void main() {
-                        mat3 rotation = mat3(1.0);
-                        vec3 column = rotation[1];
-                        float diagonal = rotation[2][2];
-                        vec3 axis = vec3(1.0, 0.0, 0.0);
-                        vec3 rotated = rotation * axis;
-                        vec3 row_combo = axis * rotation;
-                        mat3 scale = mat3(2.0);
-                        mat3 combined = rotation * scale;
-                        mat2x3 rect_a = mat2x3(1.0);
-                        mat3x2 rect_b = mat3x2(1.0);
-                        mat3 rect_product = rect_a * rect_b;
-                        vec2 weights = vec2(0.5, 2.0);
-                        vec3 rect_vec = rect_a * weights;
-                        vec2 rect_row = row_combo * rect_a;
-                        out_color = vec4(column + rotated + rect_vec, diagonal + rect_row.x + combined[0][0] + rect_product[0][0]);
-                });
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			mat3 rotation = mat3(1.0);
+			vec3 column = rotation[1];
+			float diagonal = rotation[2][2];
+			vec3 axis = vec3(1.0, 0.0, 0.0);
+			vec3 rotated = rotation * axis;
+			vec3 row_combo = axis * rotation;
+			mat3 scale = mat3(2.0);
+			mat3 combined = rotation * scale;
+			mat2x3 rect_a = mat2x3(1.0);
+			mat3x2 rect_b = mat3x2(1.0);
+			mat3 rect_product = rect_a * rect_b;
+			vec2 weights = vec2(0.5, 2.0);
+			vec3 rect_vec = rect_a * weights;
+			vec2 rect_row = row_combo * rect_a;
+			out_color = vec4(column + rotated + rect_vec, diagonal + rect_row.x + combined[0][0] + rect_product[0][0]);
+		});
 
 const char* snippet_struct_block = STR(
 		struct Light {
@@ -833,9 +842,9 @@ const char* snippet_struct_constructor = STR(
 		void main() {
 			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0));
 			Outer combo = Outer(1.0,
-				Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
-				Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
-				0.0, 1.0, 2.0, 3.0);
+					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
+					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
+					0.0, 1.0, 2.0, 3.0);
 			out_color = vec4(combo.segments[0].coords[1], combo.thresholds[3], combo.weight);
 		});
 
@@ -847,6 +856,7 @@ const char* snippet_struct_constructor = STR(
 void transpile(const char* source)
 {
 	printf("Input : %s\n\n", source);
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 	compiler_setup(source);
 	dump_ir();
 	printf("\n");

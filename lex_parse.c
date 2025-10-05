@@ -91,6 +91,7 @@ void init_keyword_interns()
 
 SymbolTable g_symbol_table;
 SymbolTable* st = &g_symbol_table;
+ShaderStage g_shader_stage = SHADER_STAGE_VERTEX;
 const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
@@ -100,6 +101,8 @@ Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
+void symbol_add_storage(Symbol* sym, unsigned flags);
+void symbol_add_qualifier(Symbol* sym, unsigned flags);
 
 void symbol_table_enter_scope()
 {
@@ -123,6 +126,38 @@ typedef struct BuiltinFunctionInit
 	const char* return_type_name;
 	int param_count;
 } BuiltinFunctionInit;
+
+typedef struct BuiltinVariableInit
+{
+	const char* name;
+	ShaderStage stage;
+	const char* type_name;
+	unsigned storage_flags;
+	unsigned qualifier_flags;
+} BuiltinVariableInit;
+
+/*
+| Builtin Variable | Stage             | Type  | Access       |
+|------------------|-------------------|-------|--------------|
+| gl_Position      | Vertex (output)   | vec4  | write (out)  |
+| gl_PointSize     | Vertex (output)   | float | write (out)  |
+| gl_VertexIndex   | Vertex (input)    | int   | read (in)    |
+| gl_InstanceIndex | Vertex (input)    | int   | read (in)    |
+| gl_FragCoord     | Fragment (input)  | vec4  | read (in)    |
+| gl_FrontFacing   | Fragment (input)  | bool  | read (in)    |
+| gl_PointCoord    | Fragment (input)  | vec2  | read (in)    |
+| gl_FragDepth     | Fragment (output) | float | write (out)  |
+*/
+static const BuiltinVariableInit builtin_variables[] = {
+	{ "gl_Position", SHADER_STAGE_VERTEX, "vec4", SYM_STORAGE_OUT, 0 },
+	{ "gl_PointSize", SHADER_STAGE_VERTEX, "float", SYM_STORAGE_OUT, 0 },
+	{ "gl_VertexIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_InstanceIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FragCoord", SHADER_STAGE_FRAGMENT, "vec4", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FrontFacing", SHADER_STAGE_FRAGMENT, "bool", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_PointCoord", SHADER_STAGE_FRAGMENT, "vec2", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FragDepth", SHADER_STAGE_FRAGMENT, "float", SYM_STORAGE_OUT, 0 },
+};
 
 static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
 {
@@ -187,12 +222,31 @@ static void symbol_table_register_builtins()
 	}
 }
 
+static void symbol_table_register_builtin_variables()
+{
+	for (size_t i = 0; i < sizeof(builtin_variables) / sizeof(builtin_variables[0]); ++i)
+	{
+		const BuiltinVariableInit* init = &builtin_variables[i];
+		if (init->stage != g_shader_stage)
+			continue;
+		const char* name = sintern(init->name);
+		const char* type_name = sintern(init->type_name);
+		Type* type = type_system_get(type_name);
+		Symbol* sym = symbol_table_add(name, type_name, type, SYM_VAR);
+		sym->is_builtin = 1;
+		sym->builtin_stage = init->stage;
+		symbol_add_storage(sym, init->storage_flags);
+		symbol_add_qualifier(sym, init->qualifier_flags);
+	}
+}
+
 void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
-	symbol_table_enter_scope(st);
+	symbol_table_enter_scope();
 	symbol_table_register_builtins();
+	symbol_table_register_builtin_variables();
 }
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
@@ -209,6 +263,8 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 	sym.kind = kind;
 	sym.scope_depth = acount(st->scopes) - 1;
 	sym.builtin_param_count = -1;
+	sym.is_builtin = 0;
+	sym.builtin_stage = g_shader_stage;
 	apush(st->symbols, sym);
 	int idx = acount(st->symbols);
 	map_add(scope->map, key, (uint64_t)idx);
@@ -360,7 +416,7 @@ void symbol_table_free()
 {
 	while (acount(st->scopes) > 0)
 	{
-		symbol_table_leave_scope(st);
+		symbol_table_leave_scope();
 	}
 	for (int i = 0; i < acount(st->symbols); ++i)
 	{
@@ -2359,6 +2415,11 @@ void compiler_teardown()
 	current_param_type_name = NULL;
 	current_param_type_type = NULL;
 	reset_parser_state();
+}
+
+void compiler_set_shader_stage(ShaderStage stage)
+{
+	g_shader_stage = stage;
 }
 
 void compiler_setup(const char* source)

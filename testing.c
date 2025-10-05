@@ -985,6 +985,41 @@ DEFINE_TEST(test_builtin_function_calls)
 	assert(saw_dot);
 	assert(saw_normalize);
 }
+
+DEFINE_TEST(test_builtin_variables_vertex_stage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_setup("void main() { gl_Position = vec4(0.0); }");
+	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
+	assert(gl_position);
+	assert(gl_position->is_builtin);
+	assert(gl_position->builtin_stage == SHADER_STAGE_VERTEX);
+	assert(symbol_has_storage(gl_position, SYM_STORAGE_OUT));
+	assert(!(gl_position->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
+	assert(!frag_coord);
+	compiler_teardown();
+}
+
+DEFINE_TEST(test_builtin_variables_fragment_stage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("void main() { vec4 coord = gl_FragCoord; gl_FragDepth = coord.x; }");
+	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
+	assert(frag_coord);
+	assert(frag_coord->is_builtin);
+	assert(frag_coord->builtin_stage == SHADER_STAGE_FRAGMENT);
+	assert(symbol_has_storage(frag_coord, SYM_STORAGE_IN));
+	assert(frag_coord->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* frag_depth = symbol_table_find(sintern("gl_FragDepth"));
+	assert(frag_depth);
+	assert(symbol_has_storage(frag_depth, SYM_STORAGE_OUT));
+	assert(!(frag_depth->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
+	assert(!gl_position);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -1089,6 +1124,8 @@ void unit_test()
 		TEST_ENTRY(test_struct_constructor_ir),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
+		TEST_ENTRY(test_builtin_variables_vertex_stage),
+		TEST_ENTRY(test_builtin_variables_fragment_stage),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_const_qualifier_metadata),
