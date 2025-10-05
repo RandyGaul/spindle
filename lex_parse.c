@@ -141,6 +141,8 @@ static void symbol_table_register_builtins()
 		{ "textureLod", BUILTIN_TEXTURE_LOD, "vec4", 3 },
 		{ "textureProj", BUILTIN_TEXTURE_PROJ, "vec4", -1 },
 		{ "textureGrad", BUILTIN_TEXTURE_GRAD, "vec4", 4 },
+		{ "textureSize", BUILTIN_TEXTURE_SIZE, NULL, -1 },
+		{ "texelFetch", BUILTIN_TEXEL_FETCH, NULL, -1 },
 		{ "min", BUILTIN_MIN, NULL, 2 },
 		{ "max", BUILTIN_MAX, NULL, 2 },
 		{ "clamp", BUILTIN_CLAMP, NULL, 3 },
@@ -179,8 +181,18 @@ static void symbol_table_register_builtins()
 		{ "roundEven", BUILTIN_ROUND_EVEN, NULL, 1 },
 		{ "dFdx", BUILTIN_DFDX, NULL, 1 },
 		{ "dFdy", BUILTIN_DFDY, NULL, 1 },
-		{ "fwidth", BUILTIN_FWIDTH, NULL, 1 }
-	};
+		{ "fwidth", BUILTIN_FWIDTH, NULL, 1 },
+		{ "inverse", BUILTIN_INVERSE, NULL, 1 },
+		{ "transpose", BUILTIN_TRANSPOSE, NULL, 1 },
+		{ "lessThan", BUILTIN_LESS_THAN, NULL, 2 },
+		{ "lessThanEqual", BUILTIN_LESS_THAN_EQUAL, NULL, 2 },
+		{ "greaterThan", BUILTIN_GREATER_THAN, NULL, 2 },
+		{ "greaterThanEqual", BUILTIN_GREATER_THAN_EQUAL, NULL, 2 },
+		{ "equal", BUILTIN_EQUAL, NULL, 2 },
+		{ "notEqual", BUILTIN_NOT_EQUAL, NULL, 2 },
+		{ "any", BUILTIN_ANY, "bool", 1 },
+		{ "all", BUILTIN_ALL, "bool", 1 }
+};
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
 	{
 		symbol_table_register_builtin(&builtins[i]);

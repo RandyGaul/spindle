@@ -985,6 +985,68 @@ DEFINE_TEST(test_builtin_function_calls)
 	assert(saw_dot);
 	assert(saw_normalize);
 }
+
+DEFINE_TEST(test_texture_query_builtins)
+{
+	const char* texture_size_name = sintern("textureSize");
+	const char* texel_fetch_name = sintern("texelFetch");
+	const char* inverse_name = sintern("inverse");
+	const char* transpose_name = sintern("transpose");
+	const char* less_than_name = sintern("lessThan");
+	const char* greater_equal_name = sintern("greaterThanEqual");
+	const char* equal_name = sintern("equal");
+	const char* not_equal_name = sintern("notEqual");
+	const char* any_name = sintern("any");
+	const char* all_name = sintern("all");
+	compiler_setup(snippet_texture_queries);
+	int saw_texture_size = 0;
+	int saw_texel_fetch = 0;
+	int saw_inverse = 0;
+	int saw_transpose = 0;
+	int saw_less_than = 0;
+	int saw_greater_equal = 0;
+	int saw_equal = 0;
+	int saw_not_equal = 0;
+	int saw_any = 0;
+	int saw_all = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_CALL)
+			continue;
+		if (inst->str0 == texture_size_name)
+			saw_texture_size = 1;
+		if (inst->str0 == texel_fetch_name)
+			saw_texel_fetch = 1;
+		if (inst->str0 == inverse_name)
+			saw_inverse = 1;
+		if (inst->str0 == transpose_name)
+			saw_transpose = 1;
+		if (inst->str0 == less_than_name)
+			saw_less_than = 1;
+		if (inst->str0 == greater_equal_name)
+			saw_greater_equal = 1;
+		if (inst->str0 == equal_name)
+			saw_equal = 1;
+		if (inst->str0 == not_equal_name)
+			saw_not_equal = 1;
+		if (inst->str0 == any_name)
+			saw_any = 1;
+		if (inst->str0 == all_name)
+			saw_all = 1;
+	}
+	compiler_teardown();
+	assert(saw_texture_size);
+	assert(saw_texel_fetch);
+	assert(saw_inverse);
+	assert(saw_transpose);
+	assert(saw_less_than);
+	assert(saw_greater_equal);
+	assert(saw_equal);
+	assert(saw_not_equal);
+	assert(saw_any);
+	assert(saw_all);
+}
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -1089,6 +1151,7 @@ void unit_test()
 		TEST_ENTRY(test_struct_constructor_ir),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
+		TEST_ENTRY(test_texture_query_builtins),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_const_qualifier_metadata),

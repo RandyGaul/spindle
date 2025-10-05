@@ -270,7 +270,19 @@ typedef enum BuiltinFuncKind
 	BUILTIN_ROUND_EVEN,
 	BUILTIN_DFDX,
 	BUILTIN_DFDY,
-	BUILTIN_FWIDTH
+	BUILTIN_FWIDTH,
+	BUILTIN_TEXTURE_SIZE,
+	BUILTIN_TEXEL_FETCH,
+	BUILTIN_INVERSE,
+	BUILTIN_TRANSPOSE,
+	BUILTIN_LESS_THAN,
+	BUILTIN_LESS_THAN_EQUAL,
+	BUILTIN_GREATER_THAN,
+	BUILTIN_GREATER_THAN_EQUAL,
+	BUILTIN_EQUAL,
+	BUILTIN_NOT_EQUAL,
+	BUILTIN_ANY,
+	BUILTIN_ALL
 } BuiltinFuncKind;
 
 typedef struct Symbol
@@ -779,6 +791,26 @@ const char* snippet_builtin_funcs = STR(
 			out_color = vec4(unit * (f + shade), sampled.a);
 		});
 
+const char* snippet_texture_queries = STR(
+		layout(location = 0) out vec4 out_color;
+		layout(set = 0, binding = 0) uniform sampler2D u_tex;
+		void main() {
+			ivec2 tex_size = textureSize(u_tex, 0);
+			vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
+			mat3 identity = mat3(1.0);
+			mat3 inv_identity = inverse(identity);
+			mat3 trans_identity = transpose(identity);
+			bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
+			bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
+			bvec2 eq_mask = equal(less_mask, ge_mask);
+			bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
+			bool all_true = all(eq_mask);
+			bool any_true = any(ne_mask);
+			float texel_extent = float(tex_size.x + tex_size.y);
+			vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
+			out_color = texel + vec4(basis, 0.0);
+		});
+
 const char* snippet_preprocessor_passthrough =
 		"#define UNUSED_CONSTANT 1\n"
 		"#define MULTI_LINE_MACRO(x) \\\n"
@@ -877,6 +909,7 @@ int main()
 		{ "discard", snippet_discard },
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
+		{ "texture_queries", snippet_texture_queries },
 		{ "const_qualifier", snippet_const_qualifier },
 		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },

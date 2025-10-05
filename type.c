@@ -588,6 +588,245 @@ static Type* builtin_result_texture(Type** args, int argc)
 	return type_system_get(sintern("vec4"));
 }
 
+static int sampler_base_dimension(const Type* sampler)
+{
+	if (!sampler || sampler->tag != T_SAMPLER)
+		return TYPE_DIM_UNKNOWN;
+	return sampler->dim & 0xF;
+}
+
+static int sampler_coord_components(const Type* sampler)
+{
+	int base_dim = sampler_base_dimension(sampler);
+	int components = 0;
+	switch (base_dim)
+	{
+	case TYPE_DIM_1D:
+		components = 1;
+		break;
+	case TYPE_DIM_2D:
+	case TYPE_DIM_RECT:
+	case TYPE_DIM_CUBE:
+	case TYPE_DIM_2D_MS:
+		components = 2;
+		break;
+	case TYPE_DIM_3D:
+		components = 3;
+		break;
+	case TYPE_DIM_BUFFER:
+		components = 1;
+		break;
+	default:
+		return 0;
+	}
+	if (sampler->dim & TYPE_DIM_FLAG_ARRAY)
+		components += 1;
+	return components;
+}
+
+static Type* builtin_result_texture_size(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("textureSize requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		return type_get_scalar(T_INT);
+	}
+	int base_dim = sampler_base_dimension(sampler);
+	int expected_args = 1;
+	switch (base_dim)
+	{
+	case TYPE_DIM_RECT:
+	case TYPE_DIM_BUFFER:
+	case TYPE_DIM_2D_MS:
+		expected_args = 1;
+		break;
+	case TYPE_DIM_UNKNOWN:
+		type_check_error("textureSize unsupported sampler type %s", type_display(sampler));
+		break;
+	default:
+		expected_args = 2;
+		break;
+	}
+	if (argc != expected_args)
+	{
+		type_check_error("textureSize expects %d arguments but received %d", expected_args, argc);
+	}
+	if (expected_args == 2)
+	{
+		Type* lod = (argc > 1) ? args[1] : NULL;
+		if (!lod || !type_is_scalar(lod) || !type_is_integer(lod))
+		{
+			type_check_error("textureSize LOD must be integer scalar, got %s", lod ? type_display(lod) : "<null>");
+		}
+	}
+	int components = sampler_coord_components(sampler);
+	if (!components)
+	{
+		type_check_error("textureSize cannot determine dimensions for sampler %s", type_display(sampler));
+		return type_get_scalar(T_INT);
+	}
+	if (components <= 1)
+		return type_get_scalar(T_INT);
+	Type* result = type_get_vector(T_INT, components);
+	return result ? result : type_get_scalar(T_INT);
+}
+
+static Type* builtin_result_texel_fetch(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+	{
+		type_check_error("texelFetch requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
+		return builtin_result_texture(args, argc);
+	}
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
+	{
+		type_check_error("texelFetch does not support shadow samplers (%s)", type_display(sampler));
+	}
+	int base_dim = sampler_base_dimension(sampler);
+	int coord_components = sampler_coord_components(sampler);
+	int expected_args = 0;
+	switch (base_dim)
+	{
+	case TYPE_DIM_BUFFER:
+		expected_args = 2;
+		coord_components = 1;
+		break;
+	case TYPE_DIM_1D:
+	case TYPE_DIM_2D:
+	case TYPE_DIM_3D:
+		expected_args = 3;
+		break;
+	case TYPE_DIM_RECT:
+		expected_args = 2;
+		break;
+	case TYPE_DIM_2D_MS:
+		expected_args = 3;
+		break;
+	default:
+		type_check_error("texelFetch unsupported sampler type %s", type_display(sampler));
+		return builtin_result_texture(args, argc);
+	}
+	if (argc != expected_args)
+	{
+		type_check_error("texelFetch expects %d arguments but received %d", expected_args, argc);
+	}
+	Type* coord = (argc > 1) ? args[1] : NULL;
+	if (coord_components <= 1)
+	{
+		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
+		{
+			type_check_error("texelFetch coordinate must be integer scalar, got %s", coord ? type_display(coord) : "<null>");
+		}
+	}
+	else
+	{
+		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
+		{
+			type_check_error("texelFetch coordinate must be ivec%d, got %s", coord_components, coord ? type_display(coord) : "<null>");
+		}
+	}
+	int requires_level = 0;
+	if (base_dim == TYPE_DIM_1D || base_dim == TYPE_DIM_2D || base_dim == TYPE_DIM_3D)
+		requires_level = 1;
+	else if (base_dim == TYPE_DIM_2D_MS || base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_RECT)
+		requires_level = 0;
+	Type* level = (argc > 2) ? args[2] : NULL;
+	if (requires_level)
+	{
+		if (!level || !type_is_scalar(level) || !type_is_integer(level))
+		{
+			type_check_error("texelFetch LOD must be integer scalar, got %s", level ? type_display(level) : "<null>");
+		}
+	}
+	else if (level)
+	{
+		if (!type_is_scalar(level) || !type_is_integer(level))
+		{
+			type_check_error("texelFetch sample index must be integer scalar, got %s", type_display(level));
+		}
+	}
+	return builtin_result_texture(args, argc);
+}
+
+static Type* builtin_result_inverse(Type** args, int argc)
+{
+	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	if (!mat || !type_is_matrix(mat))
+	{
+		type_check_error("inverse requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		return mat;
+	}
+	if (mat->cols != mat->rows)
+	{
+		type_check_error("inverse requires square matrix, got %s", type_display(mat));
+	}
+	return mat;
+}
+
+static Type* builtin_result_transpose(Type** args, int argc)
+{
+	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	if (!mat || !type_is_matrix(mat))
+	{
+		type_check_error("transpose requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		return mat;
+	}
+	Type* result = type_get_matrix(type_base_type(mat), mat->rows, mat->cols);
+	return result ? result : mat;
+}
+
+static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
+{
+	Type* lhs = (args && argc > 0) ? args[0] : NULL;
+	Type* rhs = (args && argc > 1) ? args[1] : NULL;
+	if (!lhs || !rhs)
+		return type_get_scalar(T_BOOL);
+	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
+	{
+		type_check_error("relational functions require scalar or vector arguments, got %s and %s", type_display(lhs), type_display(rhs));
+		return type_get_scalar(T_BOOL);
+	}
+	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs)))
+	{
+		type_check_error("relational functions require matching argument shapes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols)
+	{
+		type_check_error("relational functions require matching vector sizes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	TypeTag lhs_base = type_base_type(lhs);
+	TypeTag rhs_base = type_base_type(rhs);
+	if (lhs_base != rhs_base)
+	{
+		type_check_error("relational functions require matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (!allow_bool && lhs_base == T_BOOL)
+	{
+		type_check_error("ordering relational functions do not support boolean arguments");
+	}
+	int components = type_is_vector(lhs) ? lhs->cols : 1;
+	if (components <= 1)
+		return type_get_scalar(T_BOOL);
+	return type_get_vector(T_BOOL, components);
+}
+
+static Type* builtin_result_any_all(Type** args, int argc)
+{
+	Type* arg = (args && argc > 0) ? args[0] : NULL;
+	if (!arg)
+		return type_get_scalar(T_BOOL);
+	if (!type_is_vector(arg) || type_base_type(arg) != T_BOOL)
+	{
+		type_check_error("any/all require boolean vector argument, got %s", type_display(arg));
+	}
+	return type_get_scalar(T_BOOL);
+}
+
+
+
+
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
@@ -599,6 +838,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_TEXTURE_PROJ:
 	case BUILTIN_TEXTURE_GRAD:
 		return builtin_result_texture(args, argc);
+	case BUILTIN_TEXTURE_SIZE:
+		return builtin_result_texture_size(args, argc);
+	case BUILTIN_TEXEL_FETCH:
+		return builtin_result_texel_fetch(args, argc);
 	case BUILTIN_MIN:
 	case BUILTIN_MAX:
 	case BUILTIN_CLAMP:
@@ -629,6 +872,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_REFLECT:
 	case BUILTIN_REFRACT:
 		return builtin_result_same(args, argc, 0);
+	case BUILTIN_INVERSE:
+		return builtin_result_inverse(args, argc);
+	case BUILTIN_TRANSPOSE:
+		return builtin_result_transpose(args, argc);
 	case BUILTIN_STEP:
 		return builtin_result_same(args, argc, 1);
 	case BUILTIN_SMOOTHSTEP:
@@ -642,6 +889,17 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_scalar(args, argc, 0);
 	case BUILTIN_CROSS:
 		return builtin_result_vector(args, argc, 0, 3);
+	case BUILTIN_LESS_THAN:
+	case BUILTIN_LESS_THAN_EQUAL:
+	case BUILTIN_GREATER_THAN:
+	case BUILTIN_GREATER_THAN_EQUAL:
+		return builtin_result_relational(args, argc, 0);
+	case BUILTIN_EQUAL:
+	case BUILTIN_NOT_EQUAL:
+		return builtin_result_relational(args, argc, 1);
+	case BUILTIN_ANY:
+	case BUILTIN_ALL:
+		return builtin_result_any_all(args, argc);
 	default:
 		break;
 	}
