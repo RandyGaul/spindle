@@ -1,4 +1,5 @@
 typedef struct Symbol Symbol;
+typedef enum BuiltinFuncKind BuiltinFuncKind;
 Symbol* symbol_table_find(const char* name);
 Symbol** symbol_table_get_function_overloads(const char* name, int* count);
 int type_component_count(const Type* type);
@@ -713,7 +714,140 @@ enum
 	BUILTIN_ARG_REQUIRE_VECTOR = 1 << 4,
 	BUILTIN_ARG_MATCH_BASE = 1 << 5,
 	BUILTIN_ARG_MATCH_SHAPE = 1 << 6,
+	BUILTIN_ARG_REQUIRE_MATRIX = 1 << 7,
+	BUILTIN_ARG_REQUIRE_SQUARE = 1 << 8,
 };
+
+#define ARRAY_COUNT(arr) ((int)(sizeof(arr) / sizeof((arr)[0])))
+
+typedef enum BuiltinSignatureResultKind
+{
+	BUILTIN_SIGNATURE_RESULT_NONE,
+	BUILTIN_SIGNATURE_RESULT_SAME,
+	BUILTIN_SIGNATURE_RESULT_SCALAR,
+	BUILTIN_SIGNATURE_RESULT_VECTOR,
+	BUILTIN_SIGNATURE_RESULT_CUSTOM,
+} BuiltinSignatureResultKind;
+
+typedef Type* (*BuiltinSignatureCustomResult)(const Symbol* sym, Type** args, int argc);
+
+typedef struct BuiltinSignature
+{
+	BuiltinFuncKind kind;
+	const BuiltinArgConstraint* constraints;
+	int constraint_count;
+	BuiltinSignatureResultKind result_kind;
+	int result_index;
+	int result_components;
+	BuiltinSignatureCustomResult custom_result;
+} BuiltinSignature;
+
+static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc);
+static Type* builtin_result_determinant(const Symbol* sym, Type** args, int argc);
+static Type* builtin_result_outer_product(const Symbol* sym, Type** args, int argc);
+static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const BuiltinArgConstraint* constraints, int constraint_count);
+static Type* builtin_result_scalar(Type** args, int argc, int index);
+static Type* builtin_result_vector(Type** args, int argc, int index, int components);
+
+static const BuiltinArgConstraint builtin_length_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+};
+
+static const BuiltinArgConstraint builtin_distance_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+};
+
+static const BuiltinArgConstraint builtin_derivative_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
+};
+
+static const BuiltinArgConstraint builtin_normalize_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+};
+
+static const BuiltinArgConstraint builtin_reflect_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+};
+
+static const BuiltinArgConstraint builtin_refract_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+	{ "third", BUILTIN_ARG_REQUIRE_SCALAR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
+};
+
+static const BuiltinArgConstraint builtin_mix_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+	{ "third", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR, -1 },
+};
+
+static const BuiltinArgConstraint builtin_determinant_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_MATRIX | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_SQUARE, -1 },
+};
+
+static const BuiltinArgConstraint builtin_outer_product_constraints[] = {
+	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
+};
+
+static const BuiltinSignature builtin_signatures[] = {
+	{ BUILTIN_LENGTH, builtin_length_constraints, ARRAY_COUNT(builtin_length_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_DISTANCE, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_DOT, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_NORMALIZE, builtin_normalize_constraints, ARRAY_COUNT(builtin_normalize_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_REFLECT, builtin_reflect_constraints, ARRAY_COUNT(builtin_reflect_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_REFRACT, builtin_refract_constraints, ARRAY_COUNT(builtin_refract_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_MIX, builtin_mix_constraints, ARRAY_COUNT(builtin_mix_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
+	{ BUILTIN_DETERMINANT, builtin_determinant_constraints, ARRAY_COUNT(builtin_determinant_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant },
+	{ BUILTIN_OUTER_PRODUCT, builtin_outer_product_constraints, ARRAY_COUNT(builtin_outer_product_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product },
+	{ BUILTIN_FWIDTH, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_FWIDTH_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_FWIDTH_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+};
+
+static const BuiltinSignature* builtin_find_signature(BuiltinFuncKind kind)
+	{
+		for (int i = 0; i < ARRAY_COUNT(builtin_signatures); ++i)
+		{
+			const BuiltinSignature* signature = &builtin_signatures[i];
+			if (signature->kind == kind)
+			return signature;
+		}
+	return NULL;
+}
+
+static Type* builtin_apply_signature(const BuiltinSignature* signature, const Symbol* sym, Type** args, int argc)
+	{
+		if (!signature)
+		return NULL;
+		builtin_validate_args(sym, args, argc, signature->constraints, signature->constraint_count);
+		switch (signature->result_kind)
+		{
+			case BUILTIN_SIGNATURE_RESULT_NONE:
+			return NULL;
+			case BUILTIN_SIGNATURE_RESULT_SAME:
+			return builtin_result_same(args, argc, signature->result_index);
+			case BUILTIN_SIGNATURE_RESULT_SCALAR:
+			return builtin_result_scalar(args, argc, signature->result_index);
+			case BUILTIN_SIGNATURE_RESULT_VECTOR:
+			return builtin_result_vector(args, argc, signature->result_index, signature->result_components);
+			case BUILTIN_SIGNATURE_RESULT_CUSTOM:
+			if (signature->custom_result)
+			return signature->custom_result(sym, args, argc);
+			return NULL;
+			default:
+			return NULL;
+		}
+}
+
 
 // Validate a builtin invocation against per-argument rules before resolving it.
 // ...error: distance requires second argument to match first argument shape, got vec3 and vec2
@@ -737,6 +871,7 @@ static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const
 		}
 		int is_scalar = type_is_scalar(arg);
 		int is_vector = type_is_vector(arg);
+		int is_matrix = type_is_matrix(arg);
 		int is_scalar_or_vector = is_scalar || is_vector;
 		if ((constraint->flags & BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR) && !is_scalar_or_vector)
 		{
@@ -752,6 +887,19 @@ static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const
 		{
 			type_check_error("%s requires %s argument to be vector, got %s", name, constraint->role, type_display(arg));
 			all_ok = 0;
+		}
+		if ((constraint->flags & BUILTIN_ARG_REQUIRE_MATRIX) && !is_matrix)
+		{
+			type_check_error("%s requires %s argument to be matrix, got %s", name, constraint->role, type_display(arg));
+			all_ok = 0;
+		}
+		if (constraint->flags & BUILTIN_ARG_REQUIRE_SQUARE)
+		{
+			if (!is_matrix || arg->cols != arg->rows)
+			{
+				type_check_error("%s requires %s argument to be square matrix, got %s", name, constraint->role, type_display(arg));
+				all_ok = 0;
+			}
 		}
 		if (constraint->flags & BUILTIN_ARG_REQUIRE_FLOATING)
 		{
@@ -1134,85 +1282,16 @@ static Type* builtin_result_atan(const Symbol* sym, Type** args, int argc)
 	return y_over_x;
 }
 
-static Type* builtin_result_normalize(const Symbol* sym, Type** args, int argc)
-{
-	Type* value = (argc > 0) ? args[0] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, value, "first"))
-		return value;
-	return value;
-}
-
-static Type* builtin_result_reflect(const Symbol* sym, Type** args, int argc)
-{
-	Type* I = (argc > 0) ? args[0] : NULL;
-	Type* N = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, I, "first"))
-		return I;
-	if (!builtin_validate_floating_scalar_vector(sym, N, "second"))
-		return I;
-	if (!type_is_vector(I))
-	{
-		type_check_error("%s requires vector arguments, got %s", builtin_func_name(sym), type_display(I));
-	}
-	if (!type_is_vector(N))
-	{
-		type_check_error("%s requires vector arguments, got %s", builtin_func_name(sym), type_display(N));
-	}
-	if (type_is_vector(I) && type_is_vector(N) && I->cols != N->cols)
-	{
-		type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(I), type_display(N));
-	}
-	return I;
-}
-
-static Type* builtin_result_refract(const Symbol* sym, Type** args, int argc)
-{
-	Type* I = (argc > 0) ? args[0] : NULL;
-	Type* N = (argc > 1) ? args[1] : NULL;
-	Type* eta = (argc > 2) ? args[2] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, I, "first"))
-		return I;
-	if (!builtin_validate_floating_scalar_vector(sym, N, "second"))
-		return I;
-	if (!type_is_vector(I))
-	{
-		type_check_error("%s requires vector I argument, got %s", builtin_func_name(sym), type_display(I));
-	}
-	if (!type_is_vector(N))
-	{
-		type_check_error("%s requires vector N argument, got %s", builtin_func_name(sym), type_display(N));
-	}
-	if (type_is_vector(I) && type_is_vector(N) && I->cols != N->cols)
-	{
-		type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(I), type_display(N));
-	}
-	if (!builtin_validate_floating_scalar_vector(sym, eta, "third"))
-		return I;
-	if (!type_is_scalar(eta))
-	{
-		type_check_error("%s requires scalar eta argument, got %s", builtin_func_name(sym), type_display(eta));
-	}
-	return I;
-}
-
 static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc)
 {
 	Type* x = (argc > 0) ? args[0] : NULL;
 	Type* y = (argc > 1) ? args[1] : NULL;
 	Type* a = (argc > 2) ? args[2] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-		return x;
-	if (type_base_type(x) != type_base_type(y))
-	{
-		type_check_error("%s requires matching base types for first two arguments, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	if (type_is_vector(x) != type_is_vector(y) || (type_is_vector(x) && x->cols != y->cols))
-	{
-		type_check_error("%s requires first two arguments to share the same shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
 	const char* name = builtin_func_name(sym);
+	if (!x)
+		return NULL;
+	if (!y)
+		return x;
 	if (!a)
 	{
 		type_check_error("%s requires third argument", name);
@@ -1566,45 +1645,47 @@ static Type* builtin_result_transpose(Type** args, int argc)
 	return result ? result : mat;
 }
 
-static Type* builtin_result_determinant(Type** args, int argc)
+static Type* builtin_result_determinant(const Symbol* sym, Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
+	const char* name = builtin_func_name(sym);
 	if (!mat || !type_is_matrix(mat))
 	{
-		type_check_error("determinant requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
+		type_check_error("%s requires matrix argument, got %s", name, mat ? type_display(mat) : "<null>");
 		return type_get_scalar(T_FLOAT);
 	}
 	if (mat->cols != mat->rows)
 	{
-		type_check_error("determinant requires square matrix, got %s", type_display(mat));
+		type_check_error("%s requires square matrix, got %s", name, type_display(mat));
 	}
 	TypeTag base = type_base_type(mat);
 	if (base != T_FLOAT && base != T_DOUBLE)
 	{
-		type_check_error("determinant requires floating-point matrix, got %s", type_display(mat));
+		type_check_error("%s requires floating-point matrix, got %s", name, type_display(mat));
 		base = T_FLOAT;
 	}
 	return type_get_scalar(base);
 }
 
-static Type* builtin_result_outer_product(Type** args, int argc)
+static Type* builtin_result_outer_product(const Symbol* sym, Type** args, int argc)
 {
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
+	const char* name = builtin_func_name(sym);
 	if (!lhs || !rhs || !type_is_vector(lhs) || !type_is_vector(rhs))
 	{
-		type_check_error("outerProduct requires vector arguments, got %s and %s", lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
+		type_check_error("%s requires vector arguments, got %s and %s", name, lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
 		return type_get_matrix(T_FLOAT, 2, 2);
 	}
 	TypeTag lhs_base = type_base_type(lhs);
 	TypeTag rhs_base = type_base_type(rhs);
 	if (lhs_base != rhs_base)
 	{
-		type_check_error("outerProduct requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+		type_check_error("%s requires matching base types, got %s and %s", name, type_display(lhs), type_display(rhs));
 	}
 	if ((lhs_base != T_FLOAT && lhs_base != T_DOUBLE) || (rhs_base != T_FLOAT && rhs_base != T_DOUBLE))
 	{
-		type_check_error("outerProduct requires floating-point vectors, got %s and %s", type_display(lhs), type_display(rhs));
+		type_check_error("%s requires floating-point vectors, got %s and %s", name, type_display(lhs), type_display(rhs));
 		lhs_base = T_FLOAT;
 	}
 	int cols = lhs->cols;
@@ -1822,6 +1903,9 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
 		return NULL;
+	const BuiltinSignature* signature = builtin_find_signature(sym->builtin_kind);
+	if (signature)
+		return builtin_apply_signature(signature, sym, args, argc);
 	switch (sym->builtin_kind)
 	{
 	case BUILTIN_TEXTURE:
@@ -1850,10 +1934,6 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_texture_query_lod(args, argc);
 	case BUILTIN_TEXTURE_QUERY_LEVELS:
 		return builtin_result_texture_query_levels(args, argc);
-	case BUILTIN_DETERMINANT:
-		return builtin_result_determinant(args, argc);
-	case BUILTIN_OUTER_PRODUCT:
-		return builtin_result_outer_product(args, argc);
 	case BUILTIN_MATRIX_COMP_MULT:
 		return builtin_result_matrix_comp_mult(args, argc);
 	case BUILTIN_MIN:
@@ -1877,8 +1957,6 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_SQRT:
 	case BUILTIN_INVERSE_SQRT:
 		return builtin_result_unary_float(sym, args, argc);
-	case BUILTIN_MIX:
-		return builtin_result_mix(sym, args, argc);
 	case BUILTIN_POW:
 		return builtin_result_pow(sym, args, argc);
 	case BUILTIN_MOD:
@@ -1891,12 +1969,6 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_trig(sym, args, argc);
 	case BUILTIN_ATAN:
 		return builtin_result_atan(sym, args, argc);
-	case BUILTIN_NORMALIZE:
-		return builtin_result_normalize(sym, args, argc);
-	case BUILTIN_REFLECT:
-		return builtin_result_reflect(sym, args, argc);
-	case BUILTIN_REFRACT:
-		return builtin_result_refract(sym, args, argc);
 	case BUILTIN_INVERSE:
 		return builtin_result_inverse(args, argc);
 	case BUILTIN_TRANSPOSE:
@@ -1905,22 +1977,6 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_step(sym, args, argc);
 	case BUILTIN_SMOOTHSTEP:
 		return builtin_result_smoothstep(sym, args, argc);
-	case BUILTIN_LENGTH:
-		return builtin_result_length(sym, args, argc);
-	case BUILTIN_DISTANCE:
-		return builtin_result_distance(sym, args, argc);
-	case BUILTIN_DOT:
-		return builtin_result_dot(sym, args, argc);
-	case BUILTIN_FWIDTH:
-	case BUILTIN_FWIDTH_FINE:
-	case BUILTIN_FWIDTH_COARSE:
-	case BUILTIN_DFDX:
-	case BUILTIN_DFDX_FINE:
-	case BUILTIN_DFDX_COARSE:
-	case BUILTIN_DFDY:
-	case BUILTIN_DFDY_FINE:
-	case BUILTIN_DFDY_COARSE:
-		return builtin_result_derivative(sym, args, argc);
 	case BUILTIN_CROSS:
 		return builtin_result_vector(args, argc, 0, 3);
 	case BUILTIN_IMAGE_ATOMIC_ADD:
