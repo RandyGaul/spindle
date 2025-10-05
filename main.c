@@ -208,12 +208,19 @@ struct Type
 	const char* name;
 };
 
+typedef struct StructMemberArrayDim
+{
+	Type type;
+	int size;
+	int unsized;
+} StructMemberArrayDim;
+
 typedef struct StructMember
 {
 	const char* name;
 	Type* declared_type;
 	Type* type;
-	Type array_type;
+	dyna StructMemberArrayDim* array_dims;
 	int has_array;
 	int array_len;
 	int array_unsized;
@@ -235,7 +242,7 @@ StructInfo* type_struct_info(Type* type);
 void type_struct_clear(Type* type);
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type);
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location);
-void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized);
+void type_struct_member_mark_array(StructMember* member, int size, int unsized);
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count);
 StructMember* type_struct_find_member(Type* type, const char* name);
 int type_struct_member_count(Type* type);
@@ -892,21 +899,24 @@ const char* snippet_resource_types = STR(
 
 const char* snippet_struct_constructor = STR(
 		struct Inner {
-			vec2 coords[2];
+			vec2 coords[2][2];
 		};
 		struct Outer {
 			float weight;
 			Inner segments[2];
-			float thresholds[4];
+			float thresholds[2][2];
 		};
 		layout(location = 0) out vec4 out_color;
 		void main() {
-			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0));
+			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0),
+					vec2(4.0, 5.0), vec2(6.0, 7.0));
 			Outer combo = Outer(1.0,
-					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
-					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
+					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25),
+							vec2(0.125, 0.875), vec2(0.625, 0.375)),
+					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5),
+							vec2(0.9, 0.1), vec2(0.2, 0.8)),
 					0.0, 1.0, 2.0, 3.0);
-			out_color = vec4(combo.segments[0].coords[1], combo.thresholds[3], combo.weight);
+			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
 		});
 
 // Directly include all of our source for a unity build.

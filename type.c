@@ -113,7 +113,18 @@ void type_struct_clear(Type* type)
 		return;
 	info->name = type ? type->name : NULL;
 	if (info->members)
+	{
+		for (int i = 0; i < acount(info->members); ++i)
+		{
+			StructMember* member = &info->members[i];
+			if (member->array_dims)
+			{
+				afree(member->array_dims);
+				member->array_dims = NULL;
+			}
+		}
 		aclear(info->members);
+	}
 	if (info->layout_identifiers)
 		aclear(info->layout_identifiers);
 }
@@ -128,7 +139,7 @@ StructMember* type_struct_add_member(Type* type, const char* name, Type* member_
 	member.name = name;
 	member.declared_type = member_type;
 	member.type = member_type;
-	member.array_type = (Type){ 0 };
+	member.array_dims = NULL;
 	member.has_array = 0;
 	member.array_len = 0;
 	member.array_unsized = 0;
@@ -147,24 +158,40 @@ void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, 
 	member->layout_binding = binding;
 	member->layout_location = location;
 }
+
 // Update a member to reflect array declarations like float weights[4].
 // ...float weights[4];
 void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized)
 {
 	if (!member)
 		return;
+	StructMemberArrayDim dim = { 0 };
+	dim.size = size;
+	dim.unsized = unsized;
+	dim.type = (Type){ 0 };
+	dim.type.tag = T_ARRAY;
+	apush(member->array_dims, dim);
 	member->has_array = 1;
-	member->array_len = size;
-	member->array_unsized = unsized;
-	member->array_type = (Type){ 0 };
-	member->array_type.tag = T_ARRAY;
-	member->array_type.base = element_type ? element_type->tag : T_VOID;
-	member->array_type.cols = element_type ? element_type->cols : 1;
-	member->array_type.rows = element_type ? element_type->rows : 1;
-	member->array_type.array_len = unsized ? -1 : size;
-	member->array_type.user = element_type;
-	member->array_type.name = NULL;
-	member->type = &member->array_type;
+	Type* base = member->declared_type;
+	for (int i = acount(member->array_dims) - 1; i >= 0; --i)
+	{
+		StructMemberArrayDim* info = &member->array_dims[i];
+		Type* element = base;
+		info->type.base = element ? element->tag : T_VOID;
+		info->type.cols = element ? element->cols : 1;
+		info->type.rows = element ? element->rows : 1;
+		info->type.array_len = info->unsized ? -1 : info->size;
+		info->type.user = element;
+		info->type.name = NULL;
+		base = &info->type;
+	}
+	member->type = base;
+	if (member->array_dims && acount(member->array_dims) > 0)
+	{
+		StructMemberArrayDim* outer = &member->array_dims[0];
+		member->array_len = outer->unsized ? -1 : outer->size;
+		member->array_unsized = outer->unsized;
+	}
 }
 
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count)
@@ -384,11 +411,19 @@ void type_system_free()
 			if (info)
 			{
 				if (info->members)
+				{
+					for (int j = 0; j < acount(info->members); ++j)
+					{
+						StructMember* member = &info->members[j];
+						if (member->array_dims)
+							afree(member->array_dims);
+					}
 					afree(info->members);
+}
 				if (info->layout_identifiers)
 					afree(info->layout_identifiers);
 				free(info);
-			}
+}
 			type->user = NULL;
 		}
 	}
