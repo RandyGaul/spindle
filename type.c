@@ -81,6 +81,8 @@ static StructInfo* type_struct_info_ensure(Type* type)
 	return info;
 }
 
+// Ensure we have a struct type ready for declarations like struct Material.
+// ...struct Material { vec4 albedo; };
 Type* type_system_declare_struct(const char* name)
 {
 	Type* existing = type_system_get(name);
@@ -104,7 +106,8 @@ Type* type_system_declare_struct(const char* name)
 	type_struct_clear(result);
 	return result;
 }
-
+// Reset cached members so repeated declarations start clean.
+// ...struct Material { vec4 albedo; };
 void type_struct_clear(Type* type)
 {
 	StructInfo* info = type_struct_info_ensure(type);
@@ -112,11 +115,23 @@ void type_struct_clear(Type* type)
 		return;
 	info->name = type ? type->name : NULL;
 	if (info->members)
+	{
+		for (int i = 0; i < acount(info->members); ++i)
+		{
+			StructMember* member = &info->members[i];
+			if (member->array_dims)
+			{
+				afree(member->array_dims);
+				member->array_dims = NULL;
+			}
+		}
 		aclear(info->members);
+	}
 	if (info->layout_identifiers)
 		aclear(info->layout_identifiers);
 }
-
+// Append a member for struct fields encountered in user code.
+// ...struct Material { vec4 albedo; };
 StructMember* type_struct_add_member(Type* type, const char* name, Type* member_type)
 {
 	StructInfo* info = type_struct_info_ensure(type);
@@ -126,7 +141,7 @@ StructMember* type_struct_add_member(Type* type, const char* name, Type* member_
 	member.name = name;
 	member.declared_type = member_type;
 	member.type = member_type;
-	member.array_type = (Type){ 0 };
+	member.array_dims = NULL;
 	member.has_array = 0;
 	member.array_len = 0;
 	member.array_unsized = 0;
@@ -134,6 +149,8 @@ StructMember* type_struct_add_member(Type* type, const char* name, Type* member_
 	return &alast(info->members);
 }
 
+// Store layout qualifiers that come from layout(...) blocks on members.
+// ...layout(location = 0) vec4 color;
 void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, int set, int binding, int location)
 {
 	if (!member)
@@ -144,22 +161,39 @@ void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, 
 	member->layout_location = location;
 }
 
+// Update a member to reflect array declarations like float weights[4].
+// ...float weights[4];
 void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized)
 {
 	if (!member)
 		return;
+	StructMemberArrayDim dim = { 0 };
+	dim.size = size;
+	dim.unsized = unsized;
+	dim.type = (Type){ 0 };
+	dim.type.tag = T_ARRAY;
+	apush(member->array_dims, dim);
 	member->has_array = 1;
-	member->array_len = size;
-	member->array_unsized = unsized;
-	member->array_type = (Type){ 0 };
-	member->array_type.tag = T_ARRAY;
-	member->array_type.base = element_type ? element_type->tag : T_VOID;
-	member->array_type.cols = element_type ? element_type->cols : 1;
-	member->array_type.rows = element_type ? element_type->rows : 1;
-	member->array_type.array_len = unsized ? -1 : size;
-	member->array_type.user = element_type;
-	member->array_type.name = NULL;
-	member->type = &member->array_type;
+	Type* base = member->declared_type;
+	for (int i = acount(member->array_dims) - 1; i >= 0; --i)
+	{
+		StructMemberArrayDim* info = &member->array_dims[i];
+		Type* element = base;
+		info->type.base = element ? element->tag : T_VOID;
+		info->type.cols = element ? element->cols : 1;
+		info->type.rows = element ? element->rows : 1;
+		info->type.array_len = info->unsized ? -1 : info->size;
+		info->type.user = element;
+		info->type.name = NULL;
+		base = &info->type;
+	}
+	member->type = base;
+	if (member->array_dims && acount(member->array_dims) > 0)
+	{
+		StructMemberArrayDim* outer = &member->array_dims[0];
+		member->array_len = outer->unsized ? -1 : outer->size;
+		member->array_unsized = outer->unsized;
+	}
 }
 
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count)
@@ -402,11 +436,19 @@ void type_system_free()
 			if (info)
 			{
 				if (info->members)
+				{
+					for (int j = 0; j < acount(info->members); ++j)
+					{
+						StructMember* member = &info->members[j];
+						if (member->array_dims)
+							afree(member->array_dims);
+					}
 					afree(info->members);
+}
 				if (info->layout_identifiers)
 					afree(info->layout_identifiers);
 				free(info);
-			}
+}
 			type->user = NULL;
 		}
 	}
@@ -642,6 +684,8 @@ static Type* builtin_result_vector(Type** args, int argc, int index, int compone
 	return type_get_vector(type_base_type(source), components);
 }
 
+// Pick the return type for sampling helpers like texture().
+// ...vec4 color = texture(u_image, v_uv);
 static Type* builtin_result_texture(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -695,6 +739,8 @@ static int sampler_coord_components(const Type* sampler)
 	return components;
 }
 
+// Match the textureSize() return shape to the sampler argument.
+// ...ivec2 size = textureSize(u_image, 0);
 static Type* builtin_result_texture_size(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -743,6 +789,8 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 	return result ? result : type_get_scalar(T_INT);
 }
 
+// Check texelFetch() coordinates, lod/sample, and sampler compatibility.
+// ...ivec4 texel = texelFetch(u_image, ivec2(gl_FragCoord.xy), 0);
 static Type* builtin_result_texel_fetch(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
@@ -821,6 +869,8 @@ static Type* builtin_result_texel_fetch(Type** args, int argc)
 	return builtin_result_texture(args, argc);
 }
 
+// Keep inverse() limited to square matrix inputs.
+// ...mat4 inv_model = inverse(model);
 static Type* builtin_result_inverse(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
@@ -836,6 +886,8 @@ static Type* builtin_result_inverse(Type** args, int argc)
 	return mat;
 }
 
+// Flip the rows and columns for transpose() return types.
+// ...mat3 normal_mat = transpose(inverse(mat3(model)));
 static Type* builtin_result_transpose(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
@@ -848,6 +900,8 @@ static Type* builtin_result_transpose(Type** args, int argc)
 	return result ? result : mat;
 }
 
+// Enforce matching shapes for relational helpers like lessThan().
+// ...bvec3 mask = lessThan(a.xyz, b.xyz);
 static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 {
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
@@ -883,6 +937,8 @@ static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 	return type_get_vector(T_BOOL, components);
 }
 
+// Collapse boolean vectors for any()/all() reductions.
+// ...bool is_visible = all(greaterThanEqual(alpha.rgb, vec3(0.0)));
 static Type* builtin_result_any_all(Type** args, int argc)
 {
 	Type* arg = (args && argc > 0) ? args[0] : NULL;
@@ -898,6 +954,8 @@ static Type* builtin_result_any_all(Type** args, int argc)
 
 
 
+// Route builtin calls to the helper that checks their arguments.
+// ...float lighting = dot(normal, light_dir);
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
