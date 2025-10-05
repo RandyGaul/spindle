@@ -163,7 +163,7 @@ void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, 
 
 // Update a member to reflect array declarations like float weights[4].
 // ...float weights[4];
-void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized)
+void type_struct_member_mark_array(StructMember* member, int size, int unsized)
 {
 	if (!member)
 		return;
@@ -950,14 +950,6 @@ static Type* builtin_result_determinant(Type** args, int argc)
 
 static Type* builtin_result_outer_product(Type** args, int argc)
 {
-  // TODO
-  return NULL;
-}
-
-// Enforce matching shapes for relational helpers like lessThan().
-// ...bvec3 mask = lessThan(a.xyz, b.xyz);
-static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
-{
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
 	if (!lhs || !rhs || !type_is_vector(lhs) || !type_is_vector(rhs))
@@ -982,6 +974,43 @@ static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 	if (!result)
 		result = type_get_matrix(T_FLOAT, cols, rows);
 	return result;
+}
+
+// Enforce matching shapes for relational helpers like lessThan().
+// ...bvec3 mask = lessThan(a.xyz, b.xyz);
+static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
+{
+	Type* lhs = (args && argc > 0) ? args[0] : NULL;
+	Type* rhs = (args && argc > 1) ? args[1] : NULL;
+	if (!lhs || !rhs)
+		return type_get_scalar(T_BOOL);
+	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
+	{
+		type_check_error("relational functions require scalar or vector arguments, got %s and %s", type_display(lhs), type_display(rhs));
+		return type_get_scalar(T_BOOL);
+	}
+	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs)))
+	{
+		type_check_error("relational functions require matching argument shapes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols)
+	{
+		type_check_error("relational functions require matching vector sizes, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	TypeTag lhs_base = type_base_type(lhs);
+	TypeTag rhs_base = type_base_type(rhs);
+	if (lhs_base != rhs_base)
+	{
+		type_check_error("relational functions require matching base types, got %s and %s", type_display(lhs), type_display(rhs));
+	}
+	if (!allow_bool && lhs_base == T_BOOL)
+	{
+		type_check_error("ordering relational functions do not support boolean arguments");
+	}
+	int components = type_is_vector(lhs) ? lhs->cols : 1;
+	if (components <= 1)
+		return type_get_scalar(T_BOOL);
+	return type_get_vector(T_BOOL, components);
 }
 
 static Type* builtin_result_matrix_comp_mult(Type** args, int argc)
@@ -1087,7 +1116,7 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 		type_check_error("%s requires image argument, got %s", func_name, image ? type_display(image) : "<null>");
 		return type_get_scalar(T_INT);
 	}
-TypeTag base = (TypeTag)image->base;
+	TypeTag base = (TypeTag)image->base;
 	if (base != T_INT && base != T_UINT)
 	{
 		type_check_error("%s requires integer image types, got %s", func_name, type_display(image));
@@ -1152,40 +1181,6 @@ TypeTag base = (TypeTag)image->base;
 	return type_get_scalar(base);
 }
 
-static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
-{
-Type* lhs = (args && argc > 0) ? args[0] : NULL;
-Type* rhs = (args && argc > 1) ? args[1] : NULL;
-if (!lhs || !rhs)
-		return type_get_scalar(T_BOOL);
-	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
-	{
-		type_check_error("relational functions require scalar or vector arguments, got %s and %s", type_display(lhs), type_display(rhs));
-		return type_get_scalar(T_BOOL);
-	}
-	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs)))
-	{
-		type_check_error("relational functions require matching argument shapes, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols)
-	{
-		type_check_error("relational functions require matching vector sizes, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	TypeTag lhs_base = type_base_type(lhs);
-	TypeTag rhs_base = type_base_type(rhs);
-	if (lhs_base != rhs_base)
-	{
-		type_check_error("relational functions require matching base types, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (!allow_bool && lhs_base == T_BOOL)
-	{
-		type_check_error("ordering relational functions do not support boolean arguments");
-	}
-	int components = type_is_vector(lhs) ? lhs->cols : 1;
-	if (components <= 1)
-		return type_get_scalar(T_BOOL);
-	return type_get_vector(T_BOOL, components);
-}
 
 // Collapse boolean vectors for any()/all() reductions.
 // ...bool is_visible = all(greaterThanEqual(alpha.rgb, vec3(0.0)));
