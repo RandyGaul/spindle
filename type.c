@@ -1211,22 +1211,45 @@ void type_check_constructor(Type* target, Type** args, int argc)
 
 void type_check_error(const char* fmt, ...)
 {
-	va_list args;
-	va_start(args, fmt);
-	fprintf(stderr, "Type error: ");
-	vfprintf(stderr, fmt, args);
-	fprintf(stderr, "\n");
-	va_end(args);
-	exit(1);
+va_list args;
+va_start(args, fmt);
+fprintf(stderr, "Type error: ");
+vfprintf(stderr, fmt, args);
+fprintf(stderr, "\n");
+va_end(args);
+exit(1);
 }
 
-#define type_stack_pop(stack, context) (((acount(stack) == 0) ? type_check_error("missing operand for %s", context) : (void)0), apop(stack))
+static Type* type_stack_pop_checked(dyna Type*** stack_ref, dyna int** index_ref, const char* context, int* out_index)
+{
+	dyna Type** stack = stack_ref ? *stack_ref : NULL;
+	if (!stack || acount(stack) == 0)
+		type_check_error("missing operand for %s", context);
+	Type* value = apop(stack);
+	if (stack_ref)
+		*stack_ref = stack;
+	if (index_ref)
+	{
+		dyna int* indices = *index_ref;
+		if (!indices || acount(indices) == 0)
+			type_check_error("internal error: missing expression index for %s", context);
+		int idx = apop(indices);
+		*index_ref = indices;
+		if (out_index)
+			*out_index = idx;
+	}
+	else if (out_index)
+	{
+		*out_index = -1;
+	}
+	return value;
+}
 
 typedef struct TypeCheckSwitchCase
 {
-	int value;
-	int flags;
-	int has_value;
+int value;
+int flags;
+int has_value;
 } TypeCheckSwitchCase;
 
 typedef struct TypeCheckSwitch
@@ -1237,6 +1260,7 @@ typedef struct TypeCheckSwitch
 void type_check_ir()
 {
 	dyna Type** stack = NULL;
+	dyna int* stack_indices = NULL;
 	dyna Type** func_stack = NULL;
 	dyna TypeCheckSwitch* switch_stack = NULL;
 	Type* current_decl_type = NULL;
@@ -1248,14 +1272,17 @@ void type_check_ir()
 		case IR_PUSH_INT:
 			inst->type = g_type_int;
 			apush(stack, inst->type);
+			apush(stack_indices, i);
 			break;
 		case IR_PUSH_FLOAT:
 			inst->type = g_type_float;
 			apush(stack, inst->type);
+			apush(stack_indices, i);
 			break;
 		case IR_PUSH_BOOL:
 			inst->type = g_type_bool;
 			apush(stack, inst->type);
+			apush(stack_indices, i);
 			break;
 		case IR_PUSH_IDENT:
 		{
@@ -1286,36 +1313,42 @@ void type_check_ir()
 			}
 			inst->type = type;
 			apush(stack, type);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_UNARY:
 		{
-			Type* operand = type_stack_pop(stack, "unary expression");
+			Type* operand = type_stack_pop_checked(&stack, &stack_indices, "unary expression", NULL);
 			Type* result = type_check_unary(inst, operand);
 			if (!result)
 				result = operand;
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_BINARY:
 		{
-			Type* rhs = type_stack_pop(stack, "binary rhs");
-			Type* lhs = type_stack_pop(stack, "binary lhs");
+			Type* rhs = type_stack_pop_checked(&stack, &stack_indices, "binary rhs", NULL);
+			Type* lhs = type_stack_pop_checked(&stack, &stack_indices, "binary lhs", NULL);
 			Type* result = type_check_binary(inst->tok, lhs, rhs);
 			if (!result)
 				result = lhs ? lhs : rhs;
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_CALL:
 		{
 			Type** args = NULL;
+			dyna int* arg_indices = NULL;
 			for (int arg = 0; arg < inst->arg0; ++arg)
 			{
-				Type* arg_type = type_stack_pop(stack, "call argument");
+				int arg_value_index = -1;
+				Type* arg_type = type_stack_pop_checked(&stack, &stack_indices, "call argument", &arg_value_index);
 				apush(args, arg_type);
+				apush(arg_indices, arg_value_index);
 			}
 			int argc = acount(args);
 			for (int l = 0, r = argc - 1; l < r; ++l, --r)
@@ -1323,8 +1356,11 @@ void type_check_ir()
 				Type* tmp = args[l];
 				args[l] = args[r];
 				args[r] = tmp;
+				int idx_tmp = arg_indices[l];
+				arg_indices[l] = arg_indices[r];
+				arg_indices[r] = idx_tmp;
 			}
-			Type* callee = type_stack_pop(stack, "call target");
+			Type* callee = type_stack_pop_checked(&stack, &stack_indices, "call target", NULL);
 			Type* result = callee;
 			if (inst->str0)
 			{
@@ -1345,11 +1381,23 @@ void type_check_ir()
 						{
 							Type* param_type = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
 							Type* arg_type = args ? args[i] : NULL;
-							if (param_type && arg_type)
+							unsigned param_flags = (sym->param_storage_flags && i < acount(sym->param_storage_flags)) ? sym->param_storage_flags[i] : 0;
+							param_flags = storage_flags_default_in(param_flags);
+							int arg_value_index = (arg_indices && i < acount(arg_indices)) ? arg_indices[i] : -1;
+							if ((param_flags & SYM_STORAGE_IN) && param_type && arg_type)
 							{
 								if (!type_can_assign(param_type, arg_type))
 								{
 									type_check_error("argument %d to %s expects %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
+								}
+							}
+							if (param_flags & SYM_STORAGE_OUT)
+							{
+								if (arg_value_index < 0 || arg_value_index >= acount(g_ir) || !g_ir[arg_value_index].is_lvalue)
+									type_check_error("argument %d to %s must be an l-value", i + 1, inst->str0);
+								if (param_type && arg_type && !type_can_assign(arg_type, param_type))
+								{
+									type_check_error("argument %d to %s expects assignable storage of %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
 								}
 							}
 						}
@@ -1374,7 +1422,9 @@ void type_check_ir()
 			}
 			inst->type = result;
 			afree(args);
+			afree(arg_indices);
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_CONSTRUCT:
@@ -1382,7 +1432,7 @@ void type_check_ir()
 			Type** args = NULL;
 			for (int arg = 0; arg < inst->arg0; ++arg)
 			{
-				Type* arg_type = type_stack_pop(stack, "constructor argument");
+				Type* arg_type = type_stack_pop_checked(&stack, &stack_indices, "constructor argument", NULL);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -1392,19 +1442,20 @@ void type_check_ir()
 				args[l] = args[r];
 				args[r] = tmp;
 			}
-			Type* target = type_stack_pop(stack, "constructor target");
+			Type* target = type_stack_pop_checked(&stack, &stack_indices, "constructor target", NULL);
 			Type* result = inst->type ? inst->type : target;
 			inst->type = result;
 			if (result)
 				type_check_constructor(result, args, argc);
 			afree(args);
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_INDEX:
 		{
-			Type* index = type_stack_pop(stack, "index expression");
-			Type* base = type_stack_pop(stack, "index base");
+			Type* index = type_stack_pop_checked(&stack, &stack_indices, "index expression", NULL);
+			Type* base = type_stack_pop_checked(&stack, &stack_indices, "index base", NULL);
 			if (index && (!type_is_scalar(index) || !type_is_integer(index)))
 			{
 				type_check_error("index expression must be integer scalar, got %s", type_display(index));
@@ -1431,11 +1482,12 @@ void type_check_ir()
 			}
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_SWIZZLE:
 		{
-			Type* base = type_stack_pop(stack, "swizzle base");
+			Type* base = type_stack_pop_checked(&stack, &stack_indices, "swizzle base", NULL);
 			if (base && !type_is_vector(base))
 			{
 				type_check_error("cannot swizzle non-vector type %s", type_display(base));
@@ -1458,11 +1510,12 @@ void type_check_ir()
 			}
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_MEMBER:
 		{
-			Type* base = type_stack_pop(stack, "member access");
+			Type* base = type_stack_pop_checked(&stack, &stack_indices, "member access", NULL);
 			Type* result = base;
 			if (base && base->tag == T_STRUCT)
 			{
@@ -1475,18 +1528,20 @@ void type_check_ir()
 			}
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_SELECT:
 		{
-			Type* false_type = type_stack_pop(stack, "ternary false branch");
-			Type* true_type = type_stack_pop(stack, "ternary true branch");
-			Type* cond_type = type_stack_pop(stack, "ternary condition");
+			Type* false_type = type_stack_pop_checked(&stack, &stack_indices, "ternary false branch", NULL);
+			Type* true_type = type_stack_pop_checked(&stack, &stack_indices, "ternary true branch", NULL);
+			Type* cond_type = type_stack_pop_checked(&stack, &stack_indices, "ternary condition", NULL);
 			Type* result = type_select_result(cond_type, true_type, false_type);
 			if (!result)
 				result = true_type ? true_type : false_type;
 			inst->type = result;
 			apush(stack, result);
+			apush(stack_indices, i);
 			break;
 		}
 		case IR_DECL_TYPE:
@@ -1499,7 +1554,7 @@ void type_check_ir()
 		case IR_DECL_INIT_END:
 			if (acount(stack) > 0)
 			{
-				Type* value = type_stack_pop(stack, "initializer");
+				Type* value = type_stack_pop_checked(&stack, &stack_indices, "initializer", NULL);
 				if (current_decl_type && value && !type_can_assign(current_decl_type, value))
 				{
 					type_check_error("initializer type %s cannot initialize %s", type_display(value), type_display(current_decl_type));
@@ -1507,12 +1562,14 @@ void type_check_ir()
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(stack_indices) > 0)
+				aclear(stack_indices);
 			break;
 		case IR_DECL_ARRAY_SIZE_END:
 		case IR_FUNC_PARAM_ARRAY_SIZE_END:
 			if (acount(stack) > 0)
 			{
-				Type* size = type_stack_pop(stack, "array size");
+				Type* size = type_stack_pop_checked(&stack, &stack_indices, "array size", NULL);
 				if (size && (!type_is_scalar(size) || !type_is_integer(size)))
 				{
 					type_check_error("array size must be integer scalar, got %s", type_display(size));
@@ -1520,6 +1577,8 @@ void type_check_ir()
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(stack_indices) > 0)
+				aclear(stack_indices);
 			break;
 		case IR_SWITCH_BEGIN:
 			apush(switch_stack, (TypeCheckSwitch){ 0 });
@@ -1528,7 +1587,7 @@ void type_check_ir()
 			break;
 		case IR_SWITCH_SELECTOR_END:
 		{
-			Type* selector = type_stack_pop(stack, "switch selector");
+			Type* selector = type_stack_pop_checked(&stack, &stack_indices, "switch selector", NULL);
 			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector)))
 			{
 				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
@@ -1603,13 +1662,15 @@ void type_check_ir()
 		}
 		case IR_STMT_EXPR:
 			if (acount(stack) > 0)
-				type_stack_pop(stack, "expression result");
+				type_stack_pop_checked(&stack, &stack_indices, "expression result", NULL);
 			if (acount(stack) > 0)
 				aclear(stack);
+			if (acount(stack_indices) > 0)
+				aclear(stack_indices);
 			break;
 		case IR_IF_THEN:
 		{
-			Type* cond = type_stack_pop(stack, "if condition");
+			Type* cond = type_stack_pop_checked(&stack, &stack_indices, "if condition", NULL);
 			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
 			{
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
@@ -1621,7 +1682,7 @@ void type_check_ir()
 			Type* ret_type = acount(func_stack) ? func_stack[acount(func_stack) - 1] : NULL;
 			if (inst->arg0)
 			{
-				Type* value = type_stack_pop(stack, "return value");
+				Type* value = type_stack_pop_checked(&stack, &stack_indices, "return value", NULL);
 				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value))
 				{
 					type_check_error("return type mismatch: expected %s got %s", type_display(ret_type), type_display(value));
@@ -1654,6 +1715,7 @@ void type_check_ir()
 		afree(switch_stack[i].cases);
 	}
 	afree(switch_stack);
+	afree(stack_indices);
 	afree(stack);
 	afree(func_stack);
 }

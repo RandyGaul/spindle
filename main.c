@@ -284,6 +284,7 @@ typedef struct Symbol
 	int layout_location;
 	int scope_depth;
 	dyna Type** params;
+	dyna unsigned* param_storage_flags;
 	int param_count;
 	int param_signature_set;
 	Type array_type;
@@ -550,11 +551,14 @@ const char* snippet_basic_io = STR(
 		layout(location = 0) in vec3 in_pos;
 		layout(location = 1) in vec2 in_uv;
 		layout(location = 0) out vec4 out_color;
+		layout(location = 2) inout vec4 io_adjust;
 		layout(set = 0, binding = 0) uniform sampler2D u_texture;
 		layout(set = 1, binding = 0) uniform vec4 u_tint;
 		void main() {
 			vec4 sampled = texture(u_texture, in_uv);
-			out_color = sampled * u_tint;
+			vec4 tinted = sampled * u_tint;
+			io_adjust += tinted;
+			out_color = io_adjust;
 		});
 
 const char* snippet_control_flow = STR(
@@ -641,6 +645,17 @@ const char* snippet_function_calls = STR(
 			float gain = saturate(base.x + base.y);
 			out_color = apply_gain(base, gain);
 		});
+const char* snippet_inout_params = STR(
+		layout(location = 0) out vec4 out_color;
+		void adjust_color(inout vec4 value, float gain) {
+			value.rgb = value.rgb * gain;
+		}
+		void main() {
+			vec4 color = vec4(1.0);
+			adjust_color(color, 0.5);
+			out_color = color;
+		});
+
 
 const char* snippet_matrix_ops = STR(
 		layout(location = 0) out vec4 out_color;
@@ -823,6 +838,7 @@ int main()
 		{ "array_indexing", snippet_array_indexing },
 		{ "swizzle_usage", snippet_swizzle },
 		{ "function_calls", snippet_function_calls },
+		{ "inout_params", snippet_inout_params },
 		{ "matrix_ops", snippet_matrix_ops },
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },

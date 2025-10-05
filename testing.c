@@ -4,15 +4,23 @@ void dump_storage_flags(unsigned flags)
 		return;
 	printf(" storage=");
 	int first = 1;
-	if (flags & SYM_STORAGE_IN)
+	if (flags & SYM_STORAGE_INOUT)
 	{
-		printf("%sin", first ? "" : "|");
+		printf("%sinout", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_STORAGE_OUT)
+	else
 	{
-		printf("%sout", first ? "" : "|");
-		first = 0;
+		if (flags & SYM_STORAGE_IN)
+		{
+			printf("%sin", first ? "" : "|");
+			first = 0;
+		}
+		if (flags & SYM_STORAGE_OUT)
+		{
+			printf("%sout", first ? "" : "|");
+			first = 0;
+		}
 	}
 	if (flags & SYM_STORAGE_UNIFORM)
 	{
@@ -405,6 +413,7 @@ DEFINE_TEST(test_basic_io_symbols)
 	const char* u_texture = sintern("u_texture");
 	const char* u_tint = sintern("u_tint");
 	const char* out_color = sintern("out_color");
+	const char* io_adjust = sintern("io_adjust");
 	compiler_setup(snippet_basic_io);
 	Symbol* sampler_sym = symbol_table_find(u_texture);
 	assert(sampler_sym);
@@ -420,7 +429,46 @@ DEFINE_TEST(test_basic_io_symbols)
 	assert(out_sym);
 	assert(symbol_has_storage(out_sym, SYM_STORAGE_OUT));
 	assert(symbol_get_layout(out_sym, SYM_LAYOUT_LOCATION) == 0);
+	Symbol* adjust_sym = symbol_table_find(io_adjust);
+	assert(adjust_sym);
+	assert(symbol_has_storage(adjust_sym, SYM_STORAGE_IN));
+	assert(symbol_has_storage(adjust_sym, SYM_STORAGE_OUT));
+	assert(symbol_has_storage(adjust_sym, SYM_STORAGE_INOUT));
+	assert(symbol_get_layout(adjust_sym, SYM_LAYOUT_LOCATION) == 2);
 	compiler_teardown();
+}
+
+DEFINE_TEST(test_inout_parameters)
+{
+	const char* adjust_name = sintern("adjust_color");
+	compiler_setup(snippet_inout_params);
+	Symbol* func_sym = symbol_table_find(adjust_name);
+	assert(func_sym);
+	assert(func_sym->param_count == 2);
+	assert(func_sym->param_storage_flags);
+	assert(acount(func_sym->param_storage_flags) == 2);
+	unsigned first_flags = func_sym->param_storage_flags[0];
+	unsigned second_flags = func_sym->param_storage_flags[1];
+	assert(first_flags & SYM_STORAGE_IN);
+	assert(first_flags & SYM_STORAGE_OUT);
+	assert(first_flags & SYM_STORAGE_INOUT);
+	assert(second_flags & SYM_STORAGE_IN);
+	assert(!(second_flags & SYM_STORAGE_OUT));
+	int saw_inout_param = 0;
+	int saw_default_in = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_FUNC_PARAM_BEGIN)
+			continue;
+		if (inst->storage_flags & SYM_STORAGE_INOUT)
+			saw_inout_param = 1;
+		else if (inst->storage_flags & SYM_STORAGE_IN)
+			saw_default_in = 1;
+	}
+	compiler_teardown();
+	assert(saw_inout_param);
+	assert(saw_default_in);
 }
 
 DEFINE_TEST(test_array_indexing_ir)
@@ -937,6 +985,7 @@ void unit_test()
 		TEST_ENTRY(test_resource_type_registration),
 		TEST_ENTRY(test_ir_emit_push_int),
 		TEST_ENTRY(test_basic_io_symbols),
+		TEST_ENTRY(test_inout_parameters),
 		TEST_ENTRY(test_array_indexing_ir),
 		TEST_ENTRY(test_swizzle_ir),
 		TEST_ENTRY(test_control_flow_unary_ops),

@@ -3,6 +3,7 @@ typedef enum SymbolStorage
 	SYM_STORAGE_IN = 1 << 0,
 	SYM_STORAGE_OUT = 1 << 1,
 	SYM_STORAGE_UNIFORM = 1 << 2,
+	SYM_STORAGE_INOUT = 1 << 3,
 } SymbolStorage;
 
 typedef enum SymbolLayout
@@ -25,6 +26,7 @@ typedef struct SymbolTable
 
 const char* kw_in;
 const char* kw_out;
+const char* kw_inout;
 const char* kw_uniform;
 const char* kw_layout;
 const char* kw_struct;
@@ -55,6 +57,7 @@ void init_keyword_interns()
 {
 	kw_in = sintern("in");
 	kw_out = sintern("out");
+	kw_inout = sintern("inout");
 	kw_uniform = sintern("uniform");
 	kw_layout = sintern("layout");
 	kw_struct = sintern("struct");
@@ -89,6 +92,7 @@ Type* current_decl_type_type;
 const char* current_param_type_name;
 Type* current_param_type_type;
 Type** current_function_params;
+unsigned* current_function_param_flags;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
 
@@ -220,9 +224,45 @@ Symbol* symbol_table_find(const char* name)
 	return NULL;
 }
 
+unsigned storage_flags_finalize(unsigned flags)
+{
+	if (flags & SYM_STORAGE_INOUT)
+	{
+		flags |= SYM_STORAGE_IN | SYM_STORAGE_OUT;
+	}
+	if ((flags & (SYM_STORAGE_IN | SYM_STORAGE_OUT)) == (SYM_STORAGE_IN | SYM_STORAGE_OUT))
+	{
+		flags |= SYM_STORAGE_INOUT;
+	}
+	return flags;
+}
+
+unsigned storage_flags_merge(unsigned existing, unsigned flags)
+{
+	if (flags & SYM_STORAGE_INOUT)
+	{
+		existing &= ~(SYM_STORAGE_IN | SYM_STORAGE_OUT);
+	}
+	else if (flags & (SYM_STORAGE_IN | SYM_STORAGE_OUT))
+	{
+		existing &= ~SYM_STORAGE_INOUT;
+	}
+	existing |= flags;
+	return storage_flags_finalize(existing);
+}
+
+unsigned storage_flags_default_in(unsigned flags)
+{
+	if (!(flags & (SYM_STORAGE_IN | SYM_STORAGE_OUT | SYM_STORAGE_INOUT)))
+	{
+		flags |= SYM_STORAGE_IN;
+	}
+	return storage_flags_finalize(flags);
+}
+
 void symbol_add_storage(Symbol* sym, unsigned flags)
 {
-	sym->storage_flags |= flags;
+	sym->storage_flags = storage_flags_merge(sym->storage_flags, flags);
 }
 
 int symbol_has_storage(const Symbol* sym, unsigned flag)
@@ -300,7 +340,7 @@ void symbol_mark_array(Symbol* sym, Type* element_type)
 	sym->type = &sym->array_type;
 }
 
-void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
+void symbol_set_function_signature(Symbol* sym, Type** params, unsigned* param_flags, int param_count)
 {
 	if (!sym || sym->kind != SYM_FUNC)
 		return;
@@ -314,6 +354,10 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 		{
 			Type* existing = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
 			Type* incoming = (params && i < acount(params)) ? params[i] : NULL;
+			unsigned existing_flags = (sym->param_storage_flags && i < acount(sym->param_storage_flags)) ? sym->param_storage_flags[i] : 0;
+			unsigned incoming_flags = (param_flags && i < acount(param_flags)) ? param_flags[i] : 0;
+			existing_flags = storage_flags_default_in(existing_flags);
+			incoming_flags = storage_flags_default_in(incoming_flags);
 			if (existing && incoming)
 			{
 				if (!type_equal(existing, incoming))
@@ -325,14 +369,22 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 			{
 				type_check_error("function %s parameter %d type mismatch", sym->name, i + 1);
 			}
+			if (existing_flags != incoming_flags)
+			{
+				type_check_error("function %s parameter %d qualifier mismatch", sym->name, i + 1);
+			}
 		}
 		return;
 	}
 	aclear(sym->params);
+	aclear(sym->param_storage_flags);
 	for (int i = 0; i < param_count; ++i)
 	{
 		Type* incoming = params ? params[i] : NULL;
 		apush(sym->params, incoming);
+		unsigned flags = param_flags ? param_flags[i] : 0;
+		flags = storage_flags_default_in(flags);
+		apush(sym->param_storage_flags, flags);
 	}
 	sym->param_count = param_count;
 	sym->param_signature_set = 1;
@@ -348,6 +400,7 @@ void symbol_table_free()
 	{
 		Symbol* sym = &st->symbols[i];
 		afree(sym->params);
+		afree(sym->param_storage_flags);
 	}
 	afree(st->symbols);
 	afree(st->scopes);
@@ -499,6 +552,8 @@ unsigned storage_flag_from_keyword(const char* s)
 		return SYM_STORAGE_IN;
 	if (s == kw_out)
 		return SYM_STORAGE_OUT;
+	if (s == kw_inout)
+		return SYM_STORAGE_INOUT;
 	if (s == kw_uniform)
 		return SYM_STORAGE_UNIFORM;
 	return 0;
@@ -517,7 +572,7 @@ unsigned layout_flag_from_keyword(const char* s)
 
 void type_spec_add_storage(TypeSpec* spec, unsigned flags)
 {
-	spec->storage_flags |= flags;
+	spec->storage_flags = storage_flags_merge(spec->storage_flags, flags);
 }
 
 void type_spec_add_layout_identifier(TypeSpec* spec, const char* ident)
@@ -951,11 +1006,13 @@ void func_param()
 	if (!is_type_token())
 		parse_error("expected type in parameter");
 	TypeSpec spec = parse_type_specifier();
+	spec.storage_flags = storage_flags_default_in(spec.storage_flags);
 	IR_Cmd* param = ir_emit(IR_FUNC_PARAM_BEGIN);
 	ir_apply_type_spec(param, &spec);
 	current_param_type_name = spec.type_name;
 	current_param_type_type = spec.type;
 	apush(current_function_params, spec.type);
+	apush(current_function_param_flags, spec.storage_flags);
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = spec.type_name;
 	if (tok.kind != TOK_IDENTIFIER)
@@ -1063,9 +1120,11 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	symbol_table_enter_scope();
 	func_param_list();
 	sym = &st->symbols[sym_index];
-	symbol_set_function_signature(sym, current_function_params, acount(current_function_params));
+	symbol_set_function_signature(sym, current_function_params, current_function_param_flags, acount(current_function_params));
 	if (current_function_params)
 		aclear(current_function_params);
+	if (current_function_param_flags)
+		aclear(current_function_param_flags);
 	if (tok.kind == TOK_SEMI)
 	{
 		next();
@@ -2307,6 +2366,7 @@ void compiler_teardown()
 	type_system_free();
 	afree(g_ir);
 	afree(current_function_params);
+	afree(current_function_param_flags);
 	current_decl_type_name = NULL;
 	current_decl_type_type = NULL;
 	current_param_type_name = NULL;
