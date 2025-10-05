@@ -597,6 +597,29 @@ DEFINE_TEST(test_control_flow_unary_ops)
 	assert(saw_if_end);
 }
 
+DEFINE_TEST(test_ternary_vector_promotions)
+{
+	compiler_setup(snippet_ternary_vectors);
+	int saw_vec3_select = 0;
+	int saw_vec4_select = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_SELECT)
+			continue;
+		assert(inst->type);
+		assert(type_is_vector(inst->type));
+		assert(type_base_type(inst->type) == T_FLOAT);
+		if (inst->type->cols == 3)
+			saw_vec3_select = 1;
+		if (inst->type->cols == 4)
+			saw_vec4_select = 1;
+	}
+	compiler_teardown();
+	assert(saw_vec3_select);
+	assert(saw_vec4_select);
+}
+
 DEFINE_TEST(test_function_call_symbols)
 {
 	const char* saturate = sintern("saturate");
@@ -1209,6 +1232,7 @@ void unit_test()
 		TEST_ENTRY(test_array_indexing_ir),
 		TEST_ENTRY(test_swizzle_ir),
 		TEST_ENTRY(test_control_flow_unary_ops),
+		TEST_ENTRY(test_ternary_vector_promotions),
 		TEST_ENTRY(test_function_call_symbols),
 		TEST_ENTRY(test_matrix_operations_ir),
 		TEST_ENTRY(test_looping_constructs),

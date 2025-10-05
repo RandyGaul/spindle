@@ -619,8 +619,18 @@ const char* snippet_control_flow = STR(
 			else
 			{
 				out_color = vec4(1.0 - accum);
-			}
-		});
+}
+});
+
+const char* snippet_ternary_vectors = STR(
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			bool flag = true;
+			vec3 vector_false = flag ? vec3(1.0, 0.0, 0.0) : 0.5;
+			vec4 vector_true = flag ? 0.25 : vec4(0.0, 1.0, 0.0, 1.0);
+			out_color = vec4(vector_false, vector_true.x);
+		}
+	);
 
 const char* snippet_array_indexing = STR(
 		layout(location = 0) out vec4 out_color;
@@ -924,6 +934,7 @@ int main()
 	const ShaderSnippet snippets[] = {
 		{ "basic_io", snippet_basic_io },
 		{ "control_flow", snippet_control_flow },
+		{ "ternary_vectors", snippet_ternary_vectors },
 		{ "array_indexing", snippet_array_indexing },
 		{ "swizzle_usage", snippet_swizzle },
 		{ "function_calls", snippet_function_calls },
