@@ -806,13 +806,44 @@ Type* type_binary_mul(Type* lhs, Type* rhs)
 		}
 		return lhs;
 	}
+	if (type_is_matrix(lhs) && type_is_vector(rhs))
+	{
+		if (lhs->cols != rhs->cols)
+		{
+			type_check_error("matrix-vector multiplication requires matrix columns to match vector size, got %d and %d", lhs->cols, rhs->cols);
+		}
+		Type* result = type_get_vector(type_base_type(lhs), lhs->rows);
+		if (!result)
+		{
+			type_check_error("unsupported matrix-vector multiplication result size %dx1", lhs->rows);
+		}
+		return result;
+	}
+	if (type_is_vector(lhs) && type_is_matrix(rhs))
+	{
+		if (lhs->cols != rhs->rows)
+		{
+			type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
+		}
+		Type* result = type_get_vector(type_base_type(lhs), rhs->cols);
+		if (!result)
+		{
+			type_check_error("unsupported vector-matrix multiplication result size %dx1", rhs->cols);
+		}
+		return result;
+	}
 	if (type_is_matrix(lhs) && type_is_matrix(rhs))
 	{
-		if (lhs->cols != rhs->cols || lhs->rows != rhs->rows)
+		if (lhs->cols != rhs->rows)
 		{
-			type_check_error("matrix multiplication currently requires matching dimensions");
+			type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
 		}
-		return lhs;
+		Type* result = type_get_matrix(type_base_type(lhs), rhs->cols, lhs->rows);
+		if (!result)
+		{
+			type_check_error("unsupported matrix multiplication result size %dx%d", rhs->cols, lhs->rows);
+		}
+		return result;
 	}
 	type_check_error("operator * unsupported for %s and %s", type_display(lhs), type_display(rhs));
 	return NULL;

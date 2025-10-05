@@ -540,6 +540,9 @@ Type* type_system_get(const char* name);
 void type_system_free();
 void type_system_init_builtins();
 void type_system_init_builtins();
+Type* type_get_scalar(TypeTag base);
+Type* type_get_vector(TypeTag base, int cols);
+Type* type_get_matrix(TypeTag base, int cols, int rows);
 Type* type_check_unary(const IR_Cmd* inst, Type* operand);
 void type_check_ir();
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc);
@@ -643,13 +646,24 @@ const char* snippet_function_calls = STR(
 		});
 
 const char* snippet_matrix_ops = STR(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			mat3 rotation = mat3(1.0);
-			vec3 column = rotation[1];
-			float diagonal = rotation[2][2];
-			out_color = vec4(column, diagonal);
-		});
+                layout(location = 0) out vec4 out_color;
+                void main() {
+                        mat3 rotation = mat3(1.0);
+                        vec3 column = rotation[1];
+                        float diagonal = rotation[2][2];
+                        vec3 axis = vec3(1.0, 0.0, 0.0);
+                        vec3 rotated = rotation * axis;
+                        vec3 row_combo = axis * rotation;
+                        mat3 scale = mat3(2.0);
+                        mat3 combined = rotation * scale;
+                        mat2x3 rect_a = mat2x3(1.0);
+                        mat3x2 rect_b = mat3x2(1.0);
+                        mat3 rect_product = rect_a * rect_b;
+                        vec2 weights = vec2(0.5, 2.0);
+                        vec3 rect_vec = rect_a * weights;
+                        vec2 rect_row = row_combo * rect_a;
+                        out_color = vec4(column + rotated + rect_vec, diagonal + rect_row.x + combined[0][0] + rect_product[0][0]);
+                });
 
 const char* snippet_struct_block = STR(
 		struct Light {

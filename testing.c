@@ -621,19 +621,56 @@ DEFINE_TEST(test_function_call_symbols)
 DEFINE_TEST(test_matrix_operations_ir)
 {
 	const char* mat3_name = sintern("mat3");
+	const char* rect_a_name = sintern("rect_a");
+	const char* rect_b_name = sintern("rect_b");
+	const char* weights_name = sintern("weights");
+	const char* row_combo_name = sintern("row_combo");
 	compiler_setup(snippet_matrix_ops);
+	Type* vec3_type = type_get_vector(T_FLOAT, 3);
+	Type* vec2_type = type_get_vector(T_FLOAT, 2);
+	Type* mat3_type = type_get_matrix(T_FLOAT, 3, 3);
 	int saw_mat_ctor = 0;
 	int index_count = 0;
+	int saw_matrix_vector = 0;
+	int saw_vector_matrix = 0;
+	int saw_rectangular_matrix = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		if (g_ir[i].op == IR_CONSTRUCT && g_ir[i].str0 == mat3_name)
 			saw_mat_ctor = 1;
 		if (g_ir[i].op == IR_INDEX)
 			index_count++;
+		if (g_ir[i].op == IR_BINARY && g_ir[i].tok == TOK_STAR)
+		{
+			IR_Cmd* lhs = NULL;
+			IR_Cmd* rhs = NULL;
+			for (int j = i - 1; j >= 0 && (!lhs || !rhs); --j)
+			{
+				if (g_ir[j].op != IR_PUSH_IDENT)
+					continue;
+				if (!rhs)
+				{
+					rhs = &g_ir[j];
+				}
+				else if (!lhs)
+				{
+					lhs = &g_ir[j];
+				}
+			}
+			if (g_ir[i].type == vec3_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == rect_a_name && rhs->str0 == weights_name)
+				saw_matrix_vector = 1;
+			if (g_ir[i].type == vec2_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == row_combo_name && rhs->str0 == rect_a_name)
+				saw_vector_matrix = 1;
+			if (g_ir[i].type == mat3_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == rect_a_name && rhs->str0 == rect_b_name)
+				saw_rectangular_matrix = 1;
+		}
 	}
 	compiler_teardown();
 	assert(saw_mat_ctor);
 	assert(index_count >= 2);
+	assert(saw_matrix_vector);
+	assert(saw_vector_matrix);
+	assert(saw_rectangular_matrix);
 }
 
 DEFINE_TEST(test_looping_constructs)
