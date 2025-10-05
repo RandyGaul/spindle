@@ -17,9 +17,18 @@ typedef enum SymbolQualifier
 	SYM_QUAL_CONST = 1 << 0,
 } SymbolQualifier;
 
+typedef struct SymbolScopeEntry
+{
+	const char* name;
+	int value_index;
+	dyna int* func_indices;
+	Map func_map;
+} SymbolScopeEntry;
+
 typedef struct SymbolScope
 {
 	Map map;
+	dyna SymbolScopeEntry* entries;
 } SymbolScope;
 
 typedef struct SymbolTable
@@ -99,6 +108,7 @@ Type* current_param_type_type;
 Type** current_function_params;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
+dyna Symbol** function_overload_buffer;
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
 void symbol_add_storage(Symbol* sym, unsigned flags);
@@ -115,8 +125,117 @@ void symbol_table_leave_scope()
 	if (!count)
 		return;
 	SymbolScope* scope = &st->scopes[count - 1];
+	for (int i = 0; i < acount(scope->entries); ++i)
+	{
+		SymbolScopeEntry* entry = &scope->entries[i];
+		if (entry->func_indices)
+			afree(entry->func_indices);
+		map_free(entry->func_map);
+	}
+	if (scope->entries)
+		afree(scope->entries);
 	map_free(scope->map);
 	(void)apop(st->scopes);
+}
+
+static SymbolScopeEntry* symbol_scope_entry(SymbolScope* scope, const char* name, int create)
+{
+	uint64_t idx = map_get(scope->map, (uint64_t)name);
+	if (!idx)
+	{
+		if (!create)
+			return NULL;
+		SymbolScopeEntry entry = (SymbolScopeEntry){ 0 };
+		entry.name = name;
+		apush(scope->entries, entry);
+		idx = (uint64_t)acount(scope->entries);
+		map_add(scope->map, (uint64_t)name, idx);
+	}
+	return &scope->entries[(int)idx - 1];
+}
+
+static SymbolScopeEntry* symbol_scope_entry_at_depth(int scope_depth, const char* name, int create)
+{
+	if (scope_depth < 0 || scope_depth >= acount(st->scopes))
+		return NULL;
+	SymbolScope* scope = &st->scopes[scope_depth];
+	return symbol_scope_entry(scope, name, create);
+}
+
+static uint64_t symbol_function_signature_hash(Type** params, int param_count)
+{
+	dyna uint64_t* values = NULL;
+	apush(values, (uint64_t)param_count);
+	for (int i = 0; i < param_count; ++i)
+	{
+		uint64_t value = (uint64_t)(uintptr_t)(params ? params[i] : NULL);
+		apush(values, value);
+	}
+	uint64_t hash = hash_fnv1a(values, sizeof(uint64_t) * acount(values));
+	if (values)
+		afree(values);
+	return hash;
+}
+
+static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Type** params, int param_count, int scope_depth)
+{
+	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 0);
+	if (!entry)
+		return NULL;
+	if (!entry->func_indices || !acount(entry->func_indices))
+		return NULL;
+	uint64_t signature = symbol_function_signature_hash(params, param_count);
+	uint64_t mapped = map_get(entry->func_map, signature);
+	if (!mapped)
+		return NULL;
+	return &st->symbols[(int)mapped - 1];
+}
+
+static Symbol* symbol_table_add_internal(const char* name, const char* type_name, Type* type, SymbolKind kind, int scope_depth)
+{
+	if (!acount(st->scopes))
+		return NULL;
+	if (scope_depth < 0)
+		scope_depth = 0;
+	if (scope_depth >= acount(st->scopes))
+		scope_depth = acount(st->scopes) - 1;
+	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 1);
+	if (!entry)
+		return NULL;
+	if (kind == SYM_FUNC)
+	{
+		Symbol sym = (Symbol){ 0 };
+		sym.name = name;
+		sym.type_name = type_name;
+		sym.type = type;
+		sym.kind = kind;
+		sym.scope_depth = scope_depth;
+		sym.builtin_param_count = -1;
+		apush(st->symbols, sym);
+		int idx = acount(st->symbols);
+		apush(entry->func_indices, idx);
+		if (!entry->value_index)
+			entry->value_index = idx;
+		return &st->symbols[idx - 1];
+	}
+	if (entry->value_index)
+		return &st->symbols[entry->value_index - 1];
+	Symbol sym = (Symbol){ 0 };
+	sym.name = name;
+	sym.type_name = type_name;
+	sym.type = type;
+	sym.kind = kind;
+	sym.scope_depth = scope_depth;
+	sym.builtin_param_count = -1;
+	apush(st->symbols, sym);
+	int idx = acount(st->symbols);
+	entry->value_index = idx;
+	return &st->symbols[idx - 1];
+}
+
+static Symbol* symbol_table_add_at_depth(const char* name, const char* type_name, Type* type, SymbolKind kind, int scope_depth)
+{
+	return symbol_table_add_internal(name, type_name, type, kind, scope_depth);
 }
 
 typedef struct BuiltinFunctionInit
@@ -256,6 +375,7 @@ void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
+	function_overload_buffer = NULL;
 	symbol_table_enter_scope();
 	symbol_table_register_builtins();
 	symbol_table_register_builtin_variables();
@@ -263,24 +383,8 @@ void symbol_table_init()
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
 {
-	SymbolScope* scope = &alast(st->scopes);
-	uint64_t key = (uint64_t)name;
-	uint64_t existing = map_get(scope->map, key);
-	if (existing)
-		return &st->symbols[(int)existing - 1];
-	Symbol sym = (Symbol){ 0 };
-	sym.name = name;
-	sym.type_name = type_name;
-	sym.type = type;
-	sym.kind = kind;
-	sym.scope_depth = acount(st->scopes) - 1;
-	sym.builtin_param_count = -1;
-	sym.is_builtin = 0;
-	sym.builtin_stage = g_shader_stage;
-	apush(st->symbols, sym);
-	int idx = acount(st->symbols);
-	map_add(scope->map, key, (uint64_t)idx);
-	return &st->symbols[idx - 1];
+	int scope_depth = acount(st->scopes) ? acount(st->scopes) - 1 : 0;
+	return symbol_table_add_internal(name, type_name, type, kind, scope_depth);
 }
 
 Symbol* symbol_table_find(const char* name)
@@ -288,11 +392,43 @@ Symbol* symbol_table_find(const char* name)
 	for (int i = acount(st->scopes) - 1; i >= 0; --i)
 	{
 		SymbolScope* scope = &st->scopes[i];
-		uint64_t idx = map_get(scope->map, (uint64_t)name);
-		if (idx)
-			return &st->symbols[(int)idx - 1];
+		uint64_t entry_idx = map_get(scope->map, (uint64_t)name);
+		if (!entry_idx)
+			continue;
+		SymbolScopeEntry* entry = &scope->entries[(int)entry_idx - 1];
+		if (entry->value_index)
+			return &st->symbols[entry->value_index - 1];
+		if (entry->func_indices && acount(entry->func_indices))
+			return &st->symbols[entry->func_indices[0] - 1];
 	}
 	return NULL;
+}
+
+Symbol** symbol_table_get_function_overloads(const char* name, int* count)
+{
+	if (function_overload_buffer)
+		aclear(function_overload_buffer);
+	for (int i = acount(st->scopes) - 1; i >= 0; --i)
+	{
+		SymbolScope* scope = &st->scopes[i];
+		uint64_t entry_idx = map_get(scope->map, (uint64_t)name);
+		if (!entry_idx)
+			continue;
+		SymbolScopeEntry* entry = &scope->entries[(int)entry_idx - 1];
+		if (!entry->func_indices || !acount(entry->func_indices))
+			break;
+		for (int j = 0; j < acount(entry->func_indices); ++j)
+		{
+			int sym_index = entry->func_indices[j];
+			if (!sym_index)
+				continue;
+			apush(function_overload_buffer, &st->symbols[sym_index - 1]);
+		}
+		break;
+	}
+	if (count)
+		*count = function_overload_buffer ? acount(function_overload_buffer) : 0;
+	return function_overload_buffer;
 }
 
 void symbol_add_storage(Symbol* sym, unsigned flags)
@@ -422,6 +558,20 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 	}
 	sym->param_count = param_count;
 	sym->param_signature_set = 1;
+	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(sym->scope_depth, sym->name, 1);
+	if (!entry)
+		return;
+	uint64_t signature = symbol_function_signature_hash(sym->params, sym->param_count);
+	uint64_t mapped = map_get(entry->func_map, signature);
+	int sym_index = (int)(sym - st->symbols) + 1;
+	if (mapped && (int)mapped != sym_index)
+	{
+		type_check_error("function %s redeclared with identical parameter list", sym->name);
+	}
+	else if (!mapped)
+	{
+		map_add(entry->func_map, signature, (uint64_t)sym_index);
+	}
 }
 
 void symbol_table_free()
@@ -435,6 +585,8 @@ void symbol_table_free()
 		Symbol* sym = &st->symbols[i];
 		afree(sym->params);
 	}
+	if (function_overload_buffer)
+		afree(function_overload_buffer);
 	afree(st->symbols);
 	afree(st->scopes);
 }
@@ -1157,24 +1309,32 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	func->str0 = spec.type_name;
 	func->str1 = name;
 	ir_apply_type_spec(func, &spec);
-	Symbol* sym = symbol_table_add(func->str1, spec.type_name, spec.type, SYM_FUNC);
-	int sym_index = (int)(sym - st->symbols);
-	if (sym->type && spec.type && !type_equal(sym->type, spec.type))
-	{
-		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
-	}
-	if (!sym->type && spec.type)
-	{
-		sym->type = spec.type;
-	}
-	symbol_apply_type_spec(sym, &spec);
 	if (current_function_params)
 		aclear(current_function_params);
 	expect(TOK_LPAREN);
 	symbol_table_enter_scope();
 	func_param_list();
-	sym = &st->symbols[sym_index];
-	symbol_set_function_signature(sym, current_function_params, acount(current_function_params));
+	int param_count = current_function_params ? acount(current_function_params) : 0;
+	int outer_scope = acount(st->scopes) - 2;
+	if (outer_scope < 0)
+		outer_scope = 0;
+	Symbol* sym = symbol_table_find_function_overload_at_depth(func->str1, current_function_params, param_count, outer_scope);
+	if (!sym)
+		sym = symbol_table_add_at_depth(func->str1, spec.type_name, spec.type, SYM_FUNC, outer_scope);
+	if (!sym)
+	{
+		symbol_table_leave_scope();
+		type_check_error("failed to declare function %s", name);
+		return;
+	}
+	if (sym->type && spec.type && !type_equal(sym->type, spec.type))
+	{
+		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
+	}
+	if (!sym->type && spec.type)
+		sym->type = spec.type;
+	symbol_apply_type_spec(sym, &spec);
+	symbol_set_function_signature(sym, current_function_params, param_count);
 	if (current_function_params)
 		aclear(current_function_params);
 	if (tok.kind == TOK_SEMI)
