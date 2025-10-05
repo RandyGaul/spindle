@@ -704,6 +704,15 @@ const char* snippet_bitwise = STR(
 			out_bits = values + ivec2(mask, mix + shifted);
 		});
 
+const char* snippet_numeric_literals = STR(
+		layout(location = 0) out ivec3 out_values;
+		void main() {
+			int hex_val = 0x1f;
+			int bin_val = 0b1010;
+			int oct_val = 075;
+			out_values = ivec3(hex_val, bin_val, oct_val);
+		});
+
 const char* snippet_switch_stmt = STR(
 		layout(location = 0) in int in_mode;
 		layout(location = 0) out vec4 out_color;
@@ -764,6 +773,25 @@ const char* snippet_preprocessor_passthrough =
 	"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
 	"}\n";
 
+const char* snippet_resource_types = STR(
+		layout(location = 0) out vec4 out_color;
+		layout(set = 2, binding = 0) uniform sampler1D u_sampler1d;
+		layout(set = 2, binding = 1) uniform sampler3D u_sampler3d;
+		layout(set = 2, binding = 2) uniform sampler2DShadow u_sampler_shadow;
+		layout(set = 2, binding = 3) uniform isampler2D u_sampler_int;
+		layout(set = 2, binding = 4) uniform usamplerCubeArray u_sampler_uint_array;
+		layout(set = 2, binding = 5) uniform image2D u_image2d;
+		layout(set = 2, binding = 6) uniform iimage3D u_image3d;
+		layout(set = 2, binding = 7) uniform uimageBuffer u_image_buffer;
+		void main() {
+			vec4 base = texture(u_sampler1d, 0.5);
+			vec4 volume = texture(u_sampler3d, vec3(0.0));
+			float depth = texture(u_sampler_shadow, vec3(0.0, 0.0, 1.0));
+			ivec4 ints = texture(u_sampler_int, vec2(0.0, 0.0));
+			uvec4 uints = texture(u_sampler_uint_array, vec4(0.0, 0.0, 1.0, 0.0));
+			out_color = vec4(base.rgb + volume.rgb, depth);
+		});
+
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -798,9 +826,11 @@ int main()
 		{ "matrix_ops", snippet_matrix_ops },
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },
+		{ "numeric_literals", snippet_numeric_literals },
 		{ "discard", snippet_discard },
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
+		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
 		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
 	};

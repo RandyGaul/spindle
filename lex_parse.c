@@ -1979,22 +1979,85 @@ void parse()
 		} \
 		break;
 
+static int digit_value_for_base(char c, int base)
+{
+	int value = -1;
+	if (c >= '0' && c <= '9')
+		value = c - '0';
+	else if (c >= 'a' && c <= 'f')
+		value = 10 + (c - 'a');
+	else if (c >= 'A' && c <= 'F')
+		value = 10 + (c - 'A');
+	return (value >= 0 && value < base) ? value : -1;
+}
+
 void lex_number()
 {
 	const char* start = at - 1;
-	char* endptr = NULL;
-	double val = strtod(start, &endptr);
-	const char* end = endptr;
-	const char* suffix = end;
+	const char* suffix = NULL;
+	const char* number_end = NULL;
 	int is_float = 0;
-	for (const char* p = start; p < end; ++p)
+	double float_val = 0.0;
+	unsigned long long int_val = 0;
+	int base = 10;
+	int use_manual_base = 0;
+	const char* digits_start = start;
+	if (*start == '0')
 	{
-		if (*p == '.' || *p == 'e' || *p == 'E')
+		char next = start[1];
+		if (next == 'x' || next == 'X')
 		{
-			is_float = 1;
-			break;
+			base = 16;
+			use_manual_base = 1;
+			digits_start = start + 2;
+		}
+		else if (next == 'b' || next == 'B')
+		{
+			base = 2;
+			use_manual_base = 1;
+			digits_start = start + 2;
+		}
+		else if (next && next != '.' && next != 'e' && next != 'E')
+		{
+			base = 8;
+			use_manual_base = 1;
+			digits_start = start + 1;
 		}
 	}
+	if (use_manual_base)
+	{
+		const char* p = digits_start;
+		while (1)
+		{
+			int digit = digit_value_for_base(*p, base);
+			if (digit < 0)
+				break;
+			int_val = int_val * (unsigned)base + (unsigned)digit;
+			++p;
+		}
+		number_end = p;
+		float_val = (double)int_val;
+		if (base == 8 && digits_start == start + 1 && number_end == digits_start)
+		{
+			// Account for a standalone zero literal.
+			number_end = digits_start;
+		}
+	}
+	else
+	{
+		char* endptr = NULL;
+		float_val = strtod(start, &endptr);
+		number_end = endptr;
+		for (const char* p = start; p < number_end; ++p)
+		{
+			if (*p == '.' || *p == 'e' || *p == 'E')
+			{
+				is_float = 1;
+				break;
+			}
+		}
+	}
+	suffix = number_end;
 	if (*suffix == 'f' || *suffix == 'F')
 	{
 		is_float = 1;
@@ -2020,18 +2083,25 @@ void lex_number()
 	{
 		tok.kind = TOK_FLOAT;
 		tok.lexpr = expr_float;
-		tok.float_val = val;
+		tok.float_val = float_val;
 	}
 	else
 	{
 		tok.kind = TOK_INT;
 		tok.lexpr = expr_int;
-		tok.int_val = 0;
-		for (const char* p = start; p < end; ++p)
+		if (use_manual_base)
 		{
-			if (*p >= '0' && *p <= '9')
+			tok.int_val = (int)int_val;
+		}
+		else
+		{
+			tok.int_val = 0;
+			for (const char* p = start; p < number_end; ++p)
 			{
-				tok.int_val = tok.int_val * 10 + (*p - '0');
+				if (*p >= '0' && *p <= '9')
+				{
+					tok.int_val = tok.int_val * 10 + (*p - '0');
+				}
 			}
 		}
 	}
