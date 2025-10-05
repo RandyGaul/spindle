@@ -75,6 +75,8 @@ void dump_ir()
 			break;
 		case IR_PUSH_INT:
 			printf(" %d", inst->arg0);
+			if (inst->is_unsigned_literal)
+				printf("u");
 			break;
 		case IR_PUSH_FLOAT:
 			printf(" %g", inst->float_val);
@@ -792,31 +794,61 @@ DEFINE_TEST(test_bitwise_operations)
 DEFINE_TEST(test_numeric_literal_bases)
 {
 	compiler_setup(snippet_numeric_literals);
-	int saw_hex = 0;
-	int saw_bin = 0;
-	int saw_oct = 0;
+	int saw_hex_int = 0;
+	int saw_bin_int = 0;
+	int saw_oct_int = 0;
+	int saw_hex_uint = 0;
+	int saw_bin_uint = 0;
+	int saw_oct_uint = 0;
+	int saw_dec_uint = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_PUSH_INT)
 			continue;
-		if (inst->arg0 == 31)
+		if (inst->is_unsigned_literal)
 		{
-			saw_hex = 1;
+			if (inst->arg0 == 31)
+			{
+				saw_hex_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 10)
+			{
+				saw_bin_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 61)
+			{
+				saw_oct_uint = inst->type == g_type_uint;
+			}
+			else if (inst->arg0 == 42)
+			{
+				saw_dec_uint = inst->type == g_type_uint;
+			}
 		}
-		else if (inst->arg0 == 10)
+		else
 		{
-			saw_bin = 1;
-		}
-		else if (inst->arg0 == 61)
-		{
-			saw_oct = 1;
+			if (inst->arg0 == 31)
+			{
+				saw_hex_int = inst->type == g_type_int;
+			}
+			else if (inst->arg0 == 10)
+			{
+				saw_bin_int = inst->type == g_type_int;
+			}
+			else if (inst->arg0 == 61)
+			{
+				saw_oct_int = inst->type == g_type_int;
+			}
 		}
 	}
 	compiler_teardown();
-	assert(saw_hex);
-	assert(saw_bin);
-	assert(saw_oct);
+	assert(saw_hex_int);
+	assert(saw_bin_int);
+	assert(saw_oct_int);
+	assert(saw_hex_uint);
+	assert(saw_bin_uint);
+	assert(saw_oct_uint);
+	assert(saw_dec_uint);
 }
 
 DEFINE_TEST(test_discard_instruction)
@@ -1047,6 +1079,42 @@ DEFINE_TEST(test_texture_query_builtins)
 	assert(saw_any);
 	assert(saw_all);
 }
+
+DEFINE_TEST(test_builtin_variables_vertex_stage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_setup("void main() { gl_Position = vec4(0.0); }");
+	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
+	assert(gl_position);
+	assert(gl_position->is_builtin);
+	assert(gl_position->builtin_stage == SHADER_STAGE_VERTEX);
+	assert(symbol_has_storage(gl_position, SYM_STORAGE_OUT));
+	assert(!(gl_position->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
+	assert(!frag_coord);
+	compiler_teardown();
+}
+
+DEFINE_TEST(test_builtin_variables_fragment_stage)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("void main() { vec4 coord = gl_FragCoord; gl_FragDepth = coord.x; }");
+	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
+	assert(frag_coord);
+	assert(frag_coord->is_builtin);
+	assert(frag_coord->builtin_stage == SHADER_STAGE_FRAGMENT);
+	assert(symbol_has_storage(frag_coord, SYM_STORAGE_IN));
+	assert(frag_coord->qualifier_flags & SYM_QUAL_CONST);
+	Symbol* frag_depth = symbol_table_find(sintern("gl_FragDepth"));
+	assert(frag_depth);
+	assert(symbol_has_storage(frag_depth, SYM_STORAGE_OUT));
+	assert(!(frag_depth->qualifier_flags & SYM_QUAL_CONST));
+	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
+	assert(!gl_position);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -1152,6 +1220,8 @@ void unit_test()
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
 		TEST_ENTRY(test_texture_query_builtins),
+		TEST_ENTRY(test_builtin_variables_vertex_stage),
+		TEST_ENTRY(test_builtin_variables_fragment_stage),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_const_qualifier_metadata),

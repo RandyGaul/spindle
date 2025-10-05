@@ -91,6 +91,7 @@ void init_keyword_interns()
 
 SymbolTable g_symbol_table;
 SymbolTable* st = &g_symbol_table;
+ShaderStage g_shader_stage = SHADER_STAGE_VERTEX;
 const char* current_decl_type_name;
 Type* current_decl_type_type;
 const char* current_param_type_name;
@@ -100,6 +101,8 @@ Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
+void symbol_add_storage(Symbol* sym, unsigned flags);
+void symbol_add_qualifier(Symbol* sym, unsigned flags);
 
 void symbol_table_enter_scope()
 {
@@ -123,6 +126,38 @@ typedef struct BuiltinFunctionInit
 	const char* return_type_name;
 	int param_count;
 } BuiltinFunctionInit;
+
+typedef struct BuiltinVariableInit
+{
+	const char* name;
+	ShaderStage stage;
+	const char* type_name;
+	unsigned storage_flags;
+	unsigned qualifier_flags;
+} BuiltinVariableInit;
+
+/*
+| Builtin Variable | Stage             | Type  | Access       |
+|------------------|-------------------|-------|--------------|
+| gl_Position      | Vertex (output)   | vec4  | write (out)  |
+| gl_PointSize     | Vertex (output)   | float | write (out)  |
+| gl_VertexIndex   | Vertex (input)    | int   | read (in)    |
+| gl_InstanceIndex | Vertex (input)    | int   | read (in)    |
+| gl_FragCoord     | Fragment (input)  | vec4  | read (in)    |
+| gl_FrontFacing   | Fragment (input)  | bool  | read (in)    |
+| gl_PointCoord    | Fragment (input)  | vec2  | read (in)    |
+| gl_FragDepth     | Fragment (output) | float | write (out)  |
+*/
+static const BuiltinVariableInit builtin_variables[] = {
+	{ "gl_Position", SHADER_STAGE_VERTEX, "vec4", SYM_STORAGE_OUT, 0 },
+	{ "gl_PointSize", SHADER_STAGE_VERTEX, "float", SYM_STORAGE_OUT, 0 },
+	{ "gl_VertexIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_InstanceIndex", SHADER_STAGE_VERTEX, "int", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FragCoord", SHADER_STAGE_FRAGMENT, "vec4", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FrontFacing", SHADER_STAGE_FRAGMENT, "bool", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_PointCoord", SHADER_STAGE_FRAGMENT, "vec2", SYM_STORAGE_IN, SYM_QUAL_CONST },
+	{ "gl_FragDepth", SHADER_STAGE_FRAGMENT, "float", SYM_STORAGE_OUT, 0 },
+};
 
 static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
 {
@@ -199,12 +234,31 @@ static void symbol_table_register_builtins()
 	}
 }
 
+static void symbol_table_register_builtin_variables()
+{
+	for (size_t i = 0; i < sizeof(builtin_variables) / sizeof(builtin_variables[0]); ++i)
+	{
+		const BuiltinVariableInit* init = &builtin_variables[i];
+		if (init->stage != g_shader_stage)
+			continue;
+		const char* name = sintern(init->name);
+		const char* type_name = sintern(init->type_name);
+		Type* type = type_system_get(type_name);
+		Symbol* sym = symbol_table_add(name, type_name, type, SYM_VAR);
+		sym->is_builtin = 1;
+		sym->builtin_stage = init->stage;
+		symbol_add_storage(sym, init->storage_flags);
+		symbol_add_qualifier(sym, init->qualifier_flags);
+	}
+}
+
 void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
-	symbol_table_enter_scope(st);
+	symbol_table_enter_scope();
 	symbol_table_register_builtins();
+	symbol_table_register_builtin_variables();
 }
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind)
@@ -221,6 +275,8 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 	sym.kind = kind;
 	sym.scope_depth = acount(st->scopes) - 1;
 	sym.builtin_param_count = -1;
+	sym.is_builtin = 0;
+	sym.builtin_stage = g_shader_stage;
 	apush(st->symbols, sym);
 	int idx = acount(st->symbols);
 	map_add(scope->map, key, (uint64_t)idx);
@@ -372,7 +428,7 @@ void symbol_table_free()
 {
 	while (acount(st->scopes) > 0)
 	{
-		symbol_table_leave_scope(st);
+		symbol_table_leave_scope();
 	}
 	for (int i = 0; i < acount(st->symbols); ++i)
 	{
@@ -416,6 +472,7 @@ typedef struct Token
 	double float_val;
 	const char* lexeme;
 	int len;
+	int is_unsigned;
 } Token;
 
 Token tok;
@@ -1200,6 +1257,7 @@ void expr_int()
 {
 	IR_Cmd* inst = ir_emit(IR_PUSH_INT);
 	inst->arg0 = tok.int_val;
+	inst->is_unsigned_literal = tok.is_unsigned;
 	next();
 }
 
@@ -1523,6 +1581,10 @@ EXPR_BINARY(land, AND_AND, AND_AND);
 EXPR_BINARY(lor, OR_OR, OR_OR);
 EXPR_BINARY(assign, ASSIGN, ASSIGN);
 EXPR_BINARY(plus_assign, ASSIGN, PLUS_ASSIGN);
+EXPR_BINARY(minus_assign, ASSIGN, MINUS_ASSIGN);
+EXPR_BINARY(mul_assign, ASSIGN, STAR_ASSIGN);
+EXPR_BINARY(div_assign, ASSIGN, SLASH_ASSIGN);
+EXPR_BINARY(mod_assign, ASSIGN, PERCENT_ASSIGN);
 EXPR_BINARY(and_assign, ASSIGN, AND_ASSIGN);
 EXPR_BINARY(or_assign, ASSIGN, OR_ASSIGN);
 EXPR_BINARY(xor_assign, ASSIGN, XOR_ASSIGN);
@@ -2060,6 +2122,7 @@ void lex_number()
 	int base = 10;
 	int use_manual_base = 0;
 	const char* digits_start = start;
+	int has_unsigned_suffix = 0;
 	if (*start == '0')
 	{
 		char next = start[1];
@@ -2130,9 +2193,14 @@ void lex_number()
 	{
 		while (*suffix == 'u' || *suffix == 'U' || *suffix == 'l' || *suffix == 'L')
 		{
+			if (*suffix == 'u' || *suffix == 'U')
+			{
+				has_unsigned_suffix = 1;
+			}
 			++suffix;
 		}
 	}
+	tok.is_unsigned = !is_float && has_unsigned_suffix;
 	tok.lexeme = start;
 	tok.len = (int)(suffix - start);
 	tok.prec = 0;
@@ -2185,6 +2253,7 @@ void next()
 	tok.float_val = 0.0;
 	tok.lexeme = at - 1;
 	tok.len = 0;
+	tok.is_unsigned = 0;
 
 	skip_ws_comments();
 
@@ -2212,10 +2281,10 @@ void next()
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
 		TOK_EXPR_OPTION2('+', PLUS, ADD, pos, add, '+', PLUS_PLUS, POSTFIX, pre_inc, post_inc, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
-		TOK_EXPR_OPTION('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec)
-		TOK_EXPR('*', STAR, MUL, error, mul)
-		TOK_EXPR('/', SLASH, MUL, error, div)
-		TOK_EXPR('%', PERCENT, MUL, error, mod)
+		TOK_EXPR_OPTION2('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec, '=', MINUS_ASSIGN, ASSIGN, error, minus_assign)
+		TOK_EXPR_ASSIGN('*', STAR, MUL, error, mul, STAR_ASSIGN, ASSIGN, error, mul_assign)
+		TOK_EXPR_ASSIGN('/', SLASH, MUL, error, div, SLASH_ASSIGN, ASSIGN, error, div_assign)
+		TOK_EXPR_ASSIGN('%', PERCENT, MUL, error, mod, PERCENT_ASSIGN, ASSIGN, error, mod_assign)
 		TOK_EXPR('?', QUESTION, TERNARY, error, ternary)
 
 		// two-char combos
@@ -2358,6 +2427,7 @@ void reset_parser_state()
 	tok.float_val = 0.0;
 	tok.lexeme = NULL;
 	tok.len = 0;
+	tok.is_unsigned = 0;
 }
 
 void compiler_teardown()
@@ -2371,6 +2441,11 @@ void compiler_teardown()
 	current_param_type_name = NULL;
 	current_param_type_type = NULL;
 	reset_parser_state();
+}
+
+void compiler_set_shader_stage(ShaderStage stage)
+{
+	g_shader_stage = stage;
 }
 
 void compiler_setup(const char* source)
