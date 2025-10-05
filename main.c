@@ -704,6 +704,15 @@ const char* snippet_bitwise = STR(
 			out_bits = values + ivec2(mask, mix + shifted);
 		});
 
+const char* snippet_numeric_literals = STR(
+		layout(location = 0) out ivec3 out_values;
+		void main() {
+			int hex_val = 0x1f;
+			int bin_val = 0b1010;
+			int oct_val = 075;
+			out_values = ivec3(hex_val, bin_val, oct_val);
+		});
+
 const char* snippet_switch_stmt = STR(
 		layout(location = 0) in int in_mode;
 		layout(location = 0) out vec4 out_color;
@@ -804,6 +813,7 @@ int main()
 		{ "matrix_ops", snippet_matrix_ops },
 		{ "looping", snippet_looping },
 		{ "bitwise", snippet_bitwise },
+		{ "numeric_literals", snippet_numeric_literals },
 		{ "discard", snippet_discard },
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
