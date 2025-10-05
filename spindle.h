@@ -705,11 +705,10 @@ typedef enum SymbolLayout
 typedef enum SymbolQualifier
 {
 	SYM_QUAL_CONST = 1 << 0,
-	SYM_QUAL_COHERENT = 1 << 1,
-	SYM_QUAL_VOLATILE = 1 << 2,
-	SYM_QUAL_RESTRICT = 1 << 3,
-	SYM_QUAL_READONLY = 1 << 4,
-	SYM_QUAL_WRITEONLY = 1 << 5,
+	SYM_QUAL_VOLATILE = 1 << 1,
+	SYM_QUAL_RESTRICT = 1 << 2,
+	SYM_QUAL_READONLY = 1 << 3,
+	SYM_QUAL_WRITEONLY = 1 << 4,
 } SymbolQualifier;
 
 typedef struct SymbolScopeEntry
@@ -742,12 +741,10 @@ const char* kw_binding;
 const char* kw_location;
 const char* kw_std140;
 const char* kw_std430;
-const char* kw_row_major;
 const char* kw_column_major;
 const char* kw_shared;
 const char* kw_buffer;
 const char* kw_packed;
-const char* kw_coherent;
 const char* kw_volatile;
 const char* kw_restrict;
 const char* kw_readonly;
@@ -780,12 +777,10 @@ void init_keyword_interns()
 	kw_location = sintern("location");
 	kw_std140 = sintern("std140");
 	kw_std430 = sintern("std430");
-	kw_row_major = sintern("row_major");
 	kw_column_major = sintern("column_major");
 	kw_shared = sintern("shared");
 	kw_buffer = sintern("buffer");
 	kw_packed = sintern("packed");
-	kw_coherent = sintern("coherent");
 	kw_volatile = sintern("volatile");
 	kw_restrict = sintern("restrict");
 	kw_readonly = sintern("readonly");
@@ -1549,8 +1544,6 @@ unsigned qualifier_flag_from_keyword(const char* s)
 {
 	if (s == kw_const)
 		return SYM_QUAL_CONST;
-	if (s == kw_coherent)
-		return SYM_QUAL_COHERENT;
 	if (s == kw_volatile)
 		return SYM_QUAL_VOLATILE;
 	if (s == kw_restrict)
@@ -1617,6 +1610,7 @@ StructInfo* parse_struct_body(Type* type, TypeSpec* spec);
 void parse_struct_member_array_suffix(StructMember* member);
 void emit_struct_ir(Type* type, StructInfo* info);
 void interface_block_decl(const TypeSpec* spec, const char* instance_name);
+static void validate_interface_block_layout(const TypeSpec* spec);
 Token peek_token();
 IR_Cmd* ir_emit(IR_Op op);
 void ir_apply_type_spec(IR_Cmd* inst, const TypeSpec* spec);
@@ -1876,10 +1870,41 @@ void emit_struct_ir(Type* type, StructInfo* info)
 // Emit IR for interface blocks so the backend sees each layout and field.
 // ...layout(set = 1, binding = 0)
 // ...uniform Globals { mat4 vp; } u_globals;
+static void validate_interface_block_layout(const TypeSpec* spec)
+{
+	if (!spec)
+		return;
+	int is_uniform = (spec->storage_flags & SYM_STORAGE_UNIFORM) != 0;
+	int is_buffer = (spec->storage_flags & SYM_STORAGE_BUFFER) != 0;
+	int layout_count = spec->layout_identifiers ? acount(spec->layout_identifiers) : 0;
+	if (!layout_count)
+		return;
+	if (is_uniform)
+	{
+		for (int i = 0; i < layout_count; ++i)
+		{
+			const char* ident = spec->layout_identifiers[i];
+			if (ident != kw_std140)
+				parse_error("uniform blocks only support std140 layout");
+		}
+		return;
+	}
+	if (is_buffer)
+	{
+		for (int i = 0; i < layout_count; ++i)
+		{
+			const char* ident = spec->layout_identifiers[i];
+			if (ident != kw_std430)
+				parse_error("storage blocks only support std430 layout");
+		}
+	}
+}
+
 void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 {
 	if (!spec || !spec->type)
 		return;
+	validate_interface_block_layout(spec);
 	IR_Cmd* begin = ir_emit(IR_BLOCK_DECL_BEGIN);
 	begin->str0 = spec->type_name;
 	begin->type = spec->type;
@@ -7298,8 +7323,8 @@ const char* snippet_stage_builtins_fragment = SPINDLE_SNIPPET(
 
 const char* snippet_stage_builtins_compute = SPINDLE_SNIPPET(
 		layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-		coherent readonly layout(std430, set = 0, binding = 0) buffer Globals { uvec4 data[]; } u_globals;
-		shared coherent float tile[64];
+		readonly layout(std430, set = 0, binding = 0) buffer Globals { uvec4 data[]; } u_globals;
+		shared float tile[64];
 		void main() {
 			uvec3 gid = gl_GlobalInvocationID;
 			uvec3 lid = gl_LocalInvocationID;
@@ -7510,11 +7535,6 @@ void dump_qualifier_flags(unsigned flags)
 	if (flags & SYM_QUAL_CONST)
 	{
 		printf("%sconst", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_QUAL_COHERENT)
-	{
-		printf("%scoherent", first ? "" : "|");
 		first = 0;
 	}
 	if (flags & SYM_QUAL_VOLATILE)
@@ -8790,8 +8810,8 @@ DEFINE_TEST(test_compute_layout_and_storage)
 	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
 	const char* source =
 			"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
-			"coherent readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
-			"shared coherent float tile[64];"
+			"readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
+			"shared float tile[64];"
 			"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
 	compiler_setup(source);
 	int saw_stage_layout = 0;
@@ -8824,12 +8844,11 @@ DEFINE_TEST(test_compute_layout_and_storage)
 	Symbol* data_block = symbol_table_find(sintern("data"));
 	assert(data_block);
 	assert(symbol_has_storage(data_block, SYM_STORAGE_BUFFER));
-	assert(data_block->qualifier_flags & SYM_QUAL_COHERENT);
 	assert(data_block->qualifier_flags & SYM_QUAL_READONLY);
 	Symbol* tile = symbol_table_find(sintern("tile"));
 	assert(tile);
 	assert(symbol_has_storage(tile, SYM_STORAGE_SHARED));
-	assert(tile->qualifier_flags & SYM_QUAL_COHERENT);
+	assert(tile->qualifier_flags == 0);
 	compiler_teardown();
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 }
