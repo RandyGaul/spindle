@@ -155,18 +155,40 @@ void dump_symbols()
 	}
 }
 
-void unit_test()
-{
-	init_keyword_interns();
+typedef void (*TestFunc)(void);
 
-	// Validate that builtin scalar and vector types are registered and queryable.
+typedef struct TestCase
+{
+	const char* name;
+	TestFunc func;
+} TestCase;
+
+#define DEFINE_TEST(name) static void name(void)
+#define TEST_ENTRY(name) { #name, name }
+
+static void run_test_case(const TestCase* test)
+{
+	printf("[test] %s\n", test->name);
+	test->func();
+}
+
+static void run_tests(const TestCase* tests, int count)
+{
+	for (int i = 0; i < count; ++i)
+	{
+		run_test_case(&tests[i]);
+	}
+	printf("[test] %d tests passed\n", count);
+}
+
+DEFINE_TEST(test_type_system_registration)
+{
 	type_system_init_builtins();
 	const char* float_name = sintern("float");
 	Type* float_type = type_system_get(float_name);
 	assert(float_type && float_type->tag == T_FLOAT);
 	Type* vec4_type = type_system_get(sintern("vec4"));
 	assert(vec4_type && vec4_type->tag == T_VEC && vec4_type->cols == 4);
-	// Ensure user-declared struct types are interned and retrievable.
 	Type custom_type = (Type){ 0 };
 	custom_type.tag = T_STRUCT;
 	custom_type.cols = 1;
@@ -177,8 +199,10 @@ void unit_test()
 	Type* declared_type = type_system_add_internal(custom_name, custom_type);
 	assert(declared_type == type_system_get(custom_name));
 	type_system_free();
+}
 
-	// Confirm symbol table scope chaining, storage flags, and layout metadata handling.
+DEFINE_TEST(test_symbol_table_scopes)
+{
 	type_system_init_builtins();
 	symbol_table_init();
 	Type int_type = (Type){ 0 };
@@ -205,10 +229,38 @@ void unit_test()
 	const char* frac_name = sintern("frac");
 	Symbol* frac_sym = symbol_table_find(frac_name);
 	assert(frac_sym && frac_sym->builtin_kind == BUILTIN_FRACT);
-	type_system_free();
 	symbol_table_free();
+	type_system_free();
+}
 
-	// Check that IR emission produces entries with the requested opcode.
+DEFINE_TEST(test_builtin_function_metadata)
+{
+	type_system_init_builtins();
+	symbol_table_init();
+	const struct
+	{
+		const char* name;
+		BuiltinFuncKind kind;
+		int params;
+	} cases[] = {
+		{ sintern("textureLod"), BUILTIN_TEXTURE_LOD, 3 },
+		{ sintern("textureGrad"), BUILTIN_TEXTURE_GRAD, 4 },
+		{ sintern("normalize"), BUILTIN_NORMALIZE, 1 },
+		{ sintern("distance"), BUILTIN_DISTANCE, 2 },
+	};
+	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
+	{
+		Symbol* sym = symbol_table_find(cases[i].name);
+		assert(sym);
+		assert(sym->builtin_kind == cases[i].kind);
+		assert(sym->builtin_param_count == cases[i].params);
+	}
+	symbol_table_free();
+	type_system_free();
+}
+
+DEFINE_TEST(test_ir_emit_push_int)
+{
 	IR_Cmd* saved_ir = g_ir;
 	g_ir = NULL;
 	IR_Cmd* emitted = ir_emit(IR_PUSH_INT);
@@ -217,7 +269,33 @@ void unit_test()
 	assert(g_ir[0].op == IR_PUSH_INT);
 	afree(g_ir);
 	g_ir = saved_ir;
+}
 
+DEFINE_TEST(test_basic_io_symbols)
+{
+	const char* u_texture = sintern("u_texture");
+	const char* u_tint = sintern("u_tint");
+	const char* out_color = sintern("out_color");
+	compiler_setup(snippet_basic_io);
+	Symbol* sampler_sym = symbol_table_find(u_texture);
+	assert(sampler_sym);
+	assert(symbol_has_storage(sampler_sym, SYM_STORAGE_UNIFORM));
+	assert(symbol_get_layout(sampler_sym, SYM_LAYOUT_SET) == 0);
+	assert(symbol_get_layout(sampler_sym, SYM_LAYOUT_BINDING) == 0);
+	Symbol* tint_sym = symbol_table_find(u_tint);
+	assert(tint_sym);
+	assert(symbol_has_storage(tint_sym, SYM_STORAGE_UNIFORM));
+	assert(symbol_get_layout(tint_sym, SYM_LAYOUT_SET) == 1);
+	assert(symbol_get_layout(tint_sym, SYM_LAYOUT_BINDING) == 0);
+	Symbol* out_sym = symbol_table_find(out_color);
+	assert(out_sym);
+	assert(symbol_has_storage(out_sym, SYM_STORAGE_OUT));
+	assert(symbol_get_layout(out_sym, SYM_LAYOUT_LOCATION) == 0);
+	compiler_teardown();
+}
+
+DEFINE_TEST(test_array_indexing_ir)
+{
 	compiler_setup(snippet_array_indexing);
 	int saw_index = 0;
 	int saw_float_index = 0;
@@ -273,7 +351,10 @@ void unit_test()
 	assert(saw_bool_literal);
 	assert(saw_vec_index);
 	assert(saw_mat_index);
+}
 
+DEFINE_TEST(test_swizzle_ir)
+{
 	compiler_setup(snippet_swizzle);
 	int saw_swizzle[5] = { 0 };
 	for (int i = 0; i < acount(g_ir); ++i)
@@ -289,7 +370,10 @@ void unit_test()
 	assert(saw_swizzle[2]);
 	assert(saw_swizzle[3]);
 	assert(saw_swizzle[4]);
+}
 
+DEFINE_TEST(test_control_flow_unary_ops)
+{
 	compiler_setup(snippet_control_flow);
 	int saw_pre_inc = 0;
 	int saw_post_inc = 0;
@@ -299,9 +383,21 @@ void unit_test()
 	int saw_post_inc_lvalue = 0;
 	int saw_pre_dec_lvalue = 0;
 	int saw_post_dec_lvalue = 0;
+	int saw_for_begin = 0;
+	int saw_if_begin = 0;
+	int saw_if_else = 0;
+	int saw_if_end = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
+		if (inst->op == IR_FOR_BEGIN)
+			saw_for_begin = 1;
+		if (inst->op == IR_IF_BEGIN)
+			saw_if_begin = 1;
+		if (inst->op == IR_IF_ELSE)
+			saw_if_else = 1;
+		if (inst->op == IR_IF_END)
+			saw_if_end = 1;
 		if (inst->op != IR_UNARY)
 			continue;
 		if (inst->tok == TOK_PLUS_PLUS)
@@ -344,16 +440,104 @@ void unit_test()
 	assert(saw_post_inc_lvalue);
 	assert(saw_pre_dec_lvalue);
 	assert(saw_post_dec_lvalue);
+	assert(saw_for_begin);
+	assert(saw_if_begin);
+	assert(saw_if_else);
+	assert(saw_if_end);
+}
 
+DEFINE_TEST(test_function_call_symbols)
+{
+	const char* saturate = sintern("saturate");
+	const char* apply_gain = sintern("apply_gain");
+	const char* main_name = sintern("main");
 	compiler_setup(snippet_function_calls);
-	assert(acount(g_ir) > 0);
-	assert(acount(st->symbols) > 0);
+	int saw_saturate_symbol = 0;
+	int saw_apply_gain_symbol = 0;
+	int saw_main_symbol = 0;
+	int saw_apply_gain_call = 0;
+	for (int i = 0; i < acount(st->symbols); ++i)
+	{
+		Symbol* sym = &st->symbols[i];
+		if (sym->name == saturate)
+		{
+			saw_saturate_symbol = sym->kind == SYM_FUNC;
+			assert(sym->type && sym->type->tag == T_FLOAT);
+		}
+		if (sym->name == apply_gain)
+		{
+			saw_apply_gain_symbol = sym->kind == SYM_FUNC;
+			assert(sym->type && sym->type->tag == T_VEC);
+		}
+		if (sym->name == main_name)
+		{
+			saw_main_symbol = sym->kind == SYM_FUNC;
+		}
+	}
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		if (g_ir[i].op == IR_CALL && g_ir[i].str0 == apply_gain)
+		{
+			saw_apply_gain_call = 1;
+			break;
+		}
+	}
 	compiler_teardown();
+	assert(saw_saturate_symbol);
+	assert(saw_apply_gain_symbol);
+	assert(saw_main_symbol);
+	assert(saw_apply_gain_call);
+}
 
+DEFINE_TEST(test_matrix_operations_ir)
+{
+	const char* mat3_name = sintern("mat3");
+	compiler_setup(snippet_matrix_ops);
+	int saw_mat_ctor = 0;
+	int index_count = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		if (g_ir[i].op == IR_CONSTRUCT && g_ir[i].str0 == mat3_name)
+			saw_mat_ctor = 1;
+		if (g_ir[i].op == IR_INDEX)
+			index_count++;
+	}
+	compiler_teardown();
+	assert(saw_mat_ctor);
+	assert(index_count >= 2);
+}
+
+DEFINE_TEST(test_looping_constructs)
+{
 	compiler_setup(snippet_looping);
-	assert(acount(g_ir) > 0);
+	int saw_while_begin = 0;
+	int saw_while_end = 0;
+	int saw_do_begin = 0;
+	int saw_do_end = 0;
+	int saw_continue = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		if (g_ir[i].op == IR_WHILE_BEGIN)
+			saw_while_begin = 1;
+		if (g_ir[i].op == IR_WHILE_END)
+			saw_while_end = 1;
+		if (g_ir[i].op == IR_DO_BEGIN)
+			saw_do_begin = 1;
+		if (g_ir[i].op == IR_DO_END)
+			saw_do_end = 1;
+		if (g_ir[i].op == IR_CONTINUE)
+			saw_continue = 1;
+	}
 	compiler_teardown();
+	assert(saw_while_begin);
+	assert(saw_while_end);
+	assert(saw_do_begin);
+	assert(saw_do_end);
+	assert(saw_continue);
+}
 
+DEFINE_TEST(test_bitwise_operations)
+{
 	compiler_setup(snippet_bitwise);
 	int saw_band = 0;
 	int saw_bor = 0;
@@ -417,7 +601,10 @@ void unit_test()
 	assert(saw_bxor_assign);
 	assert(saw_shl_assign);
 	assert(saw_shr_assign);
+}
 
+DEFINE_TEST(test_discard_instruction)
+{
 	compiler_setup(snippet_discard);
 	int saw_discard = 0;
 	for (int i = 0; i < acount(g_ir); ++i)
@@ -430,13 +617,16 @@ void unit_test()
 	}
 	compiler_teardown();
 	assert(saw_discard);
+}
 
-	compiler_setup(snippet_struct_block);
+DEFINE_TEST(test_struct_block_layout)
+{
 	const char* light_struct = sintern("Light");
 	const char* block_name = sintern("LightBlock");
 	const char* instance_name = sintern("u_light_data");
 	const char* member_name = sintern("lights");
 	const char* std140_name = sintern("std140");
+	compiler_setup(snippet_struct_block);
 	int saw_struct = 0;
 	int saw_block = 0;
 	int saw_block_layout_identifier = 0;
@@ -452,8 +642,8 @@ void unit_test()
 		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
 		{
 			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
-					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
-					inst->layout_set == 1 && inst->layout_binding == 0;
+				(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
+				inst->layout_set == 1 && inst->layout_binding == 0;
 		}
 		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
 		{
@@ -474,4 +664,108 @@ void unit_test()
 	assert(saw_block_layout_identifier);
 	assert(saw_block_instance);
 	assert(saw_block_member_array);
+}
+
+DEFINE_TEST(test_switch_statement_cases)
+{
+	compiler_setup(snippet_switch_stmt);
+	int saw_switch_begin = 0;
+	int saw_switch_end = 0;
+	int saw_default_case = 0;
+	int saw_fallthrough = 0;
+	int case_count = 0;
+	int case_zero = 0;
+	int case_one = 0;
+	int case_two = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op == IR_SWITCH_BEGIN)
+			saw_switch_begin = 1;
+		if (inst->op == IR_SWITCH_END)
+			saw_switch_end = 1;
+		if (inst->op != IR_SWITCH_CASE)
+			continue;
+		case_count++;
+		if (inst->arg1 & SWITCH_CASE_FLAG_DEFAULT)
+			saw_default_case = 1;
+		if (inst->arg1 & SWITCH_CASE_FLAG_FALLTHROUGH)
+			saw_fallthrough = 1;
+		if (inst->arg0 == 0)
+			case_zero = 1;
+		if (inst->arg0 == 1)
+			case_one = 1;
+		if (inst->arg0 == 2)
+			case_two = 1;
+	}
+	compiler_teardown();
+	assert(saw_switch_begin);
+	assert(saw_switch_end);
+	assert(case_count == 4);
+	assert(case_zero);
+	assert(case_one);
+	assert(case_two);
+	assert(saw_default_case);
+	assert(saw_fallthrough);
+}
+
+DEFINE_TEST(test_builtin_function_calls)
+{
+	const char* texture_name = sintern("texture");
+	const char* max_name = sintern("max");
+	const char* frac_name = sintern("frac");
+	const char* dot_name = sintern("dot");
+	const char* normalize_name = sintern("normalize");
+	compiler_setup(snippet_builtin_funcs);
+	int saw_texture = 0;
+	int saw_max = 0;
+	int saw_frac = 0;
+	int saw_dot = 0;
+	int saw_normalize = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_CALL)
+			continue;
+		if (inst->str0 == texture_name)
+			saw_texture = 1;
+		if (inst->str0 == max_name)
+			saw_max = 1;
+		if (inst->str0 == frac_name)
+			saw_frac = 1;
+		if (inst->str0 == dot_name)
+			saw_dot = 1;
+		if (inst->str0 == normalize_name)
+			saw_normalize = 1;
+	}
+	compiler_teardown();
+	assert(saw_texture);
+	assert(saw_max);
+	assert(saw_frac);
+	assert(saw_dot);
+	assert(saw_normalize);
+}
+
+void unit_test()
+{
+	init_keyword_interns();
+	const TestCase tests[] = {
+		TEST_ENTRY(test_type_system_registration),
+		TEST_ENTRY(test_symbol_table_scopes),
+		TEST_ENTRY(test_builtin_function_metadata),
+		TEST_ENTRY(test_ir_emit_push_int),
+		TEST_ENTRY(test_basic_io_symbols),
+		TEST_ENTRY(test_array_indexing_ir),
+		TEST_ENTRY(test_swizzle_ir),
+		TEST_ENTRY(test_control_flow_unary_ops),
+		TEST_ENTRY(test_function_call_symbols),
+		TEST_ENTRY(test_matrix_operations_ir),
+		TEST_ENTRY(test_looping_constructs),
+		TEST_ENTRY(test_bitwise_operations),
+		TEST_ENTRY(test_discard_instruction),
+		TEST_ENTRY(test_struct_block_layout),
+		TEST_ENTRY(test_switch_statement_cases),
+		TEST_ENTRY(test_builtin_function_calls),
+	};
+	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
