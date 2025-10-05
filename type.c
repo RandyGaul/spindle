@@ -185,6 +185,24 @@ StructMember* type_struct_find_member(Type* type, const char* name)
 	return NULL;
 }
 
+int type_struct_member_count(Type* type)
+{
+	StructInfo* info = type_struct_info(type);
+	if (!info)
+		return 0;
+	return acount(info->members);
+}
+
+StructMember* type_struct_member_at(Type* type, int index)
+{
+	StructInfo* info = type_struct_info(type);
+	if (!info)
+		return NULL;
+	if (index < 0 || index >= acount(info->members))
+		return NULL;
+	return &info->members[index];
+}
+
 void type_system_init_builtins()
 {
 	typedef struct TypeInit
@@ -1108,6 +1126,185 @@ Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 	return true_type;
 }
 
+static void type_constructor_error(const Type* target, const char* owner, const char* member, const char* fmt, ...)
+{
+	const char* type_name = type_display(target);
+	char prefix[256];
+	if (owner && member)
+	{
+		snprintf(prefix, sizeof(prefix), "constructor for %s member %s (%s)", owner, member, type_name);
+	}
+	else if (owner)
+	{
+		snprintf(prefix, sizeof(prefix), "constructor for %s (%s)", owner, type_name);
+	}
+	else
+	{
+		snprintf(prefix, sizeof(prefix), "constructor %s", type_name);
+	}
+	va_list args_list;
+	va_start(args_list, fmt);
+	char suffix[256];
+	vsnprintf(suffix, sizeof(suffix), fmt, args_list);
+	va_end(args_list);
+	char message[512];
+	snprintf(message, sizeof(message), "%s %s", prefix, suffix);
+	type_check_error("%s", message);
+}
+
+static int type_constructor_validate(Type* target, Type** args, int argc, int start, const char* owner, const char* member)
+{
+	if (!target)
+		return 0;
+	int remaining = argc - start;
+	if (remaining < 0)
+		remaining = 0;
+	switch (target->tag)
+	{
+	case T_VEC:
+	{
+		int needed = target->cols;
+		TypeTag base = type_base_type(target);
+		if (needed > 1 && remaining == 1)
+		{
+			Type* arg = args[start];
+			if (arg && type_is_scalar(arg))
+			{
+				if (!type_base_can_convert(type_base_type(arg), base))
+					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
+				return 1;
+			}
+		}
+		int count = 0;
+		int consumed = 0;
+		while (count < needed)
+		{
+			if (start + consumed >= argc)
+				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+			Type* arg = args[start + consumed];
+			if (!type_base_can_convert(type_base_type(arg), base))
+				type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
+			if (type_is_scalar(arg))
+			{
+				count += 1;
+			}
+			else if (type_is_vector(arg))
+			{
+				count += arg->cols;
+			}
+			else
+			{
+				type_constructor_error(target, owner, member, "arguments must be scalar or vector, got %s", type_display(arg));
+			}
+			if (count > needed)
+				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+			consumed++;
+		}
+		return consumed;
+	}
+	case T_MAT:
+	{
+			int needed = target->cols * target->rows;
+			TypeTag base = type_base_type(target);
+			if (needed > 1 && remaining == 1)
+			{
+				Type* arg = args[start];
+				if (arg && type_is_scalar(arg))
+				{
+					if (!type_base_can_convert(type_base_type(arg), base))
+						type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
+					return 1;
+				}
+			}
+			int count = 0;
+			int consumed = 0;
+			while (count < needed)
+			{
+				if (start + consumed >= argc)
+					type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+				Type* arg = args[start + consumed];
+				if (!type_base_can_convert(type_base_type(arg), base))
+					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
+				if (type_is_scalar(arg))
+				{
+					count += 1;
+				}
+				else if (type_is_vector(arg))
+				{
+					if (arg->cols != target->rows)
+						type_constructor_error(target, owner, member, "column argument expected %d components, got %d", target->rows, arg->cols);
+					count += arg->cols;
+				}
+				else
+				{
+					type_constructor_error(target, owner, member, "arguments must be scalars or column vectors, got %s", type_display(arg));
+				}
+				if (count > needed)
+					type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
+				consumed++;
+			}
+			return consumed;
+	}
+	case T_ARRAY:
+	{
+			if (target->array_len < 0)
+				type_constructor_error(target, owner, member, "requires known array size");
+			Type* element = target->user ? (Type*)target->user : NULL;
+			if (!element)
+				type_constructor_error(target, owner, member, "has unknown element type");
+			if (remaining > 0)
+			{
+				Type* arg0 = args[start];
+				if (arg0 && arg0 == target)
+					return 1;
+			}
+			int consumed = 0;
+			for (int i = 0; i < target->array_len; ++i)
+			{
+				consumed += type_constructor_validate(element, args, argc, start + consumed, owner, member);
+			}
+			return consumed;
+	}
+	case T_STRUCT:
+	{
+			StructInfo* info = type_struct_info(target);
+			if (!info)
+				type_constructor_error(target, owner, member, "is incomplete");
+			const char* struct_name = target->name ? target->name : type_display(target);
+			if (remaining > 0)
+			{
+				Type* arg0 = args[start];
+				if (arg0 && arg0 == target)
+					return 1;
+			}
+			int consumed = 0;
+			int member_count = type_struct_member_count(target);
+			for (int i = 0; i < member_count; ++i)
+			{
+				StructMember* field = type_struct_member_at(target, i);
+				if (!field)
+					continue;
+				Type* field_type = field->type ? field->type : field->declared_type;
+				if (!field_type)
+					type_constructor_error(target, struct_name, field->name, "has unknown type");
+				consumed += type_constructor_validate(field_type, args, argc, start + consumed, struct_name, field->name);
+			}
+			return consumed;
+	}
+	default:
+	{
+			if (!type_is_scalar(target))
+				type_constructor_error(target, owner, member, "unsupported target");
+			if (remaining <= 0)
+				type_constructor_error(target, owner, member, "expects 1 argument but received 0");
+			Type* arg = args[start];
+			if (!type_scalar_can_convert(arg, target))
+				type_constructor_error(target, owner, member, "cannot convert %s to %s", type_display(arg), type_display(target));
+			return 1;
+	}
+	}
+}
+
 void type_check_constructor(Type* target, Type** args, int argc)
 {
 	if (!target)
@@ -1123,89 +1320,10 @@ void type_check_constructor(Type* target, Type** args, int argc)
 	}
 	if (has_unknown)
 		return;
-	TypeTag base = type_base_type(target);
-	switch (target->tag)
+	int consumed = type_constructor_validate(target, args, argc, 0, NULL, NULL);
+	if (consumed != argc)
 	{
-	case T_VEC:
-	{
-		int needed = target->cols;
-		int count = 0;
-		for (int i = 0; i < argc; ++i)
-		{
-			Type* arg = args[i];
-			if (!type_base_can_convert(type_base_type(arg), base))
-			{
-				type_check_error("cannot pass %s to constructor %s", type_display(arg), type_display(target));
-			}
-			if (type_is_scalar(arg))
-				count += 1;
-			else if (type_is_vector(arg))
-				count += arg->cols;
-			else
-				type_check_error("vector constructor arguments must be scalar or vector, got %s", type_display(arg));
-		}
-		if (count != needed)
-		{
-			int allow_scalar_replication = (needed > 1 && count == 1 && argc == 1 && type_is_scalar(args[0]));
-			if (!allow_scalar_replication)
-			{
-				type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
-			}
-		}
-		break;
-	}
-	case T_MAT:
-	{
-		int needed = target->cols * target->rows;
-		int count = 0;
-		for (int i = 0; i < argc; ++i)
-		{
-			Type* arg = args[i];
-			if (!type_base_can_convert(type_base_type(arg), base))
-			{
-				type_check_error("cannot pass %s to constructor %s", type_display(arg), type_display(target));
-			}
-			if (type_is_scalar(arg))
-			{
-				count += 1;
-			}
-			else if (type_is_vector(arg))
-			{
-				if (arg->cols != target->rows)
-				{
-					type_check_error("matrix constructor column argument expected %d components, got %d", target->rows, arg->cols);
-				}
-				count += arg->cols;
-			}
-			else
-			{
-				type_check_error("matrix constructor arguments must be scalars or column vectors, got %s", type_display(arg));
-			}
-		}
-		if (count != needed)
-		{
-			int allow_scalar_replication = (needed > 1 && count == 1 && argc == 1 && type_is_scalar(args[0]));
-			if (!allow_scalar_replication)
-			{
-				type_check_error("constructor %s expected %d components but received %d", type_display(target), needed, count);
-			}
-		}
-		break;
-	}
-	default:
-		if (!type_is_scalar(target))
-		{
-			type_check_error("unsupported constructor target %s", type_display(target));
-		}
-		if (argc != 1)
-		{
-			type_check_error("scalar constructor %s expects 1 argument, got %d", type_display(target), argc);
-		}
-		if (!type_scalar_can_convert(args[0], target))
-		{
-			type_check_error("cannot convert %s to %s", type_display(args[0]), type_display(target));
-		}
-		break;
+		type_check_error("constructor %s expected %d arguments but received %d", type_display(target), consumed, argc);
 	}
 }
 

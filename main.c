@@ -223,6 +223,8 @@ void type_struct_member_set_layout(StructMember* member, unsigned layout_flags, 
 void type_struct_member_mark_array(StructMember* member, Type* element_type, int size, int unsized);
 void type_struct_set_layout_identifiers(Type* type, const char** identifiers, int count);
 StructMember* type_struct_find_member(Type* type, const char* name);
+int type_struct_member_count(Type* type);
+StructMember* type_struct_member_at(Type* type, int index);
 
 typedef enum BuiltinFuncKind
 {
@@ -792,6 +794,25 @@ const char* snippet_resource_types = STR(
 			out_color = vec4(base.rgb + volume.rgb, depth);
 		});
 
+const char* snippet_struct_constructor = STR(
+		struct Inner {
+			vec2 coords[2];
+		};
+		struct Outer {
+			float weight;
+			Inner segments[2];
+			float thresholds[4];
+		};
+		layout(location = 0) out vec4 out_color;
+		void main() {
+			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0));
+			Outer combo = Outer(1.0,
+				Inner(vec2(0.5, 0.5), vec2(0.75, 0.25)),
+				Inner(vec2(0.25, 0.75), vec2(0.5, 0.5)),
+				0.0, 1.0, 2.0, 3.0);
+			out_color = vec4(combo.segments[0].coords[1], combo.thresholds[3], combo.weight);
+		});
+
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -832,6 +853,7 @@ int main()
 		{ "builtin_funcs", snippet_builtin_funcs },
 		{ "resource_types", snippet_resource_types },
 		{ "struct_block", snippet_struct_block },
+		{ "struct_constructor", snippet_struct_constructor },
 		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
 	};
 
