@@ -882,6 +882,30 @@ DEFINE_TEST(test_struct_block_layout)
 	assert(saw_block_member_array);
 }
 
+DEFINE_TEST(test_struct_constructor_ir)
+{
+	const char* inner_name = sintern("Inner");
+	const char* outer_name = sintern("Outer");
+	compiler_setup(snippet_struct_constructor);
+	int saw_inner_ctor = 0;
+	int saw_outer_ctor = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_CONSTRUCT)
+			continue;
+		if (!inst->type || inst->type->tag != T_STRUCT)
+			continue;
+		if (inst->str0 == inner_name && inst->arg0 == 2)
+			saw_inner_ctor = 1;
+		if (inst->str0 == outer_name && inst->arg0 == 7)
+			saw_outer_ctor = 1;
+	}
+	compiler_teardown();
+	assert(saw_inner_ctor);
+	assert(saw_outer_ctor);
+}
+
 DEFINE_TEST(test_switch_statement_cases)
 {
 	compiler_setup(snippet_switch_stmt);
@@ -1062,6 +1086,7 @@ void unit_test()
 		TEST_ENTRY(test_numeric_literal_bases),
 		TEST_ENTRY(test_discard_instruction),
 		TEST_ENTRY(test_struct_block_layout),
+		TEST_ENTRY(test_struct_constructor_ir),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
 		TEST_ENTRY(test_preprocessor_passthrough),
