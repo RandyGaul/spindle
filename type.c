@@ -19,6 +19,20 @@ const char* type_tag_name(TypeTag tag)
 	return names[tag] ? names[tag] : "unknown";
 }
 
+enum
+{
+	TYPE_DIM_UNKNOWN = 0,
+	TYPE_DIM_1D = 1,
+	TYPE_DIM_2D = 2,
+	TYPE_DIM_3D = 3,
+	TYPE_DIM_CUBE = 4,
+	TYPE_DIM_RECT = 5,
+	TYPE_DIM_BUFFER = 6,
+	TYPE_DIM_2D_MS = 7,
+	TYPE_DIM_FLAG_ARRAY = 1 << 4,
+	TYPE_DIM_FLAG_SHADOW = 1 << 5,
+};
+
 static Type* type_system_add_internal(const char* name, Type type)
 {
 	uint64_t key = (uint64_t)name;
@@ -178,6 +192,14 @@ void type_system_init_builtins()
 		const char* name;
 		Type type;
 	} TypeInit;
+#define SAMPLER(name, base_tag, dim_value) \
+	{ \
+		name, { .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+	}
+#define IMAGE(name, base_tag, dim_value) \
+	{ \
+		name, { .tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+	}
 	const TypeInit builtins[] = {
 		{ "void", { .tag = T_VOID, .cols = 1, .rows = 1, .base = T_VOID, .array_len = 0 } },
 		{ "bool", { .tag = T_BOOL, .cols = 1, .rows = 1, .base = T_BOOL, .array_len = 0 } },
@@ -206,10 +228,82 @@ void type_system_init_builtins()
 		{ "mat3x4", { .tag = T_MAT, .cols = 3, .rows = 4, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x2", { .tag = T_MAT, .cols = 4, .rows = 2, .base = T_FLOAT, .array_len = 0 } },
 		{ "mat4x3", { .tag = T_MAT, .cols = 4, .rows = 3, .base = T_FLOAT, .array_len = 0 } },
-		{ "sampler2D", { .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = T_FLOAT, .dim = 2, .array_len = 0 } },
-		{ "samplerCube", { .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = T_FLOAT, .dim = 4, .array_len = 0 } },
-		{ "sampler2DArray", { .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = T_FLOAT, .dim = 5, .array_len = 0 } },
+		SAMPLER("sampler1D", T_FLOAT, TYPE_DIM_1D),
+		SAMPLER("sampler2D", T_FLOAT, TYPE_DIM_2D),
+		SAMPLER("sampler3D", T_FLOAT, TYPE_DIM_3D),
+		SAMPLER("samplerCube", T_FLOAT, TYPE_DIM_CUBE),
+		SAMPLER("sampler1DShadow", T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("sampler2DShadow", T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("samplerCubeShadow", T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("sampler1DArray", T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("sampler2DArray", T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("sampler1DArrayShadow", T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("sampler2DArrayShadow", T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("samplerCubeArray", T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("samplerCubeArrayShadow", T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("sampler2DMS", T_FLOAT, TYPE_DIM_2D_MS),
+		SAMPLER("sampler2DMSArray", T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("samplerBuffer", T_FLOAT, TYPE_DIM_BUFFER),
+		SAMPLER("sampler2DRect", T_FLOAT, TYPE_DIM_RECT),
+		SAMPLER("sampler2DRectShadow", T_FLOAT, TYPE_DIM_RECT | TYPE_DIM_FLAG_SHADOW),
+		SAMPLER("isampler1D", T_INT, TYPE_DIM_1D),
+		SAMPLER("isampler2D", T_INT, TYPE_DIM_2D),
+		SAMPLER("isampler3D", T_INT, TYPE_DIM_3D),
+		SAMPLER("isamplerCube", T_INT, TYPE_DIM_CUBE),
+		SAMPLER("isampler1DArray", T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("isampler2DArray", T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("isamplerCubeArray", T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("isampler2DMS", T_INT, TYPE_DIM_2D_MS),
+		SAMPLER("isampler2DMSArray", T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("isamplerBuffer", T_INT, TYPE_DIM_BUFFER),
+		SAMPLER("isampler2DRect", T_INT, TYPE_DIM_RECT),
+		SAMPLER("usampler1D", T_UINT, TYPE_DIM_1D),
+		SAMPLER("usampler2D", T_UINT, TYPE_DIM_2D),
+		SAMPLER("usampler3D", T_UINT, TYPE_DIM_3D),
+		SAMPLER("usamplerCube", T_UINT, TYPE_DIM_CUBE),
+		SAMPLER("usampler1DArray", T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("usampler2DArray", T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("usamplerCubeArray", T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("usampler2DMS", T_UINT, TYPE_DIM_2D_MS),
+		SAMPLER("usampler2DMSArray", T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		SAMPLER("usamplerBuffer", T_UINT, TYPE_DIM_BUFFER),
+		SAMPLER("usampler2DRect", T_UINT, TYPE_DIM_RECT),
+		IMAGE("image1D", T_FLOAT, TYPE_DIM_1D),
+		IMAGE("image2D", T_FLOAT, TYPE_DIM_2D),
+		IMAGE("image3D", T_FLOAT, TYPE_DIM_3D),
+		IMAGE("imageCube", T_FLOAT, TYPE_DIM_CUBE),
+		IMAGE("imageBuffer", T_FLOAT, TYPE_DIM_BUFFER),
+		IMAGE("image1DArray", T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("image2DArray", T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("imageCubeArray", T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("image2DMS", T_FLOAT, TYPE_DIM_2D_MS),
+		IMAGE("image2DMSArray", T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("image2DRect", T_FLOAT, TYPE_DIM_RECT),
+		IMAGE("iimage1D", T_INT, TYPE_DIM_1D),
+		IMAGE("iimage2D", T_INT, TYPE_DIM_2D),
+		IMAGE("iimage3D", T_INT, TYPE_DIM_3D),
+		IMAGE("iimageCube", T_INT, TYPE_DIM_CUBE),
+		IMAGE("iimageBuffer", T_INT, TYPE_DIM_BUFFER),
+		IMAGE("iimage1DArray", T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("iimage2DArray", T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("iimageCubeArray", T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("iimage2DMS", T_INT, TYPE_DIM_2D_MS),
+		IMAGE("iimage2DMSArray", T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("iimage2DRect", T_INT, TYPE_DIM_RECT),
+		IMAGE("uimage1D", T_UINT, TYPE_DIM_1D),
+		IMAGE("uimage2D", T_UINT, TYPE_DIM_2D),
+		IMAGE("uimage3D", T_UINT, TYPE_DIM_3D),
+		IMAGE("uimageCube", T_UINT, TYPE_DIM_CUBE),
+		IMAGE("uimageBuffer", T_UINT, TYPE_DIM_BUFFER),
+		IMAGE("uimage1DArray", T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("uimage2DArray", T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("uimageCubeArray", T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("uimage2DMS", T_UINT, TYPE_DIM_2D_MS),
+		IMAGE("uimage2DMSArray", T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY),
+		IMAGE("uimage2DRect", T_UINT, TYPE_DIM_RECT),
 	};
+#undef SAMPLER
+#undef IMAGE
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
 	{
 		const char* name = sintern_range(builtins[i].name, builtins[i].name + strlen(builtins[i].name));
@@ -459,6 +553,23 @@ static Type* builtin_result_vector(Type** args, int argc, int index, int compone
 	return type_get_vector(type_base_type(source), components);
 }
 
+static Type* builtin_result_texture(Type** args, int argc)
+{
+	Type* sampler = (args && argc > 0) ? args[0] : NULL;
+	if (!sampler || sampler->tag != T_SAMPLER)
+		return type_system_get(sintern("vec4"));
+	TypeTag component = sampler->base ? (TypeTag)sampler->base : T_FLOAT;
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
+	{
+		Type* scalar = type_get_scalar(component);
+		return scalar ? scalar : type_system_get(sintern("float"));
+	}
+	Type* vec = type_get_vector(component, 4);
+	if (vec)
+		return vec;
+	return type_system_get(sintern("vec4"));
+}
+
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 {
 	if (!sym)
@@ -469,7 +580,7 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_TEXTURE_LOD:
 	case BUILTIN_TEXTURE_PROJ:
 	case BUILTIN_TEXTURE_GRAD:
-		return type_system_get(sintern("vec4"));
+		return builtin_result_texture(args, argc);
 	case BUILTIN_MIN:
 	case BUILTIN_MAX:
 	case BUILTIN_CLAMP:

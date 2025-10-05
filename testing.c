@@ -259,6 +259,135 @@ DEFINE_TEST(test_builtin_function_metadata)
 	type_system_free();
 }
 
+DEFINE_TEST(test_resource_type_registration)
+{
+	type_system_init_builtins();
+	const struct
+	{
+		const char* name;
+		TypeTag tag;
+		TypeTag base;
+		uint8_t dim;
+	} cases[] = {
+		{ "sampler1D", T_SAMPLER, T_FLOAT, TYPE_DIM_1D },
+		{ "sampler2D", T_SAMPLER, T_FLOAT, TYPE_DIM_2D },
+		{ "sampler3D", T_SAMPLER, T_FLOAT, TYPE_DIM_3D },
+		{ "samplerCube", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE },
+		{ "sampler1DShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_SHADOW },
+		{ "sampler2DShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_SHADOW },
+		{ "samplerCubeShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_SHADOW },
+		{ "sampler1DArray", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "sampler2DArray", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "sampler1DArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
+		{ "sampler2DArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
+		{ "samplerCubeArray", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "samplerCubeArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
+		{ "sampler2DMS", T_SAMPLER, T_FLOAT, TYPE_DIM_2D_MS },
+		{ "sampler2DMSArray", T_SAMPLER, T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "samplerBuffer", T_SAMPLER, T_FLOAT, TYPE_DIM_BUFFER },
+		{ "sampler2DRect", T_SAMPLER, T_FLOAT, TYPE_DIM_RECT },
+		{ "sampler2DRectShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_RECT | TYPE_DIM_FLAG_SHADOW },
+		{ "isampler1D", T_SAMPLER, T_INT, TYPE_DIM_1D },
+		{ "isampler2D", T_SAMPLER, T_INT, TYPE_DIM_2D },
+		{ "isampler3D", T_SAMPLER, T_INT, TYPE_DIM_3D },
+		{ "isamplerCube", T_SAMPLER, T_INT, TYPE_DIM_CUBE },
+		{ "isampler1DArray", T_SAMPLER, T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "isampler2DArray", T_SAMPLER, T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "isamplerCubeArray", T_SAMPLER, T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "isampler2DMS", T_SAMPLER, T_INT, TYPE_DIM_2D_MS },
+		{ "isampler2DMSArray", T_SAMPLER, T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "isamplerBuffer", T_SAMPLER, T_INT, TYPE_DIM_BUFFER },
+		{ "isampler2DRect", T_SAMPLER, T_INT, TYPE_DIM_RECT },
+		{ "usampler1D", T_SAMPLER, T_UINT, TYPE_DIM_1D },
+		{ "usampler2D", T_SAMPLER, T_UINT, TYPE_DIM_2D },
+		{ "usampler3D", T_SAMPLER, T_UINT, TYPE_DIM_3D },
+		{ "usamplerCube", T_SAMPLER, T_UINT, TYPE_DIM_CUBE },
+		{ "usampler1DArray", T_SAMPLER, T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "usampler2DArray", T_SAMPLER, T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "usamplerCubeArray", T_SAMPLER, T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "usampler2DMS", T_SAMPLER, T_UINT, TYPE_DIM_2D_MS },
+		{ "usampler2DMSArray", T_SAMPLER, T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "usamplerBuffer", T_SAMPLER, T_UINT, TYPE_DIM_BUFFER },
+		{ "usampler2DRect", T_SAMPLER, T_UINT, TYPE_DIM_RECT },
+		{ "image1D", T_IMAGE, T_FLOAT, TYPE_DIM_1D },
+		{ "image2D", T_IMAGE, T_FLOAT, TYPE_DIM_2D },
+		{ "image3D", T_IMAGE, T_FLOAT, TYPE_DIM_3D },
+		{ "imageCube", T_IMAGE, T_FLOAT, TYPE_DIM_CUBE },
+		{ "imageBuffer", T_IMAGE, T_FLOAT, TYPE_DIM_BUFFER },
+		{ "image1DArray", T_IMAGE, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "image2DArray", T_IMAGE, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "imageCubeArray", T_IMAGE, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "image2DMS", T_IMAGE, T_FLOAT, TYPE_DIM_2D_MS },
+		{ "image2DMSArray", T_IMAGE, T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "image2DRect", T_IMAGE, T_FLOAT, TYPE_DIM_RECT },
+		{ "iimage1D", T_IMAGE, T_INT, TYPE_DIM_1D },
+		{ "iimage2D", T_IMAGE, T_INT, TYPE_DIM_2D },
+		{ "iimage3D", T_IMAGE, T_INT, TYPE_DIM_3D },
+		{ "iimageCube", T_IMAGE, T_INT, TYPE_DIM_CUBE },
+		{ "iimageBuffer", T_IMAGE, T_INT, TYPE_DIM_BUFFER },
+		{ "iimage1DArray", T_IMAGE, T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "iimage2DArray", T_IMAGE, T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "iimageCubeArray", T_IMAGE, T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "iimage2DMS", T_IMAGE, T_INT, TYPE_DIM_2D_MS },
+		{ "iimage2DMSArray", T_IMAGE, T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "iimage2DRect", T_IMAGE, T_INT, TYPE_DIM_RECT },
+		{ "uimage1D", T_IMAGE, T_UINT, TYPE_DIM_1D },
+		{ "uimage2D", T_IMAGE, T_UINT, TYPE_DIM_2D },
+		{ "uimage3D", T_IMAGE, T_UINT, TYPE_DIM_3D },
+		{ "uimageCube", T_IMAGE, T_UINT, TYPE_DIM_CUBE },
+		{ "uimageBuffer", T_IMAGE, T_UINT, TYPE_DIM_BUFFER },
+		{ "uimage1DArray", T_IMAGE, T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
+		{ "uimage2DArray", T_IMAGE, T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
+		{ "uimageCubeArray", T_IMAGE, T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
+		{ "uimage2DMS", T_IMAGE, T_UINT, TYPE_DIM_2D_MS },
+		{ "uimage2DMSArray", T_IMAGE, T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
+		{ "uimage2DRect", T_IMAGE, T_UINT, TYPE_DIM_RECT },
+	};
+	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
+	{
+		const char* name = sintern(cases[i].name);
+		Type* type = type_system_get(name);
+		assert(type);
+		assert(type->tag == cases[i].tag);
+		assert(type->base == cases[i].base);
+		assert(type->dim == cases[i].dim);
+	}
+	type_system_free();
+}
+
+DEFINE_TEST(test_resource_texture_inference)
+{
+	compiler_setup(snippet_resource_types);
+	const char* texture_name = sintern("texture");
+	Type* float_vec4 = type_get_vector(T_FLOAT, 4);
+	Type* int_vec4 = type_get_vector(T_INT, 4);
+	Type* uint_vec4 = type_get_vector(T_UINT, 4);
+	Type* float_scalar = type_get_scalar(T_FLOAT);
+	int saw_float_vec = 0;
+	int saw_shadow = 0;
+	int saw_int_vec = 0;
+	int saw_uint_vec = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_CALL || inst->str0 != texture_name)
+			continue;
+		if (inst->type == float_vec4)
+			saw_float_vec = 1;
+		else if (inst->type == float_scalar)
+			saw_shadow = 1;
+		else if (inst->type == int_vec4)
+			saw_int_vec = 1;
+		else if (inst->type == uint_vec4)
+			saw_uint_vec = 1;
+	}
+	compiler_teardown();
+	assert(saw_float_vec);
+	assert(saw_shadow);
+	assert(saw_int_vec);
+	assert(saw_uint_vec);
+}
+
 DEFINE_TEST(test_ir_emit_push_int)
 {
 	IR_Cmd* saved_ir = g_ir;
@@ -642,8 +771,8 @@ DEFINE_TEST(test_struct_block_layout)
 		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
 		{
 			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
-				(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
-				inst->layout_set == 1 && inst->layout_binding == 0;
+					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
+					inst->layout_set == 1 && inst->layout_binding == 0;
 		}
 		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
 		{
@@ -753,6 +882,7 @@ void unit_test()
 		TEST_ENTRY(test_type_system_registration),
 		TEST_ENTRY(test_symbol_table_scopes),
 		TEST_ENTRY(test_builtin_function_metadata),
+		TEST_ENTRY(test_resource_type_registration),
 		TEST_ENTRY(test_ir_emit_push_int),
 		TEST_ENTRY(test_basic_io_symbols),
 		TEST_ENTRY(test_array_indexing_ir),
@@ -766,6 +896,7 @@ void unit_test()
 		TEST_ENTRY(test_struct_block_layout),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
+		TEST_ENTRY(test_resource_texture_inference),
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
