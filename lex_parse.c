@@ -967,6 +967,9 @@ void parse_type_qualifiers(TypeSpec* spec)
 	}
 }
 
+// Parse qualifiers and the core type that lead a declaration or parameter list.
+// ...layout(std140, binding = 0) uniform Globals { mat4 vp; } u_globals;
+// ...vec3 normal;
 TypeSpec parse_type_specifier()
 {
 	TypeSpec spec = (TypeSpec){ 0 };
@@ -1037,6 +1040,8 @@ TypeSpec parse_type_specifier()
 	return spec;
 }
 
+// Parse trailing brackets on struct members like weights[4].
+// ...struct Light { float weights[4]; };
 void parse_struct_member_array_suffix(StructMember* member)
 {
 	while (tok.kind == TOK_LBRACK)
@@ -1116,6 +1121,9 @@ void emit_struct_ir(Type* type, StructInfo* info)
 	ir_emit(IR_STRUCT_END);
 }
 
+// Emit IR for interface blocks so the backend sees each layout and field.
+// ...layout(set = 1, binding = 0)
+// ...uniform Globals { mat4 vp; } u_globals;
 void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 {
 	if (!spec || !spec->type)
