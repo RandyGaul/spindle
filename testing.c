@@ -745,6 +745,29 @@ DEFINE_TEST(test_builtin_function_calls)
 	assert(saw_dot);
 	assert(saw_normalize);
 }
+DEFINE_TEST(test_preprocessor_passthrough)
+{
+	const char* out_color = sintern("out_color");
+	const char* unused_constant = sintern("UNUSED_CONSTANT");
+	compiler_setup(snippet_preprocessor_passthrough);
+	Symbol* out_sym = symbol_table_find(out_color);
+	assert(out_sym);
+	assert(symbol_has_storage(out_sym, SYM_STORAGE_OUT));
+	Symbol* macro_sym = symbol_table_find(unused_constant);
+	assert(!macro_sym);
+	int saw_func = 0;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		if (g_ir[i].op == IR_FUNC_BEGIN)
+		{
+			saw_func = 1;
+			break;
+		}
+	}
+	assert(saw_func);
+	compiler_teardown();
+}
+
 
 void unit_test()
 {
@@ -766,6 +789,7 @@ void unit_test()
 		TEST_ENTRY(test_struct_block_layout),
 		TEST_ENTRY(test_switch_statement_cases),
 		TEST_ENTRY(test_builtin_function_calls),
+		TEST_ENTRY(test_preprocessor_passthrough),
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }

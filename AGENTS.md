@@ -26,6 +26,10 @@ We allocate the symbol table, type system, and any related structures ourselves.
 
 Strings passed around the compiler are assumed to be non-null. Don't add defensive null checks for them; if a null string shows up it's fine to crash.
 
+# Preprocessor directives
+
+We do not run a preprocessor. Strip out any `#`-style directives (including multi-line continuations) so they never make it into the parser. Users are expected to preprocess their shaders before handing them to this tool.
+
 # GLSL 340
 
 Here's a simple vertex shader

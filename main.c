@@ -751,6 +751,19 @@ const char* snippet_builtin_funcs = STR(
 			out_color = vec4(unit * (f + shade), sampled.a);
 		});
 
+const char* snippet_preprocessor_passthrough =
+	"#define UNUSED_CONSTANT 1\n"
+	"#define MULTI_LINE_MACRO(x) \\\n"
+	"\tdo { \\\n"
+	"\t\tint temp = 0; \\\n"
+	"\t\ttemp += (x); \\\n"
+	"\t} while (0)\n"
+	"\n"
+	"layout(location = 0) out vec4 out_color;\n"
+	"void main() {\n"
+	"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
+	"}\n";
+
 // Directly include all of our source for a unity build.
 #include "lex_parse.c"
 #include "type.c"
@@ -789,6 +802,7 @@ int main()
 		{ "switch", snippet_switch_stmt },
 		{ "builtin_funcs", snippet_builtin_funcs },
 		{ "struct_block", snippet_struct_block },
+		{ "preprocessor_passthrough", snippet_preprocessor_passthrough },
 	};
 
 	for (int i = 0; i < (int)(sizeof(snippets) / sizeof(snippets[0])); ++i)
