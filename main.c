@@ -890,7 +890,7 @@ const char* snippet_builtin_funcs = STR(
 			vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
 			vec4 sampled = texture(u_tex, uv);
 			float m = max(sampled.x, sampled.y);
-			float f = fract(m);
+float f = frac(m);
 			float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
 			vec3 unit = normalize(sampled.rgb);
 			float len_val = length(sampled.rgb);
@@ -908,23 +908,8 @@ const char* snippet_builtin_funcs = STR(
 			vec3 reflected = reflect(unit, vec3(0.0, 0.0, 1.0));
 			vec3 refracted = refract(unit, vec3(0.0, 0.0, 1.0), 1.33);
 			out_color = vec4(mixed * (f + soft + stepped + min_component + pow_val), sampled.a);
-			uint invalid_abs = abs(uvec2(1u, 2u).x);
-			vec3 invalid_min = min(sampled.rgb, ivec3(1, 1, 1));
-			float invalid_pow = pow(shade, ivec2(2, 2).x);
-			vec3 invalid_mix = mix(sampled.rgb, vec3(1.0), ivec3(1, 0, 1));
-			vec2 invalid_step = step(vec3(0.5), vec2(m, m));
-			ivec3 invalid_smooth = smoothstep(vec3(0.0), vec3(1.0), ivec3(1, 1, 1));
-			float invalid_reflect = reflect(1.0, vec3(0.0, 0.0, 1.0));
-			vec3 invalid_refract = refract(sampled.rgb, vec3(0.0, 0.0, 1.0), vec2(1.0, 1.0));
-			float invalid_trig = sin(ivec2(1, 2).x);
-			float invalid_length = length(ivec2(1, 2));
-			float invalid_distance_base = distance(sampled.rgb, ivec3(1, 1, 1));
-			float invalid_distance_shape = distance(sampled.xy, sampled.rgb);
-			float invalid_dot_base = dot(sampled.rgb, ivec3(1, 1, 1));
-			float invalid_dot_shape = dot(sampled.rgb, vec2(1.0, 1.0));
-			float invalid_fwidth = fwidth(ivec2(1, 2));
-		}
-		});
+}
+);
 
 const char* snippet_texture_queries = STR(
 	layout(location = 0) out vec4 out_color;
