@@ -46,6 +46,8 @@ void unit_test();
 }
 #endif
 
+#endif /* SPINDLE_H */
+
 #ifdef SPINDLE_IMPLEMENTATION
 
 #include <assert.h>
@@ -666,8 +668,6 @@ Type* g_type_uint64;
 Type* g_type_float;
 Type* g_type_double;
 
-// Any forward declarations we need tend to just get placed here as a simple way to
-// maintain a unity build.
 void type_check_error(const char* fmt, ...);
 int type_equal(const Type* a, const Type* b);
 const char* type_display(const Type* type);
@@ -682,6 +682,7 @@ void type_check_ir();
 Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc);
 void dump_ir();
 void dump_symbols();
+
 //--------------------------------------------------------------------------------------------------
 // Lexer and parser implementation.
 
@@ -7043,6 +7044,7 @@ void type_check_ir()
 
 //--------------------------------------------------------------------------------------------------
 // Diagnostics, dumping helpers, and unit tests.
+
 #define SPINDLE_SNIPPET(...) #__VA_ARGS__
 const char* snippet_basic_io = SPINDLE_SNIPPET(
 		layout(location = 0) in vec3 in_pos;
@@ -8951,5 +8953,3 @@ void unit_test()
 }
 
 #endif /* SPINDLE_IMPLEMENTATION */
-
-#endif /* SPINDLE_H */
