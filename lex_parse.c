@@ -446,6 +446,28 @@ void skip_ws_comments()
 	{
 		while (is_space(ch))
 			next_ch();
+		if (ch == '#')
+		{
+			next_ch();
+			while (1)
+			{
+				int prev = 0;
+				int prev_prev = 0;
+				while (ch && ch != '\n')
+				{
+					prev_prev = prev;
+					prev = ch;
+					next_ch();
+				}
+				if (!ch)
+					return;
+				next_ch();
+				if (prev == '\\' || (prev == '\r' && prev_prev == '\\'))
+					continue;
+				break;
+			}
+			continue;
+		}
 		if (ch == '/' && at[0] == '/')
 		{
 			while (ch && ch != '\n')
@@ -470,6 +492,7 @@ void skip_ws_comments()
 		break;
 	}
 }
+
 
 unsigned storage_flag_from_keyword(const char* s)
 {
