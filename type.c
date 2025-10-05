@@ -1111,6 +1111,26 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 		Type* sum = type_binary_add_sub(TOK_PLUS, lhs, rhs);
 		return type_binary_assign(lhs, sum);
 	}
+	case TOK_MINUS_ASSIGN:
+	{
+		Type* diff = type_binary_add_sub(TOK_MINUS, lhs, rhs);
+		return type_binary_assign(lhs, diff);
+	}
+	case TOK_STAR_ASSIGN:
+	{
+		Type* value = type_binary_mul(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_SLASH_ASSIGN:
+	{
+		Type* value = type_binary_div(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
+	case TOK_PERCENT_ASSIGN:
+	{
+		Type* value = type_binary_mod(lhs, rhs);
+		return type_binary_assign(lhs, value);
+	}
 	case TOK_AND_ASSIGN:
 	{
 		Type* value = type_binary_bitwise(TOK_AMP, lhs, rhs);
@@ -1501,6 +1521,10 @@ void type_check_ir()
 			{
 			case TOK_ASSIGN:
 			case TOK_PLUS_ASSIGN:
+			case TOK_MINUS_ASSIGN:
+			case TOK_STAR_ASSIGN:
+			case TOK_SLASH_ASSIGN:
+			case TOK_PERCENT_ASSIGN:
 			case TOK_AND_ASSIGN:
 			case TOK_OR_ASSIGN:
 			case TOK_XOR_ASSIGN:

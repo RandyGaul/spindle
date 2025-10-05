@@ -1567,6 +1567,10 @@ EXPR_BINARY(land, AND_AND, AND_AND);
 EXPR_BINARY(lor, OR_OR, OR_OR);
 EXPR_BINARY(assign, ASSIGN, ASSIGN);
 EXPR_BINARY(plus_assign, ASSIGN, PLUS_ASSIGN);
+EXPR_BINARY(minus_assign, ASSIGN, MINUS_ASSIGN);
+EXPR_BINARY(mul_assign, ASSIGN, STAR_ASSIGN);
+EXPR_BINARY(div_assign, ASSIGN, SLASH_ASSIGN);
+EXPR_BINARY(mod_assign, ASSIGN, PERCENT_ASSIGN);
 EXPR_BINARY(and_assign, ASSIGN, AND_ASSIGN);
 EXPR_BINARY(or_assign, ASSIGN, OR_ASSIGN);
 EXPR_BINARY(xor_assign, ASSIGN, XOR_ASSIGN);
@@ -2256,10 +2260,10 @@ void next()
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
 		TOK_EXPR_OPTION2('+', PLUS, ADD, pos, add, '+', PLUS_PLUS, POSTFIX, pre_inc, post_inc, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
-		TOK_EXPR_OPTION('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec)
-		TOK_EXPR('*', STAR, MUL, error, mul)
-		TOK_EXPR('/', SLASH, MUL, error, div)
-		TOK_EXPR('%', PERCENT, MUL, error, mod)
+		TOK_EXPR_OPTION2('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec, '=', MINUS_ASSIGN, ASSIGN, error, minus_assign)
+		TOK_EXPR_ASSIGN('*', STAR, MUL, error, mul, STAR_ASSIGN, ASSIGN, error, mul_assign)
+		TOK_EXPR_ASSIGN('/', SLASH, MUL, error, div, SLASH_ASSIGN, ASSIGN, error, div_assign)
+		TOK_EXPR_ASSIGN('%', PERCENT, MUL, error, mod, PERCENT_ASSIGN, ASSIGN, error, mod_assign)
 		TOK_EXPR('?', QUESTION, TERNARY, error, ternary)
 
 		// two-char combos
