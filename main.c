@@ -761,17 +761,17 @@ const char* snippet_builtin_funcs = STR(
 		});
 
 const char* snippet_preprocessor_passthrough =
-	"#define UNUSED_CONSTANT 1\n"
-	"#define MULTI_LINE_MACRO(x) \\\n"
-	"\tdo { \\\n"
-	"\t\tint temp = 0; \\\n"
-	"\t\ttemp += (x); \\\n"
-	"\t} while (0)\n"
-	"\n"
-	"layout(location = 0) out vec4 out_color;\n"
-	"void main() {\n"
-	"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
-	"}\n";
+		"#define UNUSED_CONSTANT 1\n"
+		"#define MULTI_LINE_MACRO(x) \\\n"
+		"\tdo { \\\n"
+		"\t\tint temp = 0; \\\n"
+		"\t\ttemp += (x); \\\n"
+		"\t} while (0)\n"
+		"\n"
+		"layout(location = 0) out vec4 out_color;\n"
+		"void main() {\n"
+		"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
+		"}\n";
 
 const char* snippet_resource_types = STR(
 		layout(location = 0) out vec4 out_color;

@@ -927,7 +927,6 @@ DEFINE_TEST(test_preprocessor_passthrough)
 	compiler_teardown();
 }
 
-
 void unit_test()
 {
 	init_keyword_interns();

@@ -493,7 +493,6 @@ void skip_ws_comments()
 	}
 }
 
-
 unsigned storage_flag_from_keyword(const char* s)
 {
 	if (s == kw_in)
