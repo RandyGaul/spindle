@@ -715,8 +715,6 @@ typedef struct SymbolScopeEntry
 {
 	const char* name;
 	int value_index;
-	dyna int* func_indices;
-	Map func_map;
 } SymbolScopeEntry;
 
 typedef struct SymbolScope
@@ -812,7 +810,6 @@ Type* current_param_type_type;
 Type** current_function_params;
 Symbol* current_decl_symbol;
 Symbol* current_param_symbol;
-dyna Symbol** function_overload_buffer;
 
 Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, SymbolKind kind);
 void symbol_add_storage(Symbol* sym, unsigned flags);
@@ -834,13 +831,6 @@ void symbol_table_leave_scope()
 	if (!count)
 		return;
 	SymbolScope* scope = &st->scopes[count - 1];
-	for (int i = 0; i < acount(scope->entries); ++i)
-	{
-		SymbolScopeEntry* entry = &scope->entries[i];
-		if (entry->func_indices)
-			afree(entry->func_indices);
-		map_free(entry->func_map);
-	}
 	if (scope->entries)
 		afree(scope->entries);
 	map_free(scope->map);
@@ -871,37 +861,6 @@ static SymbolScopeEntry* symbol_scope_entry_at_depth(int scope_depth, const char
 	return symbol_scope_entry(scope, name, create);
 }
 
-static uint64_t symbol_function_signature_hash(Type** params, int param_count)
-{
-	dyna uint64_t* values = NULL;
-	apush(values, (uint64_t)param_count);
-	for (int i = 0; i < param_count; ++i)
-	{
-		uint64_t value = (uint64_t)(uintptr_t)(params ? params[i] : NULL);
-		apush(values, value);
-	}
-	uint64_t hash = hash_fnv1a(values, sizeof(uint64_t) * acount(values));
-	if (values)
-		afree(values);
-	return hash;
-}
-
-// Look up an overload that matches a call site like light(in_pos).
-// ...float intensity = light(v_uv);
-static Symbol* symbol_table_find_function_overload_at_depth(const char* name, Type** params, int param_count, int scope_depth)
-{
-	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 0);
-	if (!entry)
-		return NULL;
-	if (!entry->func_indices || !acount(entry->func_indices))
-		return NULL;
-	uint64_t signature = symbol_function_signature_hash(params, param_count);
-	uint64_t mapped = map_get(entry->func_map, signature);
-	if (!mapped)
-		return NULL;
-	return &st->symbols[(int)mapped - 1];
-}
-
 // Register a symbol for declarations such as float roughness; or void shade().
 // ...float roughness;
 static Symbol* symbol_table_add_internal(const char* name, const char* type_name, Type* type, SymbolKind kind, int scope_depth)
@@ -915,22 +874,6 @@ static Symbol* symbol_table_add_internal(const char* name, const char* type_name
 	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(scope_depth, name, 1);
 	if (!entry)
 		return NULL;
-	if (kind == SYM_FUNC)
-	{
-		Symbol sym = (Symbol){ 0 };
-		sym.name = name;
-		sym.type_name = type_name;
-		sym.type = type;
-		sym.kind = kind;
-		sym.scope_depth = scope_depth;
-		sym.builtin_param_count = -1;
-		apush(st->symbols, sym);
-		int idx = acount(st->symbols);
-		apush(entry->func_indices, idx);
-		if (!entry->value_index)
-			entry->value_index = idx;
-		return &st->symbols[idx - 1];
-	}
 	if (entry->value_index)
 		return &st->symbols[entry->value_index - 1];
 	Symbol sym = (Symbol){ 0 };
@@ -1157,7 +1100,6 @@ void symbol_table_init()
 {
 	st->symbols = NULL;
 	st->scopes = NULL;
-	function_overload_buffer = NULL;
 	symbol_table_enter_scope();
 	symbol_table_register_builtins();
 	symbol_table_register_builtin_variables();
@@ -1180,37 +1122,8 @@ Symbol* symbol_table_find(const char* name)
 		SymbolScopeEntry* entry = &scope->entries[(int)entry_idx - 1];
 		if (entry->value_index)
 			return &st->symbols[entry->value_index - 1];
-		if (entry->func_indices && acount(entry->func_indices))
-			return &st->symbols[entry->func_indices[0] - 1];
 	}
 	return NULL;
-}
-
-Symbol** symbol_table_get_function_overloads(const char* name, int* count)
-{
-	if (function_overload_buffer)
-		aclear(function_overload_buffer);
-	for (int i = acount(st->scopes) - 1; i >= 0; --i)
-	{
-		SymbolScope* scope = &st->scopes[i];
-		uint64_t entry_idx = map_get(scope->map, (uint64_t)name);
-		if (!entry_idx)
-			continue;
-		SymbolScopeEntry* entry = &scope->entries[(int)entry_idx - 1];
-		if (!entry->func_indices || !acount(entry->func_indices))
-			break;
-		for (int j = 0; j < acount(entry->func_indices); ++j)
-		{
-			int sym_index = entry->func_indices[j];
-			if (!sym_index)
-				continue;
-			apush(function_overload_buffer, &st->symbols[sym_index - 1]);
-		}
-		break;
-	}
-	if (count)
-		*count = function_overload_buffer ? acount(function_overload_buffer) : 0;
-	return function_overload_buffer;
 }
 
 void symbol_add_storage(Symbol* sym, unsigned flags)
@@ -1338,22 +1251,8 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 		Type* incoming = params ? params[i] : NULL;
 		apush(sym->params, incoming);
 	}
-	sym->param_count = param_count;
-	sym->param_signature_set = 1;
-	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(sym->scope_depth, sym->name, 1);
-	if (!entry)
-		return;
-	uint64_t signature = symbol_function_signature_hash(sym->params, sym->param_count);
-	uint64_t mapped = map_get(entry->func_map, signature);
-	int sym_index = (int)(sym - st->symbols) + 1;
-	if (mapped && (int)mapped != sym_index)
-	{
-		type_check_error("function %s redeclared with identical parameter list", sym->name);
-	}
-	else if (!mapped)
-	{
-		map_add(entry->func_map, signature, (uint64_t)sym_index);
-	}
+sym->param_count = param_count;
+sym->param_signature_set = 1;
 }
 
 void symbol_table_free()
@@ -1362,15 +1261,13 @@ void symbol_table_free()
 	{
 		symbol_table_leave_scope();
 	}
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
-		Symbol* sym = &st->symbols[i];
-		afree(sym->params);
-	}
-	if (function_overload_buffer)
-		afree(function_overload_buffer);
-	afree(st->symbols);
-	afree(st->scopes);
+for (int i = 0; i < acount(st->symbols); ++i)
+{
+Symbol* sym = &st->symbols[i];
+afree(sym->params);
+}
+afree(st->symbols);
+afree(st->scopes);
 }
 
 typedef enum Prec
@@ -2158,7 +2055,10 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	int outer_scope = acount(st->scopes) - 2;
 	if (outer_scope < 0)
 		outer_scope = 0;
-	Symbol* sym = symbol_table_find_function_overload_at_depth(func->str1, current_function_params, param_count, outer_scope);
+	SymbolScopeEntry* entry = symbol_scope_entry_at_depth(outer_scope, func->str1, 0);
+	Symbol* sym = (entry && entry->value_index) ? &st->symbols[entry->value_index - 1] : NULL;
+	if (sym && sym->kind != SYM_FUNC)
+		type_check_error("identifier %s redeclared as function", name);
 	if (!sym)
 		sym = symbol_table_add_at_depth(func->str1, spec.type_name, spec.type, SYM_FUNC, outer_scope);
 	if (!sym)
@@ -3513,7 +3413,6 @@ void compiler_setup(const char* source)
 typedef struct Symbol Symbol;
 typedef enum BuiltinFuncKind BuiltinFuncKind;
 Symbol* symbol_table_find(const char* name);
-Symbol** symbol_table_get_function_overloads(const char* name, int* count);
 int type_component_count(const Type* type);
 
 const char* type_tag_name(TypeTag tag)
@@ -3755,35 +3654,6 @@ StructMember* type_struct_member_at(Type* type, int index)
 	if (index < 0 || index >= acount(info->members))
 		return NULL;
 	return &info->members[index];
-}
-
-static void append_cstr(dyna char** buffer, const char* str)
-{
-	if (!buffer || !str)
-		return;
-	for (const char* it = str; *it; ++it)
-		apush(*buffer, *it);
-}
-
-// Format a comma-separated argument list for diagnostics such as:
-// ...error: dot requires second argument to match first argument base type, got vec3, ivec3
-static const char* format_argument_type_list(Type** args, int count)
-{
-	static dyna char* buffer = NULL;
-	if (buffer)
-		aclear(buffer);
-	for (int i = 0; i < count; ++i)
-	{
-		if (i > 0)
-		{
-			apush(buffer, ',');
-			apush(buffer, ' ');
-		}
-		const char* name = type_display(args ? args[i] : NULL);
-		append_cstr(&buffer, name ? name : "unknown");
-	}
-	apush(buffer, '\0');
-	return buffer ? buffer : "";
 }
 
 void type_system_init_builtins()
@@ -6563,64 +6433,10 @@ void type_check_ir()
 				(void)apop(symbol_stack);
 			Type* result = callee;
 			Symbol* sym = NULL;
-			if (inst->str0)
-			{
-				int overload_count = 0;
-				Symbol** overloads = symbol_table_get_function_overloads(inst->str0, &overload_count);
-				if (overload_count > 0)
-				{
-					for (int i = 0; i < overload_count; ++i)
-					{
-						Symbol* candidate = overloads[i];
-						if (!candidate || candidate->kind != SYM_FUNC)
-							continue;
-						if (candidate->builtin_kind != BUILTIN_NONE)
-						{
-							if (candidate->builtin_param_count >= 0 && candidate->builtin_param_count != argc)
-								continue;
-							sym = candidate;
-							break;
-						}
-						if (!candidate->param_signature_set)
-							continue;
-						if (candidate->param_count != argc)
-							continue;
-						int ok = 1;
-						for (int j = 0; j < argc; ++j)
-						{
-							Type* param_type = (candidate->params && j < acount(candidate->params)) ? candidate->params[j] : NULL;
-							Type* arg_type = args ? args[j] : NULL;
-							if (param_type && arg_type)
-							{
-								if (!type_can_assign(param_type, arg_type))
-								{
-									ok = 0;
-									break;
-								}
-							}
-							else if (param_type != arg_type)
-							{
-								ok = 0;
-								break;
-							}
-						}
-						if (ok)
-						{
-							sym = candidate;
-							break;
-						}
-					}
-					if (!sym)
-					{
-						const char* arg_types = format_argument_type_list(args, argc);
-						type_check_error("no overload of %s matches argument types (%s)", inst->str0, arg_types);
-					}
-				}
-				else
-				{
-					sym = symbol_table_find(inst->str0);
-				}
-			}
+		if (inst->str0)
+		{
+			sym = symbol_table_find(inst->str0);
+		}
 			if (sym && sym->kind == SYM_FUNC)
 			{
 				if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
@@ -8205,6 +8021,28 @@ DEFINE_TEST(test_function_call_symbols)
 	assert(saw_apply_gain_call);
 }
 
+DEFINE_TEST(test_function_redeclaration_without_overloads)
+{
+	type_system_init_builtins();
+	symbol_table_init();
+	const char* func_name = sintern("foo");
+	const char* float_name = sintern("float");
+	Type* float_type = type_get_scalar(T_FLOAT);
+	Symbol* first_decl = symbol_table_add(func_name, float_name, float_type, SYM_FUNC);
+	assert(first_decl && first_decl->kind == SYM_FUNC);
+	dyna Type** params = NULL;
+	apush(params, float_type);
+	symbol_set_function_signature(first_decl, params, 1);
+	Symbol* second_decl = symbol_table_add(func_name, float_name, float_type, SYM_FUNC);
+	assert(second_decl == first_decl);
+	assert(second_decl->param_signature_set);
+	assert(second_decl->param_count == 1);
+	if (params)
+		afree(params);
+	symbol_table_free();
+	type_system_free();
+}
+
 DEFINE_TEST(test_matrix_operations_ir)
 {
 	const char* mat3_name = sintern("mat3");
@@ -8950,6 +8788,7 @@ void unit_test()
 		TEST_ENTRY(test_control_flow_unary_ops),
 		TEST_ENTRY(test_ternary_vector_promotions),
 		TEST_ENTRY(test_function_call_symbols),
+		TEST_ENTRY(test_function_redeclaration_without_overloads),
 		TEST_ENTRY(test_matrix_operations_ir),
 		TEST_ENTRY(test_looping_constructs),
 		TEST_ENTRY(test_bitwise_operations),
