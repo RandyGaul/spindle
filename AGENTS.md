@@ -32,7 +32,7 @@ Strings passed around the compiler are assumed to be non-null. Don't add defensi
 
 We do not run a preprocessor. Strip out any `#`-style directives (including multi-line continuations) so they never make it into the parser. Users are expected to preprocess their shaders before handing them to this tool.
 
-# GLSL 340
+# GLSL 450
 
 Here's a simple vertex shader
 
