@@ -584,6 +584,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc);
 void dump_ir();
 void dump_symbols();
 
+// Directly include all of our source for a unity build.
+#include "lex_parse.c"
+#include "type.c"
+
 const char* snippet_basic_io = STR(
 		layout(location = 0) in vec3 in_pos;
 		layout(location = 1) in vec2 in_uv;
@@ -906,8 +910,6 @@ const char* snippet_struct_constructor = STR(
 		});
 
 // Directly include all of our source for a unity build.
-#include "lex_parse.c"
-#include "type.c"
 #include "testing.c"
 
 void transpile(const char* source)
