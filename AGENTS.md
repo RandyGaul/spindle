@@ -8,12 +8,6 @@ This compiler tool fills a missing gap in cross-platform shader solutions in the
 
 The name for this project is "spindle".
 
-# Scoping and Concept
-
-Spindle will simply be like a "front end" compiler, except it will have scoped down input form expectations. Only basic glsl 450 shaders with vertex/fragment shaders are allowed. A single uniform buffer, input textures, control constructs like if/else/while/ternary are supported. Input types are simple and expected types such as int, vec2..4, matrix4. Builtin functions like dot, clamp, frac, etc. are all supported. However complex other types of shaders like geometry or tessselation shaders are just simply not supported, as we want to gracefully map back onto GLES3 shaders.
-
-Uniform buffer layouts must use `std140`. Other layouts such as `std430` or vendor-specific extensions are out of scope for this project and do not need to be supported.
-
 # Implementation
 
 We're using ckit.h to power our C fundamentals with dynamic array (such as apush, apop, etc.), and a Map such as map_add, map_get, etc. We also have `sintern` for string interning to be used by spindle.
@@ -135,3 +129,11 @@ static Type* builtin_result_texture(Type** args, int argc)
 
 
 In order for the code to be easier to read we must attach some context to key function definitions by comments like this.
+
+# Features Supported
+
+We want to keep line of code count down minimally and keep things simple while also hitting the critical features required to make games. The focus is on the indie dev use-case, and not AAA studios. This means very practical use-cases without diving into the more esoteric parts of glsl 450. We try and maintain a list of major features we notably support or exclude.
+- Only Vertex, fragment, and compute shaders
+- std 140 layout by default for vertex/fragment uniform buffers, and std 430 for compute storage layouts
+- No function overload for user defined functions
+- No esoteric qualifiers like row_major or coherent
