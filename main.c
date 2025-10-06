@@ -26,6 +26,7 @@ void compile(ShaderStage stage, const char* source)
 
 int main()
 {
+#ifndef SPINDLE_NO_TESTS
 	unit_test();
 
 	typedef struct ShaderSnippet
@@ -68,6 +69,8 @@ int main()
 		compile(snippets[i].stage, snippets[i].source);
 		printf("\n");
 	}
+
+#endif
 
 	return 0;
 }
