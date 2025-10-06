@@ -15,3 +15,22 @@ So far the compiler seems to handle a variety of valid vertex/fragment shader in
 - If it's not much trouble it might be worth adding in some light optimization passes as a final step
 - A reflection table needs to be generated for the shader describing all of the various inputs (uniforms, vertex attributes, etc.)
 - Again, another final human massaging, audit, refactoring would be needed, especially in designing a user-facing API
+
+# SPIR-V Backend Next Steps
+
+The SPIR-V emitter currently writes module headers, declares the Shader capability, sets the GLSL 450 memory model, and registers an empty `main` entry point. To grow it into a functional backend we should focus on the following areas:
+-	Complete type coverage
+	-	Introduce array, struct, sampler/image, and pointer emission so IR types beyond scalars/vectors/matrices resolve to their true `OpType*` forms instead of the present void fallback.
+	-	Hoist storage class decisions (e.g. UniformConstant vs. StorageBuffer) into a central helper so resource bindings remain consistent across shaders.
+-	Lower IR instructions
+	-	Translate arithmetic, logical, and comparison nodes into their SPIR-V counterparts and wire up SSA IDs so function bodies emit real control/data flow instead of returning undef placeholders.
+	-	Emit `OpVariable`, `OpLoad`, `OpStore`, and `OpAccessChain` for temporaries and uniform/vertex I/O, matching the IR's address semantics.
+-	Surface shader interfaces
+	-	Create global variables for stage inputs/outputs, apply `Location`, `Binding`, and `DescriptorSet` decorations, and generate execution modes like `OriginUpperLeft` when required.
+	-	Build a reflection table alongside emission so frontend resource descriptors (e.g. sampler2D bindings) sync with the generated SPIR-V.
+-	Handle control flow
+	-	Map conditional branches and loops to structured control flow (`OpSelectionMerge`, `OpLoopMerge`, etc.) and ensure the block graph remains well-formed for validation.
+	-	Support early exits (`OpKill`, `OpReturnValue`) and discard semantics for fragment shaders.
+-	Improve robustness and tooling
+	-	Add module-level validation (via spirv-val or bespoke checks) during tests to catch malformed output early.
+	-	Expand unit tests and sample shaders in `main.c` that exercise each new instruction category as we implement it.
