@@ -41,6 +41,8 @@ void compiler_setup(const char* source);
 void compiler_teardown();
 void dump_ir();
 void dump_symbols();
+dyna uint32_t* emit_spirv();
+  
 #ifndef SPINDLE_NO_TESTS
 void unit_test();
 #endif
@@ -5992,6 +5994,487 @@ void type_check_ir()
 }
 
 //--------------------------------------------------------------------------------------------------
+// SPIR-V emission.
+
+typedef struct SpirvBuilder
+{
+	dyna uint32_t* words;
+	uint32_t bound;
+} SpirvBuilder;
+
+typedef struct SpirvTypeEntry
+{
+	const Type* type;
+	uint32_t id;
+} SpirvTypeEntry;
+
+typedef struct SpirvTypeCache
+{
+	SpirvBuilder* builder;
+	dyna SpirvTypeEntry* entries;
+} SpirvTypeCache;
+
+typedef struct SpirvFunctionInfo
+{
+	const char* name;
+	Type* return_type;
+	dyna Type** param_types;
+	int has_definition;
+} SpirvFunctionInfo;
+
+typedef struct SpirvFunctionEmit
+{
+	SpirvFunctionInfo* info;
+	uint32_t type_id;
+	uint32_t func_id;
+} SpirvFunctionEmit;
+
+enum
+{
+	SPIRV_MAGIC = 0x07230203u,
+	SPIRV_VERSION = 0x00010500u,
+	SPIRV_GENERATOR = 0x00010001u,
+};
+
+enum SpirvOp
+{
+	SpvOpUndef = 1,
+	SpvOpMemoryModel = 14,
+	SpvOpEntryPoint = 15,
+	SpvOpExecutionMode = 16,
+	SpvOpCapability = 17,
+	SpvOpTypeVoid = 19,
+	SpvOpTypeBool = 20,
+	SpvOpTypeInt = 21,
+	SpvOpTypeFloat = 22,
+	SpvOpTypeVector = 23,
+	SpvOpTypeMatrix = 24,
+	SpvOpTypeFunction = 33,
+	SpvOpFunction = 54,
+	SpvOpFunctionParameter = 55,
+	SpvOpFunctionEnd = 56,
+	SpvOpLabel = 248,
+	SpvOpReturn = 253,
+	SpvOpReturnValue = 254,
+};
+
+enum SpirvExecutionModel
+{
+	SpvExecutionModelVertex = 0,
+	SpvExecutionModelFragment = 4,
+	SpvExecutionModelGLCompute = 5,
+};
+
+enum SpirvAddressingModel
+{
+	SpvAddressingModelLogical = 0,
+};
+
+enum SpirvMemoryModelEnum
+{
+	SpvMemoryModelGLSL450 = 1,
+};
+
+enum SpirvCapabilityEnum
+{
+	SpvCapabilityShader = 1,
+};
+
+enum SpirvFunctionControl
+{
+	SpvFunctionControlMaskNone = 0,
+};
+
+static void spirv_builder_init(SpirvBuilder* b)
+{
+	b->words = NULL;
+	b->bound = 1;
+}
+
+static uint32_t spirv_alloc_id(SpirvBuilder* b)
+{
+	uint32_t id = b->bound;
+	b->bound++;
+	return id;
+}
+
+static int spirv_inst_start(SpirvBuilder* b, uint16_t opcode)
+{
+	apush(b->words, (uint32_t)opcode);
+	return acount(b->words) - 1;
+}
+
+static void spirv_inst_append(SpirvBuilder* b, uint32_t word)
+{
+	apush(b->words, word);
+}
+
+static void spirv_inst_finalize(SpirvBuilder* b, int inst_index)
+{
+	int count = acount(b->words) - inst_index;
+	uint32_t opcode = b->words[inst_index] & 0xFFFFu;
+	b->words[inst_index] = ((uint32_t)count << 16) | opcode;
+}
+
+#define SPIRV_EMIT1(builder, opcode, a0)              \
+        do                                               \
+        {                                                \
+                int _inst = spirv_inst_start(builder, opcode); \
+                spirv_inst_append(builder, (uint32_t)(a0));    \
+                spirv_inst_finalize(builder, _inst);           \
+        } while (0)
+
+#define SPIRV_EMIT2(builder, opcode, a0, a1)           \
+        do                                                \
+        {                                                 \
+                int _inst = spirv_inst_start(builder, opcode);  \
+                spirv_inst_append(builder, (uint32_t)(a0));     \
+                spirv_inst_append(builder, (uint32_t)(a1));     \
+                spirv_inst_finalize(builder, _inst);            \
+        } while (0)
+
+#define SPIRV_EMIT3(builder, opcode, a0, a1, a2)        \
+        do                                                 \
+        {                                                  \
+                int _inst = spirv_inst_start(builder, opcode);   \
+                spirv_inst_append(builder, (uint32_t)(a0));      \
+                spirv_inst_append(builder, (uint32_t)(a1));      \
+                spirv_inst_append(builder, (uint32_t)(a2));      \
+                spirv_inst_finalize(builder, _inst);             \
+        } while (0)
+
+static void spirv_emit_string(SpirvBuilder* b, const char* text)
+{
+	uint32_t word = 0;
+	int shift = 0;
+	while (1)
+	{
+		unsigned char ch = (unsigned char)*text++;
+		word |= (uint32_t)ch << shift;
+		shift += 8;
+		if (!ch)
+		{
+			spirv_inst_append(b, word);
+			break;
+		}
+		if (shift == 32)
+		{
+			spirv_inst_append(b, word);
+			word = 0;
+			shift = 0;
+		}
+	}
+}
+
+static uint32_t spirv_type_cache_find(const SpirvTypeCache* cache, const Type* type)
+{
+	for (int i = 0; i < acount(cache->entries); ++i)
+	{
+		if (cache->entries[i].type == type)
+			return cache->entries[i].id;
+	}
+	return 0;
+}
+
+static uint32_t spirv_type_cache_store(SpirvTypeCache* cache, const Type* type, uint32_t id)
+{
+	SpirvTypeEntry entry = (SpirvTypeEntry){ 0 };
+	entry.type = type;
+	entry.id = id;
+	apush(cache->entries, entry);
+	return id;
+}
+
+static uint32_t spirv_type_scalar(SpirvTypeCache* cache, const Type* type, int width, int signedness)
+{
+	uint32_t existing = spirv_type_cache_find(cache, type);
+	if (existing)
+		return existing;
+	uint32_t id = spirv_alloc_id(cache->builder);
+	if (type == g_type_bool)
+	{
+		SPIRV_EMIT1(cache->builder, SpvOpTypeBool, id);
+	}
+	else if (type == g_type_float)
+	{
+		int inst = spirv_inst_start(cache->builder, SpvOpTypeFloat);
+		spirv_inst_append(cache->builder, id);
+		spirv_inst_append(cache->builder, (uint32_t)width);
+		spirv_inst_finalize(cache->builder, inst);
+	}
+	else if (type == g_type_double)
+	{
+		int inst = spirv_inst_start(cache->builder, SpvOpTypeFloat);
+		spirv_inst_append(cache->builder, id);
+		spirv_inst_append(cache->builder, (uint32_t)width);
+		spirv_inst_finalize(cache->builder, inst);
+	}
+	else
+	{
+		int inst = spirv_inst_start(cache->builder, SpvOpTypeInt);
+		spirv_inst_append(cache->builder, id);
+		spirv_inst_append(cache->builder, (uint32_t)width);
+		spirv_inst_append(cache->builder, (uint32_t)signedness);
+		spirv_inst_finalize(cache->builder, inst);
+	}
+	return spirv_type_cache_store(cache, type, id);
+}
+
+static uint32_t spirv_type_vector(SpirvTypeCache* cache, const Type* type)
+{
+	uint32_t existing = spirv_type_cache_find(cache, type);
+	if (existing)
+		return existing;
+	Type* component = type_get_scalar(type->base);
+	uint32_t component_id = spirv_type_cache_find(cache, component);
+	if (!component_id)
+	{
+		int width = 32;
+		int signedness = 1;
+		if (component == g_type_uint || component == g_type_uint64)
+			signedness = 0;
+		if (component == g_type_bool)
+			width = 1;
+		if (component == g_type_float)
+			width = 32;
+		if (component == g_type_double)
+			width = 64;
+		if (component == g_type_int64 || component == g_type_uint64)
+			width = 64;
+		component_id = spirv_type_scalar(cache, component, width, signedness);
+	}
+	uint32_t id = spirv_alloc_id(cache->builder);
+	int inst = spirv_inst_start(cache->builder, SpvOpTypeVector);
+	spirv_inst_append(cache->builder, id);
+	spirv_inst_append(cache->builder, component_id);
+	spirv_inst_append(cache->builder, (uint32_t)type->cols);
+	spirv_inst_finalize(cache->builder, inst);
+	return spirv_type_cache_store(cache, type, id);
+}
+
+static uint32_t spirv_type_matrix(SpirvTypeCache* cache, const Type* type)
+{
+	uint32_t existing = spirv_type_cache_find(cache, type);
+	if (existing)
+		return existing;
+	Type* column_type = type_get_vector(type->base, type->rows);
+	uint32_t column_id = spirv_type_cache_find(cache, column_type);
+	if (!column_id)
+		column_id = spirv_type_vector(cache, column_type);
+	uint32_t id = spirv_alloc_id(cache->builder);
+	int inst = spirv_inst_start(cache->builder, SpvOpTypeMatrix);
+	spirv_inst_append(cache->builder, id);
+	spirv_inst_append(cache->builder, column_id);
+	spirv_inst_append(cache->builder, (uint32_t)type->cols);
+	spirv_inst_finalize(cache->builder, inst);
+	return spirv_type_cache_store(cache, type, id);
+}
+
+static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type)
+{
+	if (!type)
+		type = g_type_void;
+	uint32_t existing = spirv_type_cache_find(cache, type);
+	if (existing)
+		return existing;
+	if (type == g_type_void)
+	{
+		uint32_t id = spirv_alloc_id(cache->builder);
+		SPIRV_EMIT1(cache->builder, SpvOpTypeVoid, id);
+		return spirv_type_cache_store(cache, type, id);
+	}
+	switch (type->tag)
+	{
+	case T_BOOL:
+		return spirv_type_scalar(cache, type, 1, 0);
+	case T_INT:
+		return spirv_type_scalar(cache, type, 32, 1);
+	case T_UINT:
+		return spirv_type_scalar(cache, type, 32, 0);
+	case T_INT64:
+		return spirv_type_scalar(cache, type, 64, 1);
+	case T_UINT64:
+		return spirv_type_scalar(cache, type, 64, 0);
+	case T_FLOAT:
+		return spirv_type_scalar(cache, type, 32, 1);
+	case T_DOUBLE:
+		return spirv_type_scalar(cache, type, 64, 1);
+	case T_VEC:
+		return spirv_type_vector(cache, type);
+	case T_MAT:
+		return spirv_type_matrix(cache, type);
+	default:
+		return spirv_type_cache_get(cache, g_type_void);
+	}
+}
+
+static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
+{
+	dyna SpirvFunctionInfo* funcs = NULL;
+	dyna int* stack = NULL;
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		switch (inst->op)
+		{
+		case IR_FUNC_BEGIN:
+		{
+			SpirvFunctionInfo info = (SpirvFunctionInfo){ 0 };
+			info.name = inst->str1 ? inst->str1 : "";
+			info.return_type = inst->type ? inst->type : g_type_void;
+			apush(funcs, info);
+			apush(stack, acount(funcs) - 1);
+			break;
+		}
+		case IR_FUNC_PROTOTYPE_END:
+		{
+			if (acount(stack))
+			(void)apop(stack);
+			break;
+		}
+		case IR_FUNC_DEFINITION_BEGIN:
+		{
+			if (acount(stack))
+			{
+			int idx = stack[acount(stack) - 1];
+			funcs[idx].has_definition = 1;
+			}
+			break;
+		}
+		case IR_FUNC_DEFINITION_END:
+		{
+			if (acount(stack))
+			(void)apop(stack);
+			break;
+		}
+		case IR_FUNC_PARAM_TYPE:
+		{
+			if (acount(stack))
+			{
+			int idx = stack[acount(stack) - 1];
+			Type* param_type = type_system_get(inst->str0);
+			if (!param_type)
+			param_type = g_type_void;
+			apush(funcs[idx].param_types, param_type);
+			}
+			break;
+		}
+		default:
+		break;
+		}
+	}
+	afree(stack);
+	*out_funcs = funcs;
+}
+
+// Emit a SPIR-V module for the parsed shader entry points.
+// ...void main() { out_color = vec4(1.0); }
+dyna uint32_t* emit_spirv()
+{
+	SpirvBuilder builder;
+	spirv_builder_init(&builder);
+	int header_index = 0;
+	apush(builder.words, SPIRV_MAGIC);
+	apush(builder.words, SPIRV_VERSION);
+	apush(builder.words, SPIRV_GENERATOR);
+	header_index = acount(builder.words);
+	apush(builder.words, 0);
+	apush(builder.words, 0);
+	SPIRV_EMIT1(&builder, SpvOpCapability, SpvCapabilityShader);
+	SPIRV_EMIT3(&builder, SpvOpMemoryModel, SpvAddressingModelLogical, SpvMemoryModelGLSL450, 0);
+	dyna SpirvFunctionInfo* funcs = NULL;
+	spirv_collect_functions(&funcs);
+	SpirvTypeCache cache = (SpirvTypeCache){ 0 };
+	cache.builder = &builder;
+	dyna SpirvFunctionEmit* emit_funcs = NULL;
+	dyna uint32_t* entry_ids = NULL;
+	static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
+		SpvExecutionModelVertex,
+		SpvExecutionModelFragment,
+		SpvExecutionModelGLCompute,
+	};
+	for (int i = 0; i < acount(funcs); ++i)
+	{
+		SpirvFunctionInfo* info = &funcs[i];
+		if (!info->has_definition)
+			continue;
+		uint32_t return_type = spirv_type_cache_get(&cache, info->return_type);
+		uint32_t func_type = spirv_alloc_id(&builder);
+		int type_inst = spirv_inst_start(&builder, SpvOpTypeFunction);
+		spirv_inst_append(&builder, func_type);
+		spirv_inst_append(&builder, return_type);
+		int param_count = acount(info->param_types);
+		dyna uint32_t* param_type_ids = NULL;
+		for (int p = 0; p < param_count; ++p)
+		{
+			uint32_t param_type_id = spirv_type_cache_get(&cache, info->param_types[p]);
+			spirv_inst_append(&builder, param_type_id);
+			apush(param_type_ids, param_type_id);
+		}
+		spirv_inst_finalize(&builder, type_inst);
+		uint32_t func_id = spirv_alloc_id(&builder);
+		int func_inst = spirv_inst_start(&builder, SpvOpFunction);
+		spirv_inst_append(&builder, return_type);
+		spirv_inst_append(&builder, func_id);
+		spirv_inst_append(&builder, SpvFunctionControlMaskNone);
+		spirv_inst_append(&builder, func_type);
+		spirv_inst_finalize(&builder, func_inst);
+		for (int p = 0; p < param_count; ++p)
+		{
+			uint32_t param_id = spirv_alloc_id(&builder);
+			SPIRV_EMIT2(&builder, SpvOpFunctionParameter, param_type_ids[p], param_id);
+		}
+		uint32_t label_id = spirv_alloc_id(&builder);
+		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
+		if (info->return_type && info->return_type != g_type_void)
+		{
+			uint32_t undef_id = spirv_alloc_id(&builder);
+			int undef_inst = spirv_inst_start(&builder, SpvOpUndef);
+			spirv_inst_append(&builder, return_type);
+			spirv_inst_append(&builder, undef_id);
+			spirv_inst_finalize(&builder, undef_inst);
+			SPIRV_EMIT1(&builder, SpvOpReturnValue, undef_id);
+		}
+		else
+		{
+			SPIRV_EMIT1(&builder, SpvOpReturn, 0);
+		}
+		SPIRV_EMIT1(&builder, SpvOpFunctionEnd, 0);
+		if (info->name && info->name[0])
+		{
+			SpirvFunctionEmit emit = (SpirvFunctionEmit){ 0 };
+			emit.info = info;
+			emit.type_id = func_type;
+			emit.func_id = func_id;
+			apush(emit_funcs, emit);
+			if (!strcmp(info->name, "main"))
+			apush(entry_ids, func_id);
+		}
+		afree(param_type_ids);
+	}
+	for (int i = 0; i < acount(entry_ids); ++i)
+	{
+		int inst = spirv_inst_start(&builder, SpvOpEntryPoint);
+		spirv_inst_append(&builder, exec_model_table[g_shader_stage]);
+		spirv_inst_append(&builder, entry_ids[i]);
+		spirv_emit_string(&builder, "main");
+		spirv_inst_finalize(&builder, inst);
+	}
+	if (acount(builder.words) > 3)
+		builder.words[header_index] = builder.bound;
+	for (int i = 0; i < acount(funcs); ++i)
+	{
+		if (funcs[i].param_types)
+			afree(funcs[i].param_types);
+	}
+	afree(funcs);
+	afree(emit_funcs);
+	afree(entry_ids);
+	afree(cache.entries);
+	return builder.words;
+}
+
+//--------------------------------------------------------------------------------------------------
 // Diagnostics, dumping helpers, and unit tests.
 
 #define SPINDLE_SNIPPET(...) #__VA_ARGS__
@@ -7664,10 +8147,10 @@ DEFINE_TEST(test_compute_layout_and_storage)
 {
 	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
 	const char* source =
-			"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
-			"readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
-			"shared float tile[64];"
-			"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
+		"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
+		"readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
+		"shared float tile[64];"
+		"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
 	compiler_setup(source);
 	int saw_stage_layout = 0;
 	int saw_x = 0;
@@ -7705,6 +8188,125 @@ DEFINE_TEST(test_compute_layout_and_storage)
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 }
 
+DEFINE_TEST(test_spirv_emit_minimal_vertex_main)
+{
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+	compiler_setup("void main() {}");
+	dyna uint32_t* words = emit_spirv();
+	const uint32_t expected[] = {
+		0x07230203u,
+		0x00010500u,
+		0x00010001u,
+		0x00000005u,
+		0x00000000u,
+		0x00020011u,
+		0x00000001u,
+		0x0004000eu,
+		0x00000000u,
+		0x00000001u,
+		0x00000000u,
+		0x00020013u,
+		0x00000001u,
+		0x00030021u,
+		0x00000002u,
+		0x00000001u,
+		0x00050036u,
+		0x00000001u,
+		0x00000003u,
+		0x00000000u,
+		0x00000002u,
+		0x000200f8u,
+		0x00000004u,
+		0x000200fdu,
+		0x00000000u,
+		0x00020038u,
+		0x00000000u,
+		0x0005000fu,
+		0x00000000u,
+		0x00000003u,
+		0x6e69616du,
+		0x00000000u,
+	};
+	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
+	assert(acount(words) == expected_count);
+	for (int i = 0; i < expected_count; ++i)
+	{
+		assert(words[i] == expected[i]);
+	}
+	afree(words);
+	compiler_teardown();
+}
+
+DEFINE_TEST(test_spirv_emit_non_void_return_helper)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("float compute() { return 1.0; } void main() { float value = compute(); }");
+	dyna uint32_t* words = emit_spirv();
+	const uint32_t expected[] = {
+		0x07230203u,
+		0x00010500u,
+		0x00010001u,
+		0x0000000au,
+		0x00000000u,
+		0x00020011u,
+		0x00000001u,
+		0x0004000eu,
+		0x00000000u,
+		0x00000001u,
+		0x00000000u,
+		0x00030016u,
+		0x00000001u,
+		0x00000020u,
+		0x00030021u,
+		0x00000002u,
+		0x00000001u,
+		0x00050036u,
+		0x00000001u,
+		0x00000003u,
+		0x00000000u,
+		0x00000002u,
+		0x000200f8u,
+		0x00000004u,
+		0x00030001u,
+		0x00000001u,
+		0x00000005u,
+		0x000200feu,
+		0x00000005u,
+		0x00020038u,
+		0x00000000u,
+		0x00020013u,
+		0x00000006u,
+		0x00030021u,
+		0x00000007u,
+		0x00000006u,
+		0x00050036u,
+		0x00000006u,
+		0x00000008u,
+		0x00000000u,
+		0x00000007u,
+		0x000200f8u,
+		0x00000009u,
+		0x000200fdu,
+		0x00000000u,
+		0x00020038u,
+		0x00000000u,
+		0x0005000fu,
+		0x00000004u,
+		0x00000008u,
+		0x6e69616du,
+		0x00000000u,
+	};
+	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
+	assert(acount(words) == expected_count);
+	for (int i = 0; i < expected_count; ++i)
+	{
+		assert(words[i] == expected[i]);
+	}
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -7725,7 +8327,6 @@ DEFINE_TEST(test_preprocessor_passthrough)
 	assert(saw_func);
 	compiler_teardown();
 }
-
 DEFINE_TEST(test_const_qualifier_metadata)
 {
 	const char* factor = sintern("factor");
@@ -7808,6 +8409,8 @@ void unit_test()
 		TEST_ENTRY(test_builtin_variables_fragment_stage),
 		TEST_ENTRY(test_builtin_variables_compute_stage),
 		TEST_ENTRY(test_compute_layout_and_storage),
+		TEST_ENTRY(test_spirv_emit_minimal_vertex_main),
+		TEST_ENTRY(test_spirv_emit_non_void_return_helper),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_const_qualifier_metadata),
 	};
