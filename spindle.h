@@ -6008,10 +6008,32 @@ typedef struct SpirvTypeEntry
 	uint32_t id;
 } SpirvTypeEntry;
 
+typedef struct SpirvPointerEntry
+{
+	uint32_t value_type_id;
+	uint32_t storage_class;
+	uint32_t id;
+} SpirvPointerEntry;
+
+typedef struct SpirvConstantEntry
+{
+	uint32_t value;
+	uint32_t type_id;
+	uint32_t id;
+} SpirvConstantEntry;
+
+typedef struct SpirvConstantCache
+{
+	SpirvBuilder* builder;
+	dyna SpirvConstantEntry* entries;
+} SpirvConstantCache;
+
 typedef struct SpirvTypeCache
 {
 	SpirvBuilder* builder;
+	SpirvConstantCache* const_cache;
 	dyna SpirvTypeEntry* entries;
+	dyna SpirvPointerEntry* pointers;
 } SpirvTypeCache;
 
 typedef struct SpirvFunctionInfo
@@ -6039,6 +6061,7 @@ enum
 enum SpirvOp
 {
 	SpvOpUndef = 1,
+	SpvOpDecorate = 71,
 	SpvOpMemoryModel = 14,
 	SpvOpEntryPoint = 15,
 	SpvOpExecutionMode = 16,
@@ -6049,10 +6072,15 @@ enum SpirvOp
 	SpvOpTypeFloat = 22,
 	SpvOpTypeVector = 23,
 	SpvOpTypeMatrix = 24,
+	SpvOpTypeArray = 28,
+	SpvOpTypeRuntimeArray = 29,
+	SpvOpTypePointer = 32,
 	SpvOpTypeFunction = 33,
+	SpvOpConstant = 43,
 	SpvOpFunction = 54,
 	SpvOpFunctionParameter = 55,
 	SpvOpFunctionEnd = 56,
+	SpvOpVariable = 59,
 	SpvOpLabel = 248,
 	SpvOpReturn = 253,
 	SpvOpReturnValue = 254,
@@ -6078,6 +6106,19 @@ enum SpirvMemoryModelEnum
 enum SpirvCapabilityEnum
 {
 	SpvCapabilityShader = 1,
+};
+
+enum SpirvStorageClass
+{
+	SpvStorageClassUniformConstant = 0,
+	SpvStorageClassInput = 1,
+	SpvStorageClassUniform = 2,
+	SpvStorageClassOutput = 3,
+};
+
+enum SpirvDecoration
+{
+	SpvDecorationLocation = 30,
 };
 
 enum SpirvFunctionControl
@@ -6166,6 +6207,7 @@ static void spirv_emit_string(SpirvBuilder* b, const char* text)
 	}
 }
 
+static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type);
 static uint32_t spirv_type_cache_find(const SpirvTypeCache* cache, const Type* type)
 {
 	for (int i = 0; i < acount(cache->entries); ++i)
@@ -6182,6 +6224,52 @@ static uint32_t spirv_type_cache_store(SpirvTypeCache* cache, const Type* type, 
 	entry.type = type;
 	entry.id = id;
 	apush(cache->entries, entry);
+	return id;
+}
+
+static uint32_t spirv_constant_uint(SpirvConstantCache* cache, uint32_t type_id, uint32_t value)
+{
+	if (!cache)
+		return 0;
+	for (int i = 0; i < acount(cache->entries); ++i)
+	{
+		SpirvConstantEntry* entry = &cache->entries[i];
+		if (entry->type_id == type_id && entry->value == value)
+			return entry->id;
+	}
+	uint32_t id = spirv_alloc_id(cache->builder);
+	int inst = spirv_inst_start(cache->builder, SpvOpConstant);
+	spirv_inst_append(cache->builder, type_id);
+	spirv_inst_append(cache->builder, id);
+	spirv_inst_append(cache->builder, value);
+	spirv_inst_finalize(cache->builder, inst);
+	SpirvConstantEntry entry = (SpirvConstantEntry){ 0 };
+	entry.type_id = type_id;
+	entry.value = value;
+	entry.id = id;
+	apush(cache->entries, entry);
+	return id;
+}
+
+static uint32_t spirv_type_pointer(SpirvTypeCache* cache, uint32_t value_type_id, uint32_t storage_class)
+{
+	for (int i = 0; i < acount(cache->pointers); ++i)
+	{
+		SpirvPointerEntry* entry = &cache->pointers[i];
+		if (entry->value_type_id == value_type_id && entry->storage_class == storage_class)
+			return entry->id;
+	}
+	uint32_t id = spirv_alloc_id(cache->builder);
+	int inst = spirv_inst_start(cache->builder, SpvOpTypePointer);
+	spirv_inst_append(cache->builder, id);
+	spirv_inst_append(cache->builder, storage_class);
+	spirv_inst_append(cache->builder, value_type_id);
+	spirv_inst_finalize(cache->builder, inst);
+	SpirvPointerEntry entry = (SpirvPointerEntry){ 0 };
+	entry.value_type_id = value_type_id;
+	entry.storage_class = storage_class;
+	entry.id = id;
+	apush(cache->pointers, entry);
 	return id;
 }
 
@@ -6270,6 +6358,34 @@ static uint32_t spirv_type_matrix(SpirvTypeCache* cache, const Type* type)
 	return spirv_type_cache_store(cache, type, id);
 }
 
+static uint32_t spirv_type_array(SpirvTypeCache* cache, const Type* type)
+{
+	uint32_t existing = spirv_type_cache_find(cache, type);
+	if (existing)
+		return existing;
+	const Type* element = (type && type->user) ? (const Type*)type->user : g_type_void;
+	uint32_t element_id = spirv_type_cache_get(cache, element);
+	uint32_t id = spirv_alloc_id(cache->builder);
+	if (type->array_len >= 0)
+	{
+		uint32_t length_type = spirv_type_cache_get(cache, g_type_uint);
+		uint32_t length_id = spirv_constant_uint(cache->const_cache, length_type, (uint32_t)type->array_len);
+		int inst = spirv_inst_start(cache->builder, SpvOpTypeArray);
+		spirv_inst_append(cache->builder, id);
+		spirv_inst_append(cache->builder, element_id);
+		spirv_inst_append(cache->builder, length_id);
+		spirv_inst_finalize(cache->builder, inst);
+	}
+	else
+	{
+		int inst = spirv_inst_start(cache->builder, SpvOpTypeRuntimeArray);
+		spirv_inst_append(cache->builder, id);
+		spirv_inst_append(cache->builder, element_id);
+		spirv_inst_finalize(cache->builder, inst);
+	}
+	return spirv_type_cache_store(cache, type, id);
+}
+
 static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type)
 {
 	if (!type)
@@ -6303,6 +6419,8 @@ static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type)
 		return spirv_type_vector(cache, type);
 	case T_MAT:
 		return spirv_type_matrix(cache, type);
+	case T_ARRAY:
+		return spirv_type_array(cache, type);
 	default:
 		return spirv_type_cache_get(cache, g_type_void);
 	}
@@ -6367,6 +6485,27 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 	*out_funcs = funcs;
 }
 
+static void spirv_collect_interface_symbols(Symbol*** out_symbols)
+{
+	dyna Symbol** symbols = NULL;
+	for (int i = 0; i < acount(st->symbols); ++i)
+	{
+		Symbol* sym = &st->symbols[i];
+		if (sym->kind != SYM_VAR)
+			continue;
+		if (sym->scope_depth != 0)
+			continue;
+		if (!(sym->storage_flags & (SYM_STORAGE_IN | SYM_STORAGE_OUT)))
+			continue;
+		if (!(sym->layout_flags & SYM_LAYOUT_LOCATION))
+			continue;
+		if (!sym->type)
+			continue;
+		apush(symbols, sym);
+	}
+	*out_symbols = symbols;
+}
+
 // Emit a SPIR-V module for the parsed shader entry points.
 // ...void main() { out_color = vec4(1.0); }
 dyna uint32_t* emit_spirv()
@@ -6384,15 +6523,45 @@ dyna uint32_t* emit_spirv()
 	SPIRV_EMIT3(&builder, SpvOpMemoryModel, SpvAddressingModelLogical, SpvMemoryModelGLSL450, 0);
 	dyna SpirvFunctionInfo* funcs = NULL;
 	spirv_collect_functions(&funcs);
+	SpirvConstantCache const_cache = (SpirvConstantCache){ 0 };
+	const_cache.builder = &builder;
 	SpirvTypeCache cache = (SpirvTypeCache){ 0 };
 	cache.builder = &builder;
+	cache.const_cache = &const_cache;
 	dyna SpirvFunctionEmit* emit_funcs = NULL;
 	dyna uint32_t* entry_ids = NULL;
+	dyna Symbol** interface_symbols = NULL;
+	spirv_collect_interface_symbols(&interface_symbols);
+	dyna uint32_t* interface_ids = NULL;
 	static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
 		SpvExecutionModelVertex,
 		SpvExecutionModelFragment,
 		SpvExecutionModelGLCompute,
 	};
+	for (int i = 0; i < acount(interface_symbols); ++i)
+	{
+		Symbol* sym = interface_symbols[i];
+		unsigned storage_flags = sym->storage_flags;
+		uint32_t storage_class = (storage_flags & SYM_STORAGE_OUT) ? SpvStorageClassOutput : SpvStorageClassInput;
+		uint32_t value_type_id = spirv_type_cache_get(&cache, sym->type);
+		uint32_t pointer_type_id = spirv_type_pointer(&cache, value_type_id, storage_class);
+		uint32_t var_id = spirv_alloc_id(&builder);
+		int var_inst = spirv_inst_start(&builder, SpvOpVariable);
+		spirv_inst_append(&builder, pointer_type_id);
+		spirv_inst_append(&builder, var_id);
+		spirv_inst_append(&builder, storage_class);
+		spirv_inst_finalize(&builder, var_inst);
+		if (sym->layout_flags & SYM_LAYOUT_LOCATION)
+		{
+			int decorate = spirv_inst_start(&builder, SpvOpDecorate);
+			spirv_inst_append(&builder, var_id);
+			spirv_inst_append(&builder, SpvDecorationLocation);
+			spirv_inst_append(&builder, (uint32_t)sym->layout_location);
+			spirv_inst_finalize(&builder, decorate);
+		}
+		apush(interface_ids, var_id);
+	}
+
 	for (int i = 0; i < acount(funcs); ++i)
 	{
 		SpirvFunctionInfo* info = &funcs[i];
@@ -6458,6 +6627,8 @@ dyna uint32_t* emit_spirv()
 		spirv_inst_append(&builder, exec_model_table[g_shader_stage]);
 		spirv_inst_append(&builder, entry_ids[i]);
 		spirv_emit_string(&builder, "main");
+		for (int j = 0; j < acount(interface_ids); ++j)
+			spirv_inst_append(&builder, interface_ids[j]);
 		spirv_inst_finalize(&builder, inst);
 	}
 	if (acount(builder.words) > 3)
@@ -6470,7 +6641,11 @@ dyna uint32_t* emit_spirv()
 	afree(funcs);
 	afree(emit_funcs);
 	afree(entry_ids);
+	afree(interface_ids);
+	afree(interface_symbols);
+	afree(cache.pointers);
 	afree(cache.entries);
+	afree(const_cache.entries);
 	return builder.words;
 }
 
@@ -8295,6 +8470,77 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 		0x00000008u,
 		0x6e69616du,
 		0x00000000u,
+	};
+	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
+	assert(acount(words) == expected_count);
+	for (int i = 0; i < expected_count; ++i)
+	{
+		assert(words[i] == expected[i]);
+	}
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
+
+DEFINE_TEST(test_spirv_emit_stage_interface)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("layout(location = 0) out vec4 out_color; void main() { out_color = vec4(1.0); }");
+	dyna uint32_t* words = emit_spirv();
+	const uint32_t expected[] = {
+		0x07230203u,
+		0x00010500u,
+		0x00010001u,
+		0x00000009u,
+		0x00000000u,
+		0x00020011u,
+		0x00000001u,
+		0x0004000eu,
+		0x00000000u,
+		0x00000001u,
+		0x00000000u,
+		0x00030016u,
+		0x00000001u,
+		0x00000020u,
+		0x00040017u,
+		0x00000002u,
+		0x00000001u,
+		0x00000004u,
+		0x00040020u,
+		0x00000003u,
+		0x00000003u,
+		0x00000002u,
+		0x0004003bu,
+		0x00000003u,
+		0x00000004u,
+		0x00000003u,
+		0x00040047u,
+		0x00000004u,
+		0x0000001eu,
+		0x00000000u,
+		0x00020013u,
+		0x00000005u,
+		0x00030021u,
+		0x00000006u,
+		0x00000005u,
+		0x00050036u,
+		0x00000005u,
+		0x00000007u,
+		0x00000000u,
+		0x00000006u,
+		0x000200f8u,
+		0x00000008u,
+		0x000200fdu,
+		0x00000000u,
+		0x00020038u,
+		0x00000000u,
+		0x0006000fu,
+		0x00000004u,
+		0x00000007u,
+		0x6e69616du,
+		0x00000000u,
+		0x00000004u,
 	};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
