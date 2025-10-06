@@ -7,6 +7,8 @@
 		#define SPINDLE_IMPLEMENTATION
 		#include "spindle.h"
 
+	Define SPINDLE_NO_TESTS before including spindle.h to omit snippets and unit tests.
+
 	Requires ckit.h for dynamic arrays, maps, and string interning.
 	Be sure to include ckit before spindle to provide those facilities.
 
@@ -39,7 +41,9 @@ void compiler_setup(const char* source);
 void compiler_teardown();
 void dump_ir();
 void dump_symbols();
+#ifndef SPINDLE_NO_TESTS
 void unit_test();
+#endif
 
 #ifdef __cplusplus
 }
@@ -6607,6 +6611,7 @@ void dump_symbols()
 	}
 }
 
+#ifndef SPINDLE_NO_TESTS
 typedef void (*TestFunc)(void);
 
 typedef struct TestCase
@@ -7808,6 +7813,8 @@ void unit_test()
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
+
+#endif /* SPINDLE_NO_TESTS */
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
