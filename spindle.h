@@ -3200,71 +3200,41 @@ void next()
 		tok.prec = 0;
 		tok.lexpr = expr_ident;
 		tok.rexpr = expr_error;
-		if (tok.lexeme == kw_if)
+		struct KeywordEntry
 		{
-			tok.kind = TOK_IF;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_else)
+			const char* lexeme;
+			Tok kind;
+			void (*lexpr)();
+			int bool_value;
+		};
+		const struct KeywordEntry keywords[] = {
+			{kw_if, TOK_IF, expr_error, -1},
+			{kw_else, TOK_ELSE, expr_error, -1},
+			{kw_for, TOK_FOR, expr_error, -1},
+			{kw_while, TOK_WHILE, expr_error, -1},
+			{kw_do, TOK_DO, expr_error, -1},
+			{kw_return, TOK_RETURN, expr_error, -1},
+			{kw_break, TOK_BREAK, expr_error, -1},
+			{kw_continue, TOK_CONTINUE, expr_error, -1},
+			{kw_discard, TOK_DISCARD, expr_error, -1},
+			{kw_switch, TOK_SWITCH, expr_error, -1},
+			{kw_case, TOK_CASE, expr_error, -1},
+			{kw_default, TOK_DEFAULT, expr_error, -1},
+			{kw_true, TOK_BOOL, expr_bool, 1},
+			{kw_false, TOK_BOOL, expr_bool, 0},
+		};
+		for (int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); ++i)
 		{
-			tok.kind = TOK_ELSE;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_for)
-		{
-			tok.kind = TOK_FOR;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_while)
-		{
-			tok.kind = TOK_WHILE;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_do)
-		{
-			tok.kind = TOK_DO;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_return)
-		{
-			tok.kind = TOK_RETURN;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_break)
-		{
-			tok.kind = TOK_BREAK;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_continue)
-		{
-			tok.kind = TOK_CONTINUE;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_discard)
-		{
-			tok.kind = TOK_DISCARD;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_switch)
-		{
-			tok.kind = TOK_SWITCH;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_case)
-		{
-			tok.kind = TOK_CASE;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_default)
-		{
-			tok.kind = TOK_DEFAULT;
-			tok.lexpr = expr_error;
-		}
-		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
-		{
-			tok.kind = TOK_BOOL;
-			tok.lexpr = expr_bool;
-			tok.int_val = tok.lexeme == kw_true;
+			if (tok.lexeme == keywords[i].lexeme)
+			{
+				tok.kind = keywords[i].kind;
+				tok.lexpr = keywords[i].lexpr;
+				if (keywords[i].bool_value != -1)
+				{
+					tok.int_val = keywords[i].bool_value;
+				}
+				return;
+			}
 		}
 		return;
 	}
