@@ -63,163 +63,104 @@ void unit_test();
 //--------------------------------------------------------------------------------------------------
 // Tokenization, symbols, and IR definitions.
 
+#define TOKEN_LIST(X) \
+	X(EOF, "EOF") \
+	X(IDENTIFIER, "IDENT") \
+	X(INT, "INT") \
+	X(FLOAT, "FLOAT") \
+	X(BOOL, "BOOL") \
+	X(LPAREN, "(") \
+	X(RPAREN, ")") \
+	X(LBRACK, "[") \
+	X(RBRACK, "]") \
+	X(LBRACE, "{") \
+	X(RBRACE, "}") \
+	X(DOT, ".") \
+	X(COMMA, ",") \
+	X(SEMI, ";") \
+	X(QUESTION, "?") \
+	X(COLON, ":") \
+	X(IF, "if") \
+	X(ELSE, "else") \
+	X(FOR, "for") \
+	X(WHILE, "while") \
+	X(DO, "do") \
+	X(RETURN, "return") \
+	X(BREAK, "break") \
+	X(CONTINUE, "continue") \
+	X(DISCARD, "discard") \
+	X(SWITCH, "switch") \
+	X(CASE, "case") \
+	X(DEFAULT, "default") \
+	X(PLUS, "+") \
+	X(MINUS, "-") \
+	X(STAR, "*") \
+	X(SLASH, "/") \
+	X(PERCENT, "%") \
+	X(PLUS_PLUS, "++") \
+	X(MINUS_MINUS, "--") \
+	X(NOT, "!") \
+	X(TILDE, "~") \
+	X(LT, "<") \
+	X(LE, "<=") \
+	X(GT, ">") \
+	X(GE, ">=") \
+	X(EQ, "==") \
+	X(NE, "!=") \
+	X(AND_AND, "&&") \
+	X(OR_OR, "||") \
+	X(AMP, "&") \
+	X(PIPE, "|") \
+	X(CARET, "^") \
+	X(LSHIFT, "<<") \
+	X(RSHIFT, ">>") \
+	X(ASSIGN, "=") \
+	X(PLUS_ASSIGN, "+=") \
+	X(MINUS_ASSIGN, "-=") \
+	X(STAR_ASSIGN, "*=") \
+	X(SLASH_ASSIGN, "/=") \
+	X(PERCENT_ASSIGN, "%=") \
+	X(AND_ASSIGN, "&=") \
+	X(OR_ASSIGN, "|=") \
+	X(XOR_ASSIGN, "^=") \
+	X(LSHIFT_ASSIGN, "<<=") \
+	X(RSHIFT_ASSIGN, ">>=")
+
 typedef enum Tok
 {
-	TOK_EOF,
-	TOK_IDENTIFIER,
-	TOK_INT,
-	TOK_FLOAT,
-	TOK_BOOL,
-
-	TOK_LPAREN,
-	TOK_RPAREN,
-	TOK_LBRACK,
-	TOK_RBRACK,
-	TOK_LBRACE,
-	TOK_RBRACE,
-	TOK_DOT,
-	TOK_COMMA,
-	TOK_SEMI,
-	TOK_QUESTION,
-	TOK_COLON,
-
-	TOK_IF,
-	TOK_ELSE,
-	TOK_FOR,
-	TOK_WHILE,
-	TOK_DO,
-	TOK_RETURN,
-	TOK_BREAK,
-	TOK_CONTINUE,
-	TOK_DISCARD,
-	TOK_SWITCH,
-	TOK_CASE,
-	TOK_DEFAULT,
-
-	TOK_PLUS,
-	TOK_MINUS,
-	TOK_STAR,
-	TOK_SLASH,
-	TOK_PERCENT,
-	TOK_PLUS_PLUS,
-	TOK_MINUS_MINUS,
-	TOK_NOT,
-	TOK_TILDE,
-	TOK_LT,
-	TOK_LE,
-	TOK_GT,
-	TOK_GE,
-	TOK_EQ,
-	TOK_NE,
-	TOK_AND_AND,
-	TOK_OR_OR,
-	TOK_AMP,
-	TOK_PIPE,
-	TOK_CARET,
-	TOK_LSHIFT,
-	TOK_RSHIFT,
-	TOK_ASSIGN,
-	TOK_PLUS_ASSIGN,
-	TOK_MINUS_ASSIGN,
-	TOK_STAR_ASSIGN,
-	TOK_SLASH_ASSIGN,
-	TOK_PERCENT_ASSIGN,
-	TOK_AND_ASSIGN,
-	TOK_OR_ASSIGN,
-	TOK_XOR_ASSIGN,
-	TOK_LSHIFT_ASSIGN,
-	TOK_RSHIFT_ASSIGN,
-
+#define TOKEN_ENUM(name, text)	TOK_##name,
+	TOKEN_LIST(TOKEN_ENUM)
+#undef TOKEN_ENUM
 	TOK_COUNT
 } Tok;
 
 const char* tok_name[TOK_COUNT] = {
-	[TOK_EOF] = "EOF",
-	[TOK_IDENTIFIER] = "IDENT",
-	[TOK_INT] = "INT",
-	[TOK_FLOAT] = "FLOAT",
-	[TOK_BOOL] = "BOOL",
-
-	[TOK_LPAREN] = "(",
-	[TOK_RPAREN] = ")",
-	[TOK_LBRACK] = "[",
-	[TOK_RBRACK] = "]",
-	[TOK_LBRACE] = "{",
-	[TOK_RBRACE] = "}",
-	[TOK_DOT] = ".",
-	[TOK_COMMA] = ",",
-	[TOK_SEMI] = ";",
-	[TOK_QUESTION] = "?",
-	[TOK_COLON] = ":",
-
-	[TOK_IF] = "if",
-	[TOK_ELSE] = "else",
-	[TOK_FOR] = "for",
-	[TOK_WHILE] = "while",
-	[TOK_DO] = "do",
-	[TOK_RETURN] = "return",
-	[TOK_BREAK] = "break",
-	[TOK_CONTINUE] = "continue",
-	[TOK_DISCARD] = "discard",
-	[TOK_SWITCH] = "switch",
-	[TOK_CASE] = "case",
-	[TOK_DEFAULT] = "default",
-
-	[TOK_PLUS] = "+",
-	[TOK_MINUS] = "-",
-	[TOK_STAR] = "*",
-	[TOK_SLASH] = "/",
-	[TOK_PERCENT] = "%",
-
-	[TOK_PLUS_PLUS] = "++",
-	[TOK_MINUS_MINUS] = "--",
-
-	[TOK_NOT] = "!",
-	[TOK_TILDE] = "~",
-
-	[TOK_LT] = "<",
-	[TOK_LE] = "<=",
-	[TOK_GT] = ">",
-	[TOK_GE] = ">=",
-	[TOK_EQ] = "==",
-	[TOK_NE] = "!=",
-
-	[TOK_AND_AND] = "&&",
-	[TOK_OR_OR] = "||",
-	[TOK_AMP] = "&",
-	[TOK_PIPE] = "|",
-	[TOK_CARET] = "^",
-	[TOK_LSHIFT] = "<<",
-	[TOK_RSHIFT] = ">>",
-
-	[TOK_ASSIGN] = "=",
-	[TOK_PLUS_ASSIGN] = "+=",
-	[TOK_MINUS_ASSIGN] = "-=",
-	[TOK_STAR_ASSIGN] = "*=",
-	[TOK_SLASH_ASSIGN] = "/=",
-	[TOK_PERCENT_ASSIGN] = "%=",
-	[TOK_AND_ASSIGN] = "&=",
-	[TOK_OR_ASSIGN] = "|=",
-	[TOK_XOR_ASSIGN] = "^=",
-	[TOK_LSHIFT_ASSIGN] = "<<=",
-	[TOK_RSHIFT_ASSIGN] = ">>=",
+#define TOKEN_NAME(name, text)	[TOK_##name] = text,
+	TOKEN_LIST(TOKEN_NAME)
+#undef TOKEN_NAME
 };
+#undef TOKEN_LIST
+
+#define SYMBOL_KIND_LIST(X) \
+	X(VAR, "var") \
+	X(FUNC, "func") \
+	X(PARAM, "param") \
+	X(BLOCK, "block")
 
 typedef enum SymbolKind
 {
-	SYM_VAR,
-	SYM_FUNC,
-	SYM_PARAM,
-	SYM_BLOCK,
+#define SYMBOL_KIND_ENUM(name, text)	SYM_##name,
+	SYMBOL_KIND_LIST(SYMBOL_KIND_ENUM)
+#undef SYMBOL_KIND_ENUM
 	SYM_KIND_COUNT
 } SymbolKind;
 
 const char* symbol_kind_name[SYM_KIND_COUNT] = {
-	[SYM_VAR] = "var",
-	[SYM_FUNC] = "func",
-	[SYM_PARAM] = "param",
-	[SYM_BLOCK] = "block",
+#define SYMBOL_KIND_NAME(name, text)	[SYM_##name] = text,
+	SYMBOL_KIND_LIST(SYMBOL_KIND_NAME)
+#undef SYMBOL_KIND_NAME
 };
+#undef SYMBOL_KIND_LIST
 
 typedef enum TypeTag
 {
