@@ -2839,149 +2839,23 @@ void parse()
 		tok.rexpr = expr_##rexpr1; \
 		break;
 
-#define TOK_EXPR_EXPR(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2) \
-	case ch1: \
-		next_ch(); \
-		if (match_ch(ch2)) \
-		{ \
-			tok.kind = TOK_##tok2; \
-			tok.prec = PREC_##prec2; \
-			tok.lexpr = expr_##lexpr2; \
-			tok.rexpr = expr_##rexpr2; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
-		} \
-		break;
+#define TOK_SET(tok1, prec1, lexpr1, rexpr1) \
+	do \
+	{ \
+		tok.kind = TOK_##tok1; \
+		tok.prec = PREC_##prec1; \
+		tok.lexpr = expr_##lexpr1; \
+		tok.rexpr = expr_##rexpr1; \
+	} while (0)
 
-#define TOK_EXPR_ASSIGN(ch1, tok1, prec1, lexpr1, rexpr1, tok_assign, prec_assign, lexpr_assign, rexpr_assign) \
+#define TOK_CASE(ch1, tok1, prec1, lexpr1, rexpr1, body) \
 	case ch1: \
 		next_ch(); \
-		if (match_ch('=')) \
+		do \
 		{ \
-			tok.kind = TOK_##tok_assign; \
-			tok.prec = PREC_##prec_assign; \
-			tok.lexpr = expr_##lexpr_assign; \
-			tok.rexpr = expr_##rexpr_assign; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
-		} \
-		break;
-
-#define TOK_EXPR_EXPR_ASSIGN(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2, tok_assign, prec_assign, lexpr_assign, rexpr_assign) \
-	case ch1: \
-		next_ch(); \
-		if (match_ch(ch2)) \
-		{ \
-			tok.kind = TOK_##tok2; \
-			tok.prec = PREC_##prec2; \
-			tok.lexpr = expr_##lexpr2; \
-			tok.rexpr = expr_##rexpr2; \
-		} \
-		else if (match_ch('=')) \
-		{ \
-			tok.kind = TOK_##tok_assign; \
-			tok.prec = PREC_##prec_assign; \
-			tok.lexpr = expr_##lexpr_assign; \
-			tok.rexpr = expr_##rexpr_assign; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
-		} \
-		break;
-
-#define TOK_SHIFT_REL(ch1, tok_rel, prec_rel, lexpr_rel, rexpr_rel, tok_rel_eq, prec_rel_eq, lexpr_rel_eq, rexpr_rel_eq, tok_shift, prec_shift, lexpr_shift, rexpr_shift, tok_shift_assign, prec_shift_assign, lexpr_shift_assign, rexpr_shift_assign) \
-	case ch1: \
-		next_ch(); \
-		if (match_ch(ch1)) \
-		{ \
-			if (match_ch('=')) \
-			{ \
-				tok.kind = TOK_##tok_shift_assign; \
-				tok.prec = PREC_##prec_shift_assign; \
-				tok.lexpr = expr_##lexpr_shift_assign; \
-				tok.rexpr = expr_##rexpr_shift_assign; \
-			} \
-			else \
-			{ \
-				tok.kind = TOK_##tok_shift; \
-				tok.prec = PREC_##prec_shift; \
-				tok.lexpr = expr_##lexpr_shift; \
-				tok.rexpr = expr_##rexpr_shift; \
-			} \
-		} \
-		else if (match_ch('=')) \
-		{ \
-			tok.kind = TOK_##tok_rel_eq; \
-			tok.prec = PREC_##prec_rel_eq; \
-			tok.lexpr = expr_##lexpr_rel_eq; \
-			tok.rexpr = expr_##rexpr_rel_eq; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok_rel; \
-			tok.prec = PREC_##prec_rel; \
-			tok.lexpr = expr_##lexpr_rel; \
-			tok.rexpr = expr_##rexpr_rel; \
-		} \
-		break;
-
-#define TOK_EXPR_OPTION(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2) \
-	case ch1: \
-		next_ch(); \
-		if (match_ch(ch2)) \
-		{ \
-			tok.kind = TOK_##tok2; \
-			tok.prec = PREC_##prec2; \
-			tok.lexpr = expr_##lexpr2; \
-			tok.rexpr = expr_##rexpr2; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
-		} \
-		break;
-
-#define TOK_EXPR_OPTION2(ch1, tok1, prec1, lexpr1, rexpr1, ch2, tok2, prec2, lexpr2, rexpr2, ch3, tok3, prec3, lexpr3, rexpr3) \
-	case ch1: \
-		next_ch(); \
-		if (match_ch(ch2)) \
-		{ \
-			tok.kind = TOK_##tok2; \
-			tok.prec = PREC_##prec2; \
-			tok.lexpr = expr_##lexpr2; \
-			tok.rexpr = expr_##rexpr2; \
-		} \
-		else if (match_ch(ch3)) \
-		{ \
-			tok.kind = TOK_##tok3; \
-			tok.prec = PREC_##prec3; \
-			tok.lexpr = expr_##lexpr3; \
-			tok.rexpr = expr_##rexpr3; \
-		} \
-		else \
-		{ \
-			tok.kind = TOK_##tok1; \
-			tok.prec = PREC_##prec1; \
-			tok.lexpr = expr_##lexpr1; \
-			tok.rexpr = expr_##rexpr1; \
-		} \
+			body \
+			TOK_SET(tok1, prec1, lexpr1, rexpr1); \
+		} while (0); \
 		break;
 
 static int digit_value_for_base(char c, int base)
@@ -3165,21 +3039,133 @@ void next()
 
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
-		TOK_EXPR_OPTION2('+', PLUS, ADD, pos, add, '+', PLUS_PLUS, POSTFIX, pre_inc, post_inc, '=', PLUS_ASSIGN, ASSIGN, error, plus_assign)
-		TOK_EXPR_OPTION2('-', MINUS, ADD, neg, sub, '-', MINUS_MINUS, POSTFIX, pre_dec, post_dec, '=', MINUS_ASSIGN, ASSIGN, error, minus_assign)
-		TOK_EXPR_ASSIGN('*', STAR, MUL, error, mul, STAR_ASSIGN, ASSIGN, error, mul_assign)
-		TOK_EXPR_ASSIGN('/', SLASH, MUL, error, div, SLASH_ASSIGN, ASSIGN, error, div_assign)
-		TOK_EXPR_ASSIGN('%', PERCENT, MUL, error, mod, PERCENT_ASSIGN, ASSIGN, error, mod_assign)
+		TOK_CASE('+', PLUS, ADD, pos, add,
+			if (match_ch('+'))
+			{
+				TOK_SET(PLUS_PLUS, POSTFIX, pre_inc, post_inc);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(PLUS_ASSIGN, ASSIGN, error, plus_assign);
+				break;
+			}
+		)
+		TOK_CASE('-', MINUS, ADD, neg, sub,
+			if (match_ch('-'))
+			{
+				TOK_SET(MINUS_MINUS, POSTFIX, pre_dec, post_dec);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(MINUS_ASSIGN, ASSIGN, error, minus_assign);
+				break;
+			}
+		)
+		TOK_CASE('*', STAR, MUL, error, mul,
+			if (match_ch('='))
+			{
+				TOK_SET(STAR_ASSIGN, ASSIGN, error, mul_assign);
+				break;
+			}
+		)
+		TOK_CASE('/', SLASH, MUL, error, div,
+			if (match_ch('='))
+			{
+				TOK_SET(SLASH_ASSIGN, ASSIGN, error, div_assign);
+				break;
+			}
+		)
+		TOK_CASE('%', PERCENT, MUL, error, mod,
+			if (match_ch('='))
+			{
+				TOK_SET(PERCENT_ASSIGN, ASSIGN, error, mod_assign);
+				break;
+			}
+		)
 		TOK_EXPR('?', QUESTION, TERNARY, error, ternary)
 
 		// two-char combos
-		TOK_SHIFT_REL('<', LT, REL, error, lt, LE, REL, error, le, LSHIFT, SHIFT, error, shl, LSHIFT_ASSIGN, ASSIGN, error, shl_assign)
-		TOK_SHIFT_REL('>', GT, REL, error, gt, GE, REL, error, ge, RSHIFT, SHIFT, error, shr, RSHIFT_ASSIGN, ASSIGN, error, shr_assign)
-		TOK_EXPR_EXPR('=', ASSIGN, ASSIGN, error, assign, '=', EQ, EQ, error, eq)
-		TOK_EXPR_EXPR('!', NOT, UNARY, not, error, '=', NE, EQ, error, ne)
-		TOK_EXPR_EXPR_ASSIGN('&', AMP, BIT_AND, error, band, '&', AND_AND, AND_AND, error, land, AND_ASSIGN, ASSIGN, error, and_assign)
-		TOK_EXPR_EXPR_ASSIGN('|', PIPE, BIT_OR, error, bor, '|', OR_OR, OR_OR, error, lor, OR_ASSIGN, ASSIGN, error, or_assign)
-		TOK_EXPR_ASSIGN('^', CARET, BIT_XOR, error, bxor, XOR_ASSIGN, ASSIGN, error, xor_assign)
+		TOK_CASE('<', LT, REL, error, lt,
+			if (match_ch('<'))
+			{
+				if (match_ch('='))
+				{
+					TOK_SET(LSHIFT_ASSIGN, ASSIGN, error, shl_assign);
+					break;
+				}
+				TOK_SET(LSHIFT, SHIFT, error, shl);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(LE, REL, error, le);
+				break;
+			}
+		)
+		TOK_CASE('>', GT, REL, error, gt,
+			if (match_ch('>'))
+			{
+				if (match_ch('='))
+				{
+					TOK_SET(RSHIFT_ASSIGN, ASSIGN, error, shr_assign);
+					break;
+				}
+				TOK_SET(RSHIFT, SHIFT, error, shr);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(GE, REL, error, ge);
+				break;
+			}
+		)
+		TOK_CASE('=', ASSIGN, ASSIGN, error, assign,
+			if (match_ch('='))
+			{
+				TOK_SET(EQ, EQ, error, eq);
+				break;
+			}
+		)
+		TOK_CASE('!', NOT, UNARY, not, error,
+			if (match_ch('='))
+			{
+				TOK_SET(NE, EQ, error, ne);
+				break;
+			}
+		)
+		TOK_CASE('&', AMP, BIT_AND, error, band,
+			if (match_ch('&'))
+			{
+				TOK_SET(AND_AND, AND_AND, error, land);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(AND_ASSIGN, ASSIGN, error, and_assign);
+				break;
+			}
+		)
+		TOK_CASE('|', PIPE, BIT_OR, error, bor,
+			if (match_ch('|'))
+			{
+				TOK_SET(OR_OR, OR_OR, error, lor);
+				break;
+			}
+			if (match_ch('='))
+			{
+				TOK_SET(OR_ASSIGN, ASSIGN, error, or_assign);
+				break;
+			}
+		)
+		TOK_CASE('^', CARET, BIT_XOR, error, bxor,
+			if (match_ch('='))
+			{
+				TOK_SET(XOR_ASSIGN, ASSIGN, error, xor_assign);
+				break;
+			}
+		)
 	default:
 		break;
 	}
