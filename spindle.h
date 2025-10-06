@@ -23,24 +23,23 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-	typedef enum ShaderStage
-	{
-		SHADER_STAGE_VERTEX,
-		SHADER_STAGE_FRAGMENT,
-		SHADER_STAGE_COMPUTE,
-		SHADER_STAGE_COUNT
-	} ShaderStage;
+typedef enum ShaderStage
+{
+	SHADER_STAGE_VERTEX,
+	SHADER_STAGE_FRAGMENT,
+	SHADER_STAGE_COMPUTE,
+	SHADER_STAGE_COUNT
+} ShaderStage;
 
-	void compiler_set_shader_stage(ShaderStage stage);
-	void compiler_setup(const char* source);
-	void compiler_teardown();
-	void dump_ir();
-	void dump_symbols();
-	void unit_test();
+void compiler_set_shader_stage(ShaderStage stage);
+void compiler_setup(const char* source);
+void compiler_teardown();
+void dump_ir();
+void dump_symbols();
+void unit_test();
 
 #ifdef __cplusplus
 }
@@ -781,8 +780,7 @@ void symbol_table_leave_scope()
 static SymbolScopeEntry* symbol_scope_entry(SymbolScope* scope, const char* name, int create)
 {
 	uint64_t idx = map_get(scope->map, (uint64_t)name);
-	if (!idx)
-	{
+	if (!idx) {
 		if (!create)
 			return NULL;
 		SymbolScopeEntry entry = (SymbolScopeEntry){ 0 };
@@ -1004,8 +1002,7 @@ static void symbol_table_register_builtins()
 		{ "imageAtomicExchange", BUILTIN_IMAGE_ATOMIC_EXCHANGE, NULL, -1 },
 		{ "imageAtomicCompSwap", BUILTIN_IMAGE_ATOMIC_COMP_SWAP, NULL, -1 }
 	};
-	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
-	{
+	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i) {
 		symbol_table_register_builtin(&builtins[i]);
 	}
 }
@@ -1013,8 +1010,7 @@ static void symbol_table_register_builtins()
 static void symbol_table_register_builtin_variables()
 {
 	unsigned current_stage_mask = STAGE_MASK(g_shader_stage);
-	for (size_t i = 0; i < sizeof(builtin_variables) / sizeof(builtin_variables[0]); ++i)
-	{
+	for (size_t i = 0; i < sizeof(builtin_variables) / sizeof(builtin_variables[0]); ++i) {
 		const BuiltinVariableInit* init = &builtin_variables[i];
 		if (!(init->stage_mask & current_stage_mask))
 			continue;
@@ -1027,8 +1023,7 @@ static void symbol_table_register_builtin_variables()
 		symbol_add_storage(sym, init->storage_flags);
 		symbol_add_qualifier(sym, init->qualifier_flags);
 		Type* element_type = type;
-		for (int dim = 0; dim < init->array_dimensions; ++dim)
-		{
+		for (int dim = 0; dim < init->array_dimensions; ++dim) {
 			symbol_mark_array(sym, element_type);
 			if (sym->type && init->array_length >= 0)
 				sym->type->array_len = init->array_length;
@@ -1054,8 +1049,7 @@ Symbol* symbol_table_add(const char* name, const char* type_name, Type* type, Sy
 
 Symbol* symbol_table_find(const char* name)
 {
-	for (int i = acount(st->scopes) - 1; i >= 0; --i)
-	{
+	for (int i = acount(st->scopes) - 1; i >= 0; --i) {
 		SymbolScope* scope = &st->scopes[i];
 		uint64_t entry_idx = map_get(scope->map, (uint64_t)name);
 		if (!entry_idx)
@@ -1090,8 +1084,7 @@ int symbol_has_qualifier(const Symbol* sym, unsigned flag)
 void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
 {
 	sym->layout_flags |= layout_flag;
-	switch (layout_flag)
-	{
+	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
 		sym->layout_set = value;
 		break;
@@ -1115,8 +1108,7 @@ int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
 {
 	if (!symbol_has_layout(sym, layout_flag))
 		return -1;
-	switch (layout_flag)
-	{
+	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
 		return sym->layout_set;
 	case SYM_LAYOUT_BINDING:
@@ -1162,33 +1154,25 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 {
 	if (!sym || sym->kind != SYM_FUNC)
 		return;
-	if (sym->param_signature_set)
-	{
-		if (sym->param_count != param_count)
-		{
+	if (sym->param_signature_set) {
+		if (sym->param_count != param_count) {
 			type_check_error("function %s redeclared with %d parameters but previously had %d", sym->name, param_count, sym->param_count);
 		}
-		for (int i = 0; i < param_count; ++i)
-		{
+		for (int i = 0; i < param_count; ++i) {
 			Type* existing = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
 			Type* incoming = (params && i < acount(params)) ? params[i] : NULL;
-			if (existing && incoming)
-			{
-				if (!type_equal(existing, incoming))
-				{
+			if (existing && incoming) {
+				if (!type_equal(existing, incoming)) {
 					type_check_error("function %s parameter %d type mismatch (%s vs %s)", sym->name, i + 1, type_display(existing), type_display(incoming));
 				}
-			}
-			else if (existing != incoming)
-			{
+			} else if (existing != incoming) {
 				type_check_error("function %s parameter %d type mismatch", sym->name, i + 1);
 			}
 		}
 		return;
 	}
 	aclear(sym->params);
-	for (int i = 0; i < param_count; ++i)
-	{
+	for (int i = 0; i < param_count; ++i) {
 		Type* incoming = params ? params[i] : NULL;
 		apush(sym->params, incoming);
 	}
@@ -1198,12 +1182,10 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 
 void symbol_table_free()
 {
-	while (acount(st->scopes) > 0)
-	{
+	while (acount(st->scopes) > 0) {
 		symbol_table_leave_scope();
 	}
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
+	for (int i = 0; i < acount(st->symbols); ++i) {
 		Symbol* sym = &st->symbols[i];
 		afree(sym->params);
 	}
@@ -1252,11 +1234,9 @@ Token tok;
 void parse_error(const char* msg)
 {
 	fprintf(stderr, "Parse error: %s", msg);
-	if (tok.kind < TOK_COUNT)
-	{
+	if (tok.kind < TOK_COUNT) {
 		fprintf(stderr, " (token %s", tok_name[tok.kind]);
-		if (tok.len)
-		{
+		if (tok.len) {
 			fprintf(stderr, " '%.*s'", tok.len, tok.lexeme);
 		}
 		fprintf(stderr, ")");
@@ -1291,8 +1271,7 @@ int is_digit(int c)
 }
 int match_ch(int want)
 {
-	if (ch == want)
-	{
+	if (ch == want) {
 		next_ch();
 		return 1;
 	}
@@ -1301,19 +1280,15 @@ int match_ch(int want)
 
 void skip_ws_comments()
 {
-	while (1)
-	{
+	while (1) {
 		while (is_space(ch))
 			next_ch();
-		if (ch == '#')
-		{
+		if (ch == '#') {
 			next_ch();
-			while (1)
-			{
+			while (1) {
 				int prev = 0;
 				int prev_prev = 0;
-				while (ch && ch != '\n')
-				{
+				while (ch && ch != '\n') {
 					prev_prev = prev;
 					prev = ch;
 					next_ch();
@@ -1327,22 +1302,18 @@ void skip_ws_comments()
 			}
 			continue;
 		}
-		if (ch == '/' && at[0] == '/')
-		{
-			while (ch && ch != '\n')
-			{
+		if (ch == '/' && at[0] == '/') {
+			while (ch && ch != '\n') {
 				next_ch();
 			}
 			continue;
 		}
-		if (ch == '/' && at[0] == '*')
-		{
+		if (ch == '/' && at[0] == '*') {
 			next_ch();
 			next_ch();
 			while (ch && !(ch == '*' && at[0] == '/'))
 				next_ch();
-			if (ch == '*')
-			{
+			if (ch == '*') {
 				next_ch();
 				next_ch();
 			}
@@ -1423,8 +1394,7 @@ void type_spec_add_layout_assignment(TypeSpec* spec, const char* ident, int valu
 void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 {
 	spec->layout_flags |= layout_flag;
-	switch (layout_flag)
-	{
+	switch (layout_flag) {
 	case SYM_LAYOUT_SET:
 		spec->layout_set = value;
 		break;
@@ -1477,35 +1447,27 @@ void parse_layout_block(TypeSpec* spec)
 {
 	next();
 	expect(TOK_LPAREN);
-	while (tok.kind != TOK_RPAREN)
-	{
+	while (tok.kind != TOK_RPAREN) {
 		if (tok.kind != TOK_IDENTIFIER)
 			parse_error("expected identifier in layout");
 		const char* ident = tok.lexeme;
 		unsigned layout_flag = layout_flag_from_keyword(ident);
 		next();
-		if (tok.kind == TOK_ASSIGN)
-		{
+		if (tok.kind == TOK_ASSIGN) {
 			next();
 			if (tok.kind != TOK_INT)
 				parse_error("expected integer in layout assignment");
 			int value = tok.int_val;
 			next();
-			if (layout_flag)
-			{
+			if (layout_flag) {
 				type_spec_set_layout(spec, layout_flag, value);
-			}
-			else
-			{
+			} else {
 				type_spec_add_layout_assignment(spec, ident, value);
 			}
-		}
-		else
-		{
+		} else {
 			type_spec_add_layout_identifier(spec, ident);
 		}
-		if (tok.kind == TOK_COMMA)
-		{
+		if (tok.kind == TOK_COMMA) {
 			next();
 			continue;
 		}
@@ -1518,24 +1480,20 @@ void parse_layout_block(TypeSpec* spec)
 // ...uniform sampler2D u_image;
 void parse_type_qualifiers(TypeSpec* spec)
 {
-	while (tok.kind == TOK_IDENTIFIER)
-	{
+	while (tok.kind == TOK_IDENTIFIER) {
 		unsigned storage_flag = storage_flag_from_keyword(tok.lexeme);
-		if (storage_flag)
-		{
+		if (storage_flag) {
 			type_spec_add_storage(spec, storage_flag);
 			next();
 			continue;
 		}
 		unsigned qualifier_flag = qualifier_flag_from_keyword(tok.lexeme);
-		if (qualifier_flag)
-		{
+		if (qualifier_flag) {
 			type_spec_add_qualifier(spec, qualifier_flag);
 			next();
 			continue;
 		}
-		if (tok.lexeme == kw_layout)
-		{
+		if (tok.lexeme == kw_layout) {
 			parse_layout_block(spec);
 			continue;
 		}
@@ -1550,15 +1508,13 @@ TypeSpec parse_type_specifier()
 {
 	TypeSpec spec = (TypeSpec){ 0 };
 	parse_type_qualifiers(&spec);
-	if (tok.kind == TOK_IDENTIFIER && tok.lexeme == kw_struct)
-	{
+	if (tok.kind == TOK_IDENTIFIER && tok.lexeme == kw_struct) {
 		next();
 		if (tok.kind != TOK_IDENTIFIER)
 			parse_error("expected identifier after struct");
 		const char* struct_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 		Token lookahead = peek_token();
-		if (lookahead.kind == TOK_LBRACE)
-		{
+		if (lookahead.kind == TOK_LBRACE) {
 			next();
 			Type* type = type_system_declare_struct(struct_name);
 			if (!type || type->tag != T_STRUCT)
@@ -1582,22 +1538,18 @@ TypeSpec parse_type_specifier()
 		spec.type = type;
 		return spec;
 	}
-	if (tok.kind != TOK_IDENTIFIER)
-	{
+	if (tok.kind != TOK_IDENTIFIER) {
 		int has_layout = (spec.layout_identifiers && acount(spec.layout_identifiers) > 0) || (spec.layout_assignments && acount(spec.layout_assignments) > 0);
-		if (tok.kind == TOK_SEMI && (spec.storage_flags || has_layout))
-		{
+		if (tok.kind == TOK_SEMI && (spec.storage_flags || has_layout)) {
 			spec.is_stage_layout = 1;
 			return spec;
 		}
 		parse_error("expected type");
 	}
 	const char* type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
-	if ((spec.storage_flags & (SYM_STORAGE_UNIFORM | SYM_STORAGE_BUFFER)))
-	{
+	if ((spec.storage_flags & (SYM_STORAGE_UNIFORM | SYM_STORAGE_BUFFER))) {
 		Token lookahead = peek_token();
-		if (lookahead.kind == TOK_LBRACE)
-		{
+		if (lookahead.kind == TOK_LBRACE) {
 			next();
 			Type* type = type_system_declare_struct(type_name);
 			if (!type || type->tag != T_STRUCT)
@@ -1628,17 +1580,13 @@ TypeSpec parse_type_specifier()
 // ...struct Light { float weights[4]; };
 void parse_struct_member_array_suffix(StructMember* member)
 {
-	while (tok.kind == TOK_LBRACK)
-	{
+	while (tok.kind == TOK_LBRACK) {
 		next();
 		int unsized = 0;
 		int size = -1;
-		if (tok.kind == TOK_RBRACK)
-		{
+		if (tok.kind == TOK_RBRACK) {
 			unsized = 1;
-		}
-		else
-		{
+		} else {
 			if (tok.kind != TOK_INT)
 				parse_error("expected integer array size");
 			size = tok.int_val;
@@ -1653,20 +1601,17 @@ void parse_struct_member_array_suffix(StructMember* member)
 StructInfo* parse_struct_body(Type* type, TypeSpec* spec)
 {
 	expect(TOK_LBRACE);
-	while (tok.kind != TOK_RBRACE)
-	{
+	while (tok.kind != TOK_RBRACE) {
 		TypeSpec member_spec = parse_type_specifier();
 		if (tok.kind != TOK_IDENTIFIER)
 			parse_error("expected identifier in struct");
-		while (1)
-		{
+		while (1) {
 			const char* member_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 			StructMember* member = type_struct_add_member(type, member_name, member_spec.type);
 			type_struct_member_set_layout(member, member_spec.layout_flags, member_spec.layout_set, member_spec.layout_binding, member_spec.layout_location);
 			next();
 			parse_struct_member_array_suffix(member);
-			if (tok.kind == TOK_COMMA)
-			{
+			if (tok.kind == TOK_COMMA) {
 				next();
 				continue;
 			}
@@ -1688,8 +1633,7 @@ void emit_struct_ir(Type* type, StructInfo* info)
 	IR_Cmd* begin = ir_emit(IR_STRUCT_BEGIN);
 	begin->str0 = type->name;
 	begin->type = type;
-	for (int i = 0; i < acount(info->members); ++i)
-	{
+	for (int i = 0; i < acount(info->members); ++i) {
 		StructMember* member = &info->members[i];
 		IR_Cmd* inst = ir_emit(IR_STRUCT_MEMBER);
 		inst->str0 = member->name;
@@ -1717,20 +1661,16 @@ static void validate_interface_block_layout(const TypeSpec* spec)
 	int layout_count = spec->layout_identifiers ? acount(spec->layout_identifiers) : 0;
 	if (!layout_count)
 		return;
-	if (is_uniform)
-	{
-		for (int i = 0; i < layout_count; ++i)
-		{
+	if (is_uniform) {
+		for (int i = 0; i < layout_count; ++i) {
 			const char* ident = spec->layout_identifiers[i];
 			if (ident != kw_std140)
 				parse_error("uniform blocks only support std140 layout");
 		}
 		return;
 	}
-	if (is_buffer)
-	{
-		for (int i = 0; i < layout_count; ++i)
-		{
+	if (is_buffer) {
+		for (int i = 0; i < layout_count; ++i) {
 			const char* ident = spec->layout_identifiers[i];
 			if (ident != kw_std430)
 				parse_error("storage blocks only support std430 layout");
@@ -1748,16 +1688,13 @@ void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 	begin->type = spec->type;
 	ir_apply_type_spec(begin, spec);
 	int layout_count = spec->layout_identifiers ? acount(spec->layout_identifiers) : 0;
-	for (int i = 0; i < layout_count; ++i)
-	{
+	for (int i = 0; i < layout_count; ++i) {
 		IR_Cmd* layout_inst = ir_emit(IR_BLOCK_DECL_LAYOUT);
 		layout_inst->str0 = spec->layout_identifiers[i];
 	}
 	StructInfo* info = spec->struct_info ? spec->struct_info : type_struct_info(spec->type);
-	if (info)
-	{
-		for (int i = 0; i < acount(info->members); ++i)
-		{
+	if (info) {
+		for (int i = 0; i < acount(info->members); ++i) {
 			StructMember* member = &info->members[i];
 			IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_MEMBER);
 			inst->str0 = member->name;
@@ -1771,14 +1708,12 @@ void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 				inst->arg0 = member->array_unsized ? -1 : member->array_len;
 		}
 	}
-	if (instance_name)
-	{
+	if (instance_name) {
 		IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_INSTANCE);
 		inst->str0 = instance_name;
 	}
 	ir_emit(IR_BLOCK_DECL_END);
-	if (instance_name)
-	{
+	if (instance_name) {
 		Symbol* sym = symbol_table_add(instance_name, spec->type_name, spec->type, SYM_BLOCK);
 		symbol_apply_type_spec(sym, spec);
 	}
@@ -1832,22 +1767,17 @@ void decl_array_suffix()
 {
 	Symbol* sym = current_decl_symbol;
 	Type* element_type = current_decl_type_type;
-	while (tok.kind == TOK_LBRACK)
-	{
+	while (tok.kind == TOK_LBRACK) {
 		next();
 		ir_emit(IR_DECL_ARRAY_BEGIN);
-		if (sym)
-		{
+		if (sym) {
 			symbol_mark_array(sym, element_type);
 			element_type = sym->type;
 		}
 
-		if (tok.kind == TOK_RBRACK)
-		{
+		if (tok.kind == TOK_RBRACK) {
 			ir_emit(IR_DECL_ARRAY_UNSIZED);
-		}
-		else
-		{
+		} else {
 			ir_emit(IR_DECL_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_DECL_ARRAY_SIZE_END);
@@ -1861,21 +1791,16 @@ void func_param_array_suffix()
 {
 	Symbol* sym = current_param_symbol;
 	Type* element_type = current_param_type_type;
-	while (tok.kind == TOK_LBRACK)
-	{
+	while (tok.kind == TOK_LBRACK) {
 		next();
 		ir_emit(IR_FUNC_PARAM_ARRAY_BEGIN);
-		if (sym)
-		{
+		if (sym) {
 			symbol_mark_array(sym, element_type);
 			element_type = sym->type;
 		}
-		if (tok.kind == TOK_RBRACK)
-		{
+		if (tok.kind == TOK_RBRACK) {
 			ir_emit(IR_FUNC_PARAM_ARRAY_UNSIZED);
-		}
-		else
-		{
+		} else {
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_END);
@@ -1914,13 +1839,10 @@ void func_param()
 void func_param_list()
 {
 	ir_emit(IR_FUNC_PARAMS_BEGIN);
-	if (tok.kind != TOK_RPAREN)
-	{
-		while (1)
-		{
+	if (tok.kind != TOK_RPAREN) {
+		while (1) {
 			func_param();
-			if (tok.kind == TOK_COMMA)
-			{
+			if (tok.kind == TOK_COMMA) {
 				next();
 				ir_emit(IR_FUNC_PARAM_SEPARATOR);
 				continue;
@@ -1944,15 +1866,13 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 	current_decl_symbol = sym;
 	decl_array_suffix();
 	current_decl_symbol = NULL;
-	if (tok.kind == TOK_ASSIGN)
-	{
+	if (tok.kind == TOK_ASSIGN) {
 		next();
 		ir_emit(IR_DECL_INIT_BEGIN);
 		expr();
 		ir_emit(IR_DECL_INIT_END);
 	}
-	while (tok.kind == TOK_COMMA)
-	{
+	while (tok.kind == TOK_COMMA) {
 		next();
 		ir_emit(IR_DECL_SEPARATOR);
 		if (tok.kind != TOK_IDENTIFIER)
@@ -1967,8 +1887,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 		next();
 		decl_array_suffix();
 		current_decl_symbol = NULL;
-		if (tok.kind == TOK_ASSIGN)
-		{
+		if (tok.kind == TOK_ASSIGN) {
 			next();
 			ir_emit(IR_DECL_INIT_BEGIN);
 			expr();
@@ -2002,14 +1921,12 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 		type_check_error("identifier %s redeclared as function", name);
 	if (!sym)
 		sym = symbol_table_add_at_depth(func->str1, spec.type_name, spec.type, SYM_FUNC, outer_scope);
-	if (!sym)
-	{
+	if (!sym) {
 		symbol_table_leave_scope();
 		type_check_error("failed to declare function %s", name);
 		return;
 	}
-	if (sym->type && spec.type && !type_equal(sym->type, spec.type))
-	{
+	if (sym->type && spec.type && !type_equal(sym->type, spec.type)) {
 		type_check_error("function %s redeclared with return type %s but previously %s", name, type_display(spec.type), type_display(sym->type));
 	}
 	if (!sym->type && spec.type)
@@ -2018,15 +1935,13 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	symbol_set_function_signature(sym, current_function_params, param_count);
 	if (current_function_params)
 		aclear(current_function_params);
-	if (tok.kind == TOK_SEMI)
-	{
+	if (tok.kind == TOK_SEMI) {
 		next();
 		symbol_table_leave_scope();
 		ir_emit(IR_FUNC_PROTOTYPE_END);
 		return;
 	}
-	if (tok.kind == TOK_LBRACE)
-	{
+	if (tok.kind == TOK_LBRACE) {
 		ir_emit(IR_FUNC_DEFINITION_BEGIN);
 		stmt_block();
 		symbol_table_leave_scope();
@@ -2040,19 +1955,16 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 void stmt_decl()
 {
 	TypeSpec spec = parse_type_specifier();
-	if (spec.is_stage_layout)
-	{
+	if (spec.is_stage_layout) {
 		IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
 		ir_apply_type_spec(begin, &spec);
 		int layout_count = spec.layout_identifiers ? acount(spec.layout_identifiers) : 0;
-		for (int i = 0; i < layout_count; ++i)
-		{
+		for (int i = 0; i < layout_count; ++i) {
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
 			layout->str0 = spec.layout_identifiers[i];
 		}
 		int assignment_count = spec.layout_assignments ? acount(spec.layout_assignments) : 0;
-		for (int i = 0; i < assignment_count; ++i)
-		{
+		for (int i = 0; i < assignment_count; ++i) {
 			TypeLayoutAssignment* entry = &spec.layout_assignments[i];
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
 			layout->str0 = entry->identifier;
@@ -2062,11 +1974,9 @@ void stmt_decl()
 		ir_emit(IR_STAGE_LAYOUT_END);
 		return;
 	}
-	if (spec.is_interface_block)
-	{
+	if (spec.is_interface_block) {
 		const char* instance_name = NULL;
-		if (tok.kind == TOK_IDENTIFIER)
-		{
+		if (tok.kind == TOK_IDENTIFIER) {
 			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 			next();
 		}
@@ -2074,15 +1984,13 @@ void stmt_decl()
 		interface_block_decl(&spec, instance_name);
 		return;
 	}
-	if (tok.kind == TOK_SEMI)
-	{
+	if (tok.kind == TOK_SEMI) {
 		next();
 		return;
 	}
 	IR_Cmd* inst;
 	decl_emit_begin(&spec);
-	while (1)
-	{
+	while (1) {
 		if (tok.kind != TOK_IDENTIFIER)
 			parse_error("expected identifier in declaration");
 		const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
@@ -2095,15 +2003,13 @@ void stmt_decl()
 		next();
 		decl_array_suffix();
 		current_decl_symbol = NULL;
-		if (tok.kind == TOK_ASSIGN)
-		{
+		if (tok.kind == TOK_ASSIGN) {
 			next();
 			ir_emit(IR_DECL_INIT_BEGIN);
 			expr();
 			ir_emit(IR_DECL_INIT_END);
 		}
-		if (tok.kind == TOK_COMMA)
-		{
+		if (tok.kind == TOK_COMMA) {
 			next();
 			ir_emit(IR_DECL_SEPARATOR);
 			continue;
@@ -2143,8 +2049,7 @@ void expr_ident()
 	IR_Cmd* inst = ir_emit(IR_PUSH_IDENT);
 	inst->str0 = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	Symbol* sym = symbol_table_find(inst->str0);
-	if (sym)
-	{
+	if (sym) {
 		inst->qualifier_flags = sym->qualifier_flags;
 		if ((sym->kind == SYM_VAR || sym->kind == SYM_PARAM) && !symbol_has_qualifier(sym, SYM_QUAL_CONST))
 			inst->is_lvalue = 1;
@@ -2163,35 +2068,28 @@ void expr_call()
 {
 	int callee_idx = acount(g_ir) - 1;
 	int argc = 0;
-	if (tok.kind != TOK_RPAREN)
-	{
+	if (tok.kind != TOK_RPAREN) {
 		expr();
 		argc++;
-		while (tok.kind == TOK_COMMA)
-		{
+		while (tok.kind == TOK_COMMA) {
 			next();
 			expr();
 			argc++;
 		}
 		expect(TOK_RPAREN);
-	}
-	else
-	{
+	} else {
 		next(); // consume ')'
 	}
 	Type* ctor_type = NULL;
 	const char* ctor_name = NULL;
 	const char* callee_name = NULL;
-	if (callee_idx >= 0)
-	{
+	if (callee_idx >= 0) {
 		IR_Cmd* callee = &g_ir[callee_idx];
-		if (callee->op == IR_PUSH_IDENT && callee->str0)
-		{
+		if (callee->op == IR_PUSH_IDENT && callee->str0) {
 			callee_name = callee->str0;
 			Symbol* sym = symbol_table_find(callee->str0);
 			Type* type = type_system_get(callee->str0);
-			if (type && (!sym || sym->kind != SYM_FUNC))
-			{
+			if (type && (!sym || sym->kind != SYM_FUNC)) {
 				callee->type = type;
 				ctor_type = type;
 				ctor_name = callee->str0;
@@ -2200,13 +2098,10 @@ void expr_call()
 	}
 	IR_Cmd* inst = ir_emit(ctor_type ? IR_CONSTRUCT : IR_CALL);
 	inst->arg0 = argc;
-	if (ctor_type)
-	{
+	if (ctor_type) {
 		inst->str0 = ctor_name;
 		inst->type = ctor_type;
-	}
-	else if (callee_name)
-	{
+	} else if (callee_name) {
 		inst->str0 = callee_name;
 	}
 }
@@ -2225,8 +2120,7 @@ int swizzle_set_from_char(char c)
 {
 	if (c >= 'A' && c <= 'Z')
 		c = (char)(c - 'A' + 'a');
-	switch (c)
-	{
+	switch (c) {
 	case 'x':
 	case 'y':
 	case 'z':
@@ -2256,8 +2150,7 @@ int swizzle_component_index(int set, char c)
 	if (set < 0 || set >= (int)(sizeof(sets) / sizeof(sets[0])))
 		return -1;
 	const char* names = sets[set];
-	for (int i = 0; i < 4; i = i + 1)
-	{
+	for (int i = 0; i < 4; i = i + 1) {
 		if (c == names[i])
 			return i;
 	}
@@ -2272,8 +2165,7 @@ int swizzle_is_valid(const char* name, int len, int* out_mask)
 	if (set < 0)
 		return 0;
 	int mask = 0;
-	for (int i = 0; i < len; ++i)
-	{
+	for (int i = 0; i < len; ++i) {
 		int comp = swizzle_component_index(set, name[i]);
 		if (comp < 0)
 			return 0;
@@ -2292,8 +2184,7 @@ int swizzle_is_assignable(const char* name, int len)
 	if (set < 0)
 		return 0;
 	int seen = 0;
-	for (int i = 0; i < len; ++i)
-	{
+	for (int i = 0; i < len; ++i) {
 		int comp = swizzle_component_index(set, name[i]);
 		if (comp < 0)
 			return 0;
@@ -2313,16 +2204,13 @@ void expr_member()
 		parse_error("expected identifier after '.'");
 	const char* name = tok.lexeme;
 	int mask = 0;
-	if (swizzle_is_valid(name, tok.len, &mask))
-	{
+	if (swizzle_is_valid(name, tok.len, &mask)) {
 		IR_Cmd* inst = ir_emit(IR_SWIZZLE);
 		inst->str0 = sintern_range(name, name + tok.len);
 		inst->arg0 = tok.len;
 		inst->arg1 = mask;
 		inst->is_lvalue = base_is_lvalue && swizzle_is_assignable(name, tok.len);
-	}
-	else
-	{
+	} else {
 		IR_Cmd* inst = ir_emit(IR_MEMBER);
 		inst->str0 = sintern_range(name, name + tok.len);
 		inst->is_lvalue = base_is_lvalue;
@@ -2458,8 +2346,7 @@ void expr_binary(Prec min_prec)
 {
 	tok.lexpr(); // start: number/ident/paren/unary...
 
-	while (tok.prec > min_prec)
-	{
+	while (tok.prec > min_prec) {
 		void (*cont)() = tok.rexpr;
 		next(); // consume operator -> next token begins RHS
 		cont(); // parse RHS/args/member and "emit"
@@ -2471,8 +2358,7 @@ void stmt_block()
 	expect(TOK_LBRACE);
 	ir_emit(IR_BLOCK_BEGIN);
 	symbol_table_enter_scope();
-	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
-	{
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF) {
 		stmt();
 	}
 	expect(TOK_RBRACE);
@@ -2482,8 +2368,7 @@ void stmt_block()
 
 void stmt_controlled()
 {
-	if (tok.kind == TOK_LBRACE)
-	{
+	if (tok.kind == TOK_LBRACE) {
 		stmt_block();
 		return;
 	}
@@ -2501,8 +2386,7 @@ void stmt_if()
 	expect(TOK_RPAREN);
 	ir_emit(IR_IF_THEN);
 	stmt_controlled();
-	if (tok.kind == TOK_ELSE)
-	{
+	if (tok.kind == TOK_ELSE) {
 		next();
 		ir_emit(IR_IF_ELSE);
 		stmt_controlled();
@@ -2521,8 +2405,7 @@ void stmt_return()
 {
 	expect(TOK_RETURN);
 	int has_value = tok.kind != TOK_SEMI;
-	if (has_value)
-	{
+	if (has_value) {
 		expr();
 	}
 	expect(TOK_SEMI);
@@ -2586,14 +2469,12 @@ void stmt_do()
 int parse_switch_case_value()
 {
 	int sign = 1;
-	if (tok.kind == TOK_PLUS || tok.kind == TOK_MINUS)
-	{
+	if (tok.kind == TOK_PLUS || tok.kind == TOK_MINUS) {
 		if (tok.kind == TOK_MINUS)
 			sign = -1;
 		next();
 	}
-	if (tok.kind != TOK_INT)
-	{
+	if (tok.kind != TOK_INT) {
 		parse_error("expected integer literal in case label");
 	}
 	int value = tok.int_val;
@@ -2613,28 +2494,21 @@ void stmt_switch()
 	expect(TOK_LBRACE);
 	symbol_table_enter_scope();
 	int last_case_index = -1;
-	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF)
-	{
-		if (tok.kind == TOK_CASE || tok.kind == TOK_DEFAULT)
-		{
-			if (last_case_index >= 0)
-			{
+	while (tok.kind != TOK_RBRACE && tok.kind != TOK_EOF) {
+		if (tok.kind == TOK_CASE || tok.kind == TOK_DEFAULT) {
+			if (last_case_index >= 0) {
 				IR_Cmd* prev_case = &g_ir[last_case_index];
-				if (!(prev_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
-				{
+				if (!(prev_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY)) {
 					prev_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
 				}
 			}
 			IR_Cmd* inst = ir_emit(IR_SWITCH_CASE);
 			inst->arg0 = 0;
 			inst->arg1 = 0;
-			if (tok.kind == TOK_CASE)
-			{
+			if (tok.kind == TOK_CASE) {
 				next();
 				inst->arg0 = parse_switch_case_value();
-			}
-			else
-			{
+			} else {
 				next();
 				inst->arg1 |= SWITCH_CASE_FLAG_DEFAULT;
 			}
@@ -2642,21 +2516,17 @@ void stmt_switch()
 			last_case_index = acount(g_ir) - 1;
 			continue;
 		}
-		if (last_case_index < 0)
-		{
+		if (last_case_index < 0) {
 			parse_error("case label expected before statements in switch");
 		}
 		stmt();
-		if (last_case_index >= 0)
-		{
+		if (last_case_index >= 0) {
 			g_ir[last_case_index].arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
 		}
 	}
-	if (last_case_index >= 0)
-	{
+	if (last_case_index >= 0) {
 		IR_Cmd* last_case = &g_ir[last_case_index];
-		if (!(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY))
-		{
+		if (!(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY)) {
 			last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
 		}
 	}
@@ -2672,30 +2542,23 @@ void stmt_for()
 	expect(TOK_LPAREN);
 	symbol_table_enter_scope();
 	ir_emit(IR_FOR_INIT_BEGIN);
-	if (tok.kind == TOK_SEMI)
-	{
+	if (tok.kind == TOK_SEMI) {
 		next();
-	}
-	else if (is_type_token())
-	{
+	} else if (is_type_token()) {
 		stmt_decl();
-	}
-	else
-	{
+	} else {
 		expr();
 		expect(TOK_SEMI);
 	}
 	ir_emit(IR_FOR_INIT_END);
 	ir_emit(IR_FOR_COND_BEGIN);
-	if (tok.kind != TOK_SEMI)
-	{
+	if (tok.kind != TOK_SEMI) {
 		expr();
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_FOR_COND_END);
 	ir_emit(IR_FOR_STEP_BEGIN);
-	if (tok.kind != TOK_RPAREN)
-	{
+	if (tok.kind != TOK_RPAREN) {
 		expr();
 	}
 	expect(TOK_RPAREN);
@@ -2709,13 +2572,11 @@ void stmt_for()
 
 void stmt()
 {
-	if (is_type_token())
-	{
+	if (is_type_token()) {
 		stmt_decl();
 		return;
 	}
-	switch (tok.kind)
-	{
+	switch (tok.kind) {
 	case TOK_IF:
 		stmt_if();
 		break;
@@ -2762,19 +2623,16 @@ void top_level()
 	if (!is_type_token())
 		parse_error("expected type at top level");
 	TypeSpec type_spec = parse_type_specifier();
-	if (type_spec.is_stage_layout)
-	{
+	if (type_spec.is_stage_layout) {
 		IR_Cmd* begin = ir_emit(IR_STAGE_LAYOUT_BEGIN);
 		ir_apply_type_spec(begin, &type_spec);
 		int layout_count = type_spec.layout_identifiers ? acount(type_spec.layout_identifiers) : 0;
-		for (int i = 0; i < layout_count; ++i)
-		{
+		for (int i = 0; i < layout_count; ++i) {
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
 			layout->str0 = type_spec.layout_identifiers[i];
 		}
 		int assignment_count = type_spec.layout_assignments ? acount(type_spec.layout_assignments) : 0;
-		for (int i = 0; i < assignment_count; ++i)
-		{
+		for (int i = 0; i < assignment_count; ++i) {
 			TypeLayoutAssignment* entry = &type_spec.layout_assignments[i];
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
 			layout->str0 = entry->identifier;
@@ -2784,11 +2642,9 @@ void top_level()
 		ir_emit(IR_STAGE_LAYOUT_END);
 		return;
 	}
-	if (type_spec.is_interface_block)
-	{
+	if (type_spec.is_interface_block) {
 		const char* instance_name = NULL;
-		if (tok.kind == TOK_IDENTIFIER)
-		{
+		if (tok.kind == TOK_IDENTIFIER) {
 			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 			next();
 		}
@@ -2796,8 +2652,7 @@ void top_level()
 		interface_block_decl(&type_spec, instance_name);
 		return;
 	}
-	if (tok.kind == TOK_SEMI)
-	{
+	if (tok.kind == TOK_SEMI) {
 		next();
 		return;
 	}
@@ -2805,8 +2660,7 @@ void top_level()
 		parse_error("expected identifier after type");
 	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	next();
-	if (tok.kind == TOK_LPAREN)
-	{
+	if (tok.kind == TOK_LPAREN) {
 		func_decl_or_def(type_spec, name);
 		return;
 	}
@@ -2815,8 +2669,7 @@ void top_level()
 
 void parse()
 {
-	while (tok.kind != TOK_EOF)
-	{
+	while (tok.kind != TOK_EOF) {
 		top_level();
 	}
 }
@@ -2840,8 +2693,7 @@ void parse()
 		break;
 
 #define TOK_SET(tok1, prec1, lexpr1, rexpr1) \
-	do \
-	{ \
+	do { \
 		tok.kind = TOK_##tok1; \
 		tok.prec = PREC_##prec1; \
 		tok.lexpr = expr_##lexpr1; \
@@ -2851,10 +2703,9 @@ void parse()
 #define TOK_CASE(ch1, tok1, prec1, lexpr1, rexpr1, body) \
 	case ch1: \
 		next_ch(); \
-		do \
-		{ \
+		do { \
 			body \
-			TOK_SET(tok1, prec1, lexpr1, rexpr1); \
+					TOK_SET(tok1, prec1, lexpr1, rexpr1); \
 		} while (0); \
 		break;
 
@@ -2882,33 +2733,25 @@ void lex_number()
 	int use_manual_base = 0;
 	const char* digits_start = start;
 	int has_unsigned_suffix = 0;
-	if (*start == '0')
-	{
+	if (*start == '0') {
 		char next = start[1];
-		if (next == 'x' || next == 'X')
-		{
+		if (next == 'x' || next == 'X') {
 			base = 16;
 			use_manual_base = 1;
 			digits_start = start + 2;
-		}
-		else if (next == 'b' || next == 'B')
-		{
+		} else if (next == 'b' || next == 'B') {
 			base = 2;
 			use_manual_base = 1;
 			digits_start = start + 2;
-		}
-		else if (next && next != '.' && next != 'e' && next != 'E')
-		{
+		} else if (next && next != '.' && next != 'e' && next != 'E') {
 			base = 8;
 			use_manual_base = 1;
 			digits_start = start + 1;
 		}
 	}
-	if (use_manual_base)
-	{
+	if (use_manual_base) {
 		const char* p = digits_start;
-		while (1)
-		{
+		while (1) {
 			int digit = digit_value_for_base(*p, base);
 			if (digit < 0)
 				break;
@@ -2917,43 +2760,33 @@ void lex_number()
 		}
 		number_end = p;
 		float_val = (double)int_val;
-		if (base == 8 && digits_start == start + 1 && number_end == digits_start)
-		{
+		if (base == 8 && digits_start == start + 1 && number_end == digits_start) {
 			// Account for a standalone zero literal.
 			number_end = digits_start;
 		}
-	}
-	else
-	{
+	} else {
 		char* endptr = NULL;
 		float_val = strtod(start, &endptr);
 		number_end = endptr;
-		for (const char* p = start; p < number_end; ++p)
-		{
-			if (*p == '.' || *p == 'e' || *p == 'E')
-			{
+		for (const char* p = start; p < number_end; ++p) {
+			if (*p == '.' || *p == 'e' || *p == 'E') {
 				is_float = 1;
 				break;
 			}
 		}
 	}
 	suffix = number_end;
-	if (*suffix == 'f' || *suffix == 'F')
-	{
+	if (*suffix == 'f' || *suffix == 'F') {
 		is_float = 1;
 		++suffix;
 	}
-	if (*suffix == 'l' || *suffix == 'L')
-	{
+	if (*suffix == 'l' || *suffix == 'L') {
 		is_float = 1;
 		++suffix;
 	}
-	if (!is_float)
-	{
-		while (*suffix == 'u' || *suffix == 'U' || *suffix == 'l' || *suffix == 'L')
-		{
-			if (*suffix == 'u' || *suffix == 'U')
-			{
+	if (!is_float) {
+		while (*suffix == 'u' || *suffix == 'U' || *suffix == 'l' || *suffix == 'L') {
+			if (*suffix == 'u' || *suffix == 'U') {
 				has_unsigned_suffix = 1;
 			}
 			++suffix;
@@ -2964,39 +2797,28 @@ void lex_number()
 	tok.len = (int)(suffix - start);
 	tok.prec = 0;
 	tok.rexpr = expr_error;
-	if (is_float)
-	{
+	if (is_float) {
 		tok.kind = TOK_FLOAT;
 		tok.lexpr = expr_float;
 		tok.float_val = float_val;
-	}
-	else
-	{
+	} else {
 		tok.kind = TOK_INT;
 		tok.lexpr = expr_int;
-		if (use_manual_base)
-		{
+		if (use_manual_base) {
 			tok.int_val = (int)int_val;
-		}
-		else
-		{
+		} else {
 			tok.int_val = 0;
-			for (const char* p = start; p < number_end; ++p)
-			{
-				if (*p >= '0' && *p <= '9')
-				{
+			for (const char* p = start; p < number_end; ++p) {
+				if (*p >= '0' && *p <= '9') {
 					tok.int_val = tok.int_val * 10 + (*p - '0');
 				}
 			}
 		}
 	}
-	if (*suffix)
-	{
+	if (*suffix) {
 		ch = (unsigned char)*suffix;
 		at = suffix + 1;
-	}
-	else
-	{
+	} else {
 		ch = 0;
 		at = suffix;
 	}
@@ -3016,14 +2838,12 @@ void next()
 
 	skip_ws_comments();
 
-	if (ch == '.' && is_digit(at[0]))
-	{
+	if (ch == '.' && is_digit(at[0])) {
 		lex_number();
 		return;
 	}
 
-	switch (ch)
-	{
+	switch (ch) {
 		// single-char punctuation
 		TOK_CHAR(0, EOF)
 		TOK_CHAR(')', RPAREN)
@@ -3039,133 +2859,67 @@ void next()
 
 		// prefix + binary-ish
 		TOK_EXPR('~', TILDE, UNARY, bnot, error)
-		TOK_CASE('+', PLUS, ADD, pos, add,
-			if (match_ch('+'))
-			{
+		TOK_CASE('+', PLUS, ADD, pos, add, if (match_ch('+')) {
 				TOK_SET(PLUS_PLUS, POSTFIX, pre_inc, post_inc);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(PLUS_ASSIGN, ASSIGN, error, plus_assign);
-				break;
-			}
-		)
-		TOK_CASE('-', MINUS, ADD, neg, sub,
-			if (match_ch('-'))
-			{
+				break; })
+		TOK_CASE('-', MINUS, ADD, neg, sub, if (match_ch('-')) {
 				TOK_SET(MINUS_MINUS, POSTFIX, pre_dec, post_dec);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(MINUS_ASSIGN, ASSIGN, error, minus_assign);
-				break;
-			}
-		)
-		TOK_CASE('*', STAR, MUL, error, mul,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('*', STAR, MUL, error, mul, if (match_ch('=')) {
 				TOK_SET(STAR_ASSIGN, ASSIGN, error, mul_assign);
-				break;
-			}
-		)
-		TOK_CASE('/', SLASH, MUL, error, div,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('/', SLASH, MUL, error, div, if (match_ch('=')) {
 				TOK_SET(SLASH_ASSIGN, ASSIGN, error, div_assign);
-				break;
-			}
-		)
-		TOK_CASE('%', PERCENT, MUL, error, mod,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('%', PERCENT, MUL, error, mod, if (match_ch('=')) {
 				TOK_SET(PERCENT_ASSIGN, ASSIGN, error, mod_assign);
-				break;
-			}
-		)
+				break; })
 		TOK_EXPR('?', QUESTION, TERNARY, error, ternary)
 
 		// two-char combos
-		TOK_CASE('<', LT, REL, error, lt,
-			if (match_ch('<'))
-			{
+		TOK_CASE('<', LT, REL, error, lt, if (match_ch('<')) {
 				if (match_ch('='))
 				{
 					TOK_SET(LSHIFT_ASSIGN, ASSIGN, error, shl_assign);
 					break;
 				}
 				TOK_SET(LSHIFT, SHIFT, error, shl);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(LE, REL, error, le);
-				break;
-			}
-		)
-		TOK_CASE('>', GT, REL, error, gt,
-			if (match_ch('>'))
-			{
+				break; })
+		TOK_CASE('>', GT, REL, error, gt, if (match_ch('>')) {
 				if (match_ch('='))
 				{
 					TOK_SET(RSHIFT_ASSIGN, ASSIGN, error, shr_assign);
 					break;
 				}
 				TOK_SET(RSHIFT, SHIFT, error, shr);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(GE, REL, error, ge);
-				break;
-			}
-		)
-		TOK_CASE('=', ASSIGN, ASSIGN, error, assign,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('=', ASSIGN, ASSIGN, error, assign, if (match_ch('=')) {
 				TOK_SET(EQ, EQ, error, eq);
-				break;
-			}
-		)
-		TOK_CASE('!', NOT, UNARY, not, error,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('!', NOT, UNARY, not, error, if (match_ch('=')) {
 				TOK_SET(NE, EQ, error, ne);
-				break;
-			}
-		)
-		TOK_CASE('&', AMP, BIT_AND, error, band,
-			if (match_ch('&'))
-			{
+				break; })
+		TOK_CASE('&', AMP, BIT_AND, error, band, if (match_ch('&')) {
 				TOK_SET(AND_AND, AND_AND, error, land);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(AND_ASSIGN, ASSIGN, error, and_assign);
-				break;
-			}
-		)
-		TOK_CASE('|', PIPE, BIT_OR, error, bor,
-			if (match_ch('|'))
-			{
+				break; })
+		TOK_CASE('|', PIPE, BIT_OR, error, bor, if (match_ch('|')) {
 				TOK_SET(OR_OR, OR_OR, error, lor);
-				break;
-			}
-			if (match_ch('='))
-			{
+				break; } if (match_ch('=')) {
 				TOK_SET(OR_ASSIGN, ASSIGN, error, or_assign);
-				break;
-			}
-		)
-		TOK_CASE('^', CARET, BIT_XOR, error, bxor,
-			if (match_ch('='))
-			{
+				break; })
+		TOK_CASE('^', CARET, BIT_XOR, error, bxor, if (match_ch('=')) {
 				TOK_SET(XOR_ASSIGN, ASSIGN, error, xor_assign);
-				break;
-			}
-		)
+				break; })
 	default:
 		break;
 	}
@@ -3174,8 +2928,7 @@ void next()
 		return;
 
 	// identifiers
-	if (is_alpha(ch))
-	{
+	if (is_alpha(ch)) {
 		const char* s = at - 1;
 		while (is_alpha(ch) || is_digit(ch))
 			next_ch();
@@ -3194,29 +2947,26 @@ void next()
 			int bool_value;
 		};
 		const struct KeywordEntry keywords[] = {
-			{kw_if, TOK_IF, expr_error, -1},
-			{kw_else, TOK_ELSE, expr_error, -1},
-			{kw_for, TOK_FOR, expr_error, -1},
-			{kw_while, TOK_WHILE, expr_error, -1},
-			{kw_do, TOK_DO, expr_error, -1},
-			{kw_return, TOK_RETURN, expr_error, -1},
-			{kw_break, TOK_BREAK, expr_error, -1},
-			{kw_continue, TOK_CONTINUE, expr_error, -1},
-			{kw_discard, TOK_DISCARD, expr_error, -1},
-			{kw_switch, TOK_SWITCH, expr_error, -1},
-			{kw_case, TOK_CASE, expr_error, -1},
-			{kw_default, TOK_DEFAULT, expr_error, -1},
-			{kw_true, TOK_BOOL, expr_bool, 1},
-			{kw_false, TOK_BOOL, expr_bool, 0},
+			{ kw_if, TOK_IF, expr_error, -1 },
+			{ kw_else, TOK_ELSE, expr_error, -1 },
+			{ kw_for, TOK_FOR, expr_error, -1 },
+			{ kw_while, TOK_WHILE, expr_error, -1 },
+			{ kw_do, TOK_DO, expr_error, -1 },
+			{ kw_return, TOK_RETURN, expr_error, -1 },
+			{ kw_break, TOK_BREAK, expr_error, -1 },
+			{ kw_continue, TOK_CONTINUE, expr_error, -1 },
+			{ kw_discard, TOK_DISCARD, expr_error, -1 },
+			{ kw_switch, TOK_SWITCH, expr_error, -1 },
+			{ kw_case, TOK_CASE, expr_error, -1 },
+			{ kw_default, TOK_DEFAULT, expr_error, -1 },
+			{ kw_true, TOK_BOOL, expr_bool, 1 },
+			{ kw_false, TOK_BOOL, expr_bool, 0 },
 		};
-		for (int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); ++i)
-		{
-			if (tok.lexeme == keywords[i].lexeme)
-			{
+		for (int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); ++i) {
+			if (tok.lexeme == keywords[i].lexeme) {
 				tok.kind = keywords[i].kind;
 				tok.lexpr = keywords[i].lexpr;
-				if (keywords[i].bool_value != -1)
-				{
+				if (keywords[i].bool_value != -1) {
 					tok.int_val = keywords[i].bool_value;
 				}
 				return;
@@ -3226,15 +2976,13 @@ void next()
 	}
 
 	// numbers
-	if (is_digit(ch))
-	{
+	if (is_digit(ch)) {
 		lex_number();
 		return;
 	}
 
 	// unknown char: consume and retry
-	if (ch)
-	{
+	if (ch) {
 		fprintf(stderr, "Unknown char: '%c'\n", ch);
 		next_ch();
 		next();
@@ -3382,8 +3130,7 @@ static StructInfo* type_struct_info_ensure(Type* type)
 	if (!type || type->tag != T_STRUCT)
 		return NULL;
 	StructInfo* info = type_struct_info(type);
-	if (!info)
-	{
+	if (!info) {
 		info = (StructInfo*)calloc(1, sizeof(StructInfo));
 		info->name = type->name;
 		type->user = info;
@@ -3396,10 +3143,8 @@ static StructInfo* type_struct_info_ensure(Type* type)
 Type* type_system_declare_struct(const char* name)
 {
 	Type* existing = type_system_get(name);
-	if (existing)
-	{
-		if (existing->tag == T_STRUCT)
-		{
+	if (existing) {
+		if (existing->tag == T_STRUCT) {
 			type_struct_clear(existing);
 			return existing;
 		}
@@ -3424,13 +3169,10 @@ void type_struct_clear(Type* type)
 	if (!info)
 		return;
 	info->name = type ? type->name : NULL;
-	if (info->members)
-	{
-		for (int i = 0; i < acount(info->members); ++i)
-		{
+	if (info->members) {
+		for (int i = 0; i < acount(info->members); ++i) {
 			StructMember* member = &info->members[i];
-			if (member->array_dims)
-			{
+			if (member->array_dims) {
 				afree(member->array_dims);
 				member->array_dims = NULL;
 			}
@@ -3485,8 +3227,7 @@ void type_struct_member_mark_array(StructMember* member, int size, int unsized)
 	apush(member->array_dims, dim);
 	member->has_array = 1;
 	Type* base = member->declared_type;
-	for (int i = acount(member->array_dims) - 1; i >= 0; --i)
-	{
+	for (int i = acount(member->array_dims) - 1; i >= 0; --i) {
 		StructMemberArrayDim* info = &member->array_dims[i];
 		Type* element = base;
 		info->type.base = element ? element->tag : T_VOID;
@@ -3498,8 +3239,7 @@ void type_struct_member_mark_array(StructMember* member, int size, int unsized)
 		base = &info->type;
 	}
 	member->type = base;
-	if (member->array_dims && acount(member->array_dims) > 0)
-	{
+	if (member->array_dims && acount(member->array_dims) > 0) {
 		StructMemberArrayDim* outer = &member->array_dims[0];
 		member->array_len = outer->unsized ? -1 : outer->size;
 		member->array_unsized = outer->unsized;
@@ -3513,8 +3253,7 @@ void type_struct_set_layout_identifiers(Type* type, const char** identifiers, in
 		return;
 	if (info->layout_identifiers)
 		aclear(info->layout_identifiers);
-	for (int i = 0; i < count; ++i)
-	{
+	for (int i = 0; i < count; ++i) {
 		const char* ident = identifiers ? identifiers[i] : NULL;
 		if (ident)
 			apush(info->layout_identifiers, ident);
@@ -3526,8 +3265,7 @@ StructMember* type_struct_find_member(Type* type, const char* name)
 	StructInfo* info = type_struct_info(type);
 	if (!info || !name)
 		return NULL;
-	for (int i = 0; i < acount(info->members); ++i)
-	{
+	for (int i = 0; i < acount(info->members); ++i) {
 		StructMember* member = &info->members[i];
 		if (member->name == name)
 			return member;
@@ -3695,8 +3433,7 @@ void type_system_init_builtins()
 	};
 #undef SAMPLER
 #undef IMAGE
-	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
-	{
+	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i) {
 		const char* name = sintern_range(builtins[i].name, builtins[i].name + strlen(builtins[i].name));
 		type_system_add_internal(name, builtins[i].type);
 	}
@@ -3712,18 +3449,13 @@ void type_system_init_builtins()
 
 void type_system_free()
 {
-	for (int i = 0; i < acount(ts->types); ++i)
-	{
+	for (int i = 0; i < acount(ts->types); ++i) {
 		Type* type = &ts->types[i];
-		if (type->tag == T_STRUCT && type->user)
-		{
+		if (type->tag == T_STRUCT && type->user) {
 			StructInfo* info = (StructInfo*)type->user;
-			if (info)
-			{
-				if (info->members)
-				{
-					for (int j = 0; j < acount(info->members); ++j)
-					{
+			if (info) {
+				if (info->members) {
+					for (int j = 0; j < acount(info->members); ++j) {
 						StructMember* member = &info->members[j];
 						if (member->array_dims)
 							afree(member->array_dims);
@@ -3755,8 +3487,7 @@ TypeTag type_base_type(const Type* type)
 {
 	if (!type)
 		return T_VOID;
-	switch (type->tag)
-	{
+	switch (type->tag) {
 	case T_VEC:
 	case T_MAT:
 	case T_ARRAY:
@@ -3787,8 +3518,7 @@ int type_is_matrix(const Type* type)
 
 int type_base_is_numeric(TypeTag tag)
 {
-	switch (tag)
-	{
+	switch (tag) {
 	case T_INT:
 	case T_UINT:
 	case T_INT64:
@@ -3855,8 +3585,7 @@ int type_scalar_can_convert(const Type* from, const Type* to)
 const char* type_vector_name(TypeTag base, int cols)
 {
 	const char* prefix = NULL;
-	switch (base)
-	{
+	switch (base) {
 	case T_FLOAT:
 		prefix = "vec";
 		break;
@@ -3894,12 +3623,9 @@ const char* type_matrix_name(TypeTag base, int cols, int rows)
 		return NULL;
 	char buf[16];
 	int n = 0;
-	if (cols == rows)
-	{
+	if (cols == rows) {
 		n = snprintf(buf, sizeof(buf), "%s%d", base == T_FLOAT ? "mat" : "dmat", cols);
-	}
-	else
-	{
+	} else {
 		n = snprintf(buf, sizeof(buf), "%s%dx%d", base == T_FLOAT ? "mat" : "dmat", cols, rows);
 	}
 	if (n <= 0 || n >= (int)sizeof(buf))
@@ -3909,8 +3635,7 @@ const char* type_matrix_name(TypeTag base, int cols, int rows)
 
 Type* type_get_scalar(TypeTag base)
 {
-	switch (base)
-	{
+	switch (base) {
 	case T_BOOL:
 		return g_type_bool;
 	case T_INT:
@@ -4113,8 +3838,7 @@ static const BuiltinSignature builtin_signatures[] = {
 
 static const BuiltinSignature* builtin_find_signature(BuiltinFuncKind kind)
 {
-	for (int i = 0; i < ARRAY_COUNT(builtin_signatures); ++i)
-	{
+	for (int i = 0; i < ARRAY_COUNT(builtin_signatures); ++i) {
 		const BuiltinSignature* signature = &builtin_signatures[i];
 		if (signature->kind == kind)
 			return signature;
@@ -4127,8 +3851,7 @@ static Type* builtin_apply_signature(const BuiltinSignature* signature, const Sy
 	if (!signature)
 		return NULL;
 	builtin_check_args(sym, args, argc, signature->args, signature->arg_count);
-	switch (signature->result_kind)
-	{
+	switch (signature->result_kind) {
 	case BUILTIN_SIGNATURE_RESULT_NONE:
 		return NULL;
 	case BUILTIN_SIGNATURE_RESULT_SAME:
@@ -4150,8 +3873,7 @@ static Type* builtin_apply_signature(const BuiltinSignature* signature, const Sy
 // ...error: distance requires second argument to match first argument shape, got vec3 and vec2
 static int builtin_arg_in_base_set(const Type* type, BuiltinBaseSet base, const Type* ref)
 {
-	switch (base)
-	{
+	switch (base) {
 	case BUILTIN_BASE_ANY:
 		return 1;
 	case BUILTIN_BASE_FLOATING:
@@ -4173,8 +3895,7 @@ static int builtin_arg_in_base_set(const Type* type, BuiltinBaseSet base, const 
 
 static int builtin_shape_matches(const Type* type, BuiltinShapeRule rule, const Type* ref)
 {
-	switch (rule)
-	{
+	switch (rule) {
 	case BUILTIN_SHAPE_ANY:
 		return 1;
 	case BUILTIN_SHAPE_SCALAR:
@@ -4219,8 +3940,7 @@ static void builtin_require_base(const Symbol* sym, const Type* arg, const Built
 	if (builtin_arg_in_base_set(arg, sig->base, ref))
 		return;
 	const char* name = builtin_func_name(sym);
-	switch (sig->base)
-	{
+	switch (sig->base) {
 	case BUILTIN_BASE_FLOATING:
 		type_check_error("%s requires floating-point %s argument, got %s", name, sig->role, type_display(arg));
 		break;
@@ -4234,12 +3954,9 @@ static void builtin_require_base(const Symbol* sym, const Type* arg, const Built
 		type_check_error("%s requires boolean %s argument, got %s", name, sig->role, type_display(arg));
 		break;
 	case BUILTIN_BASE_SAME_AS_REF:
-		if (ref)
-		{
+		if (ref) {
 			type_check_error("%s requires %s argument to match %s argument base type, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		}
-		else
-		{
+		} else {
 			type_check_error("%s requires %s argument to match %s argument base type", name, sig->role, ref_role);
 		}
 		break;
@@ -4256,8 +3973,7 @@ static void builtin_require_shape(const Symbol* sym, const Type* arg, const Buil
 	if (builtin_shape_matches(arg, sig->shape, ref))
 		return;
 	const char* name = builtin_func_name(sym);
-	switch (sig->shape)
-	{
+	switch (sig->shape) {
 	case BUILTIN_SHAPE_SCALAR:
 		type_check_error("%s requires scalar %s argument, got %s", name, sig->role, type_display(arg));
 		break;
@@ -4271,44 +3987,29 @@ static void builtin_require_shape(const Symbol* sym, const Type* arg, const Buil
 		type_check_error("%s requires matrix %s argument, got %s", name, sig->role, type_display(arg));
 		break;
 	case BUILTIN_SHAPE_SQUARE_MATRIX:
-		if (arg && type_is_matrix(arg))
-		{
+		if (arg && type_is_matrix(arg)) {
 			type_check_error("%s requires square matrix %s argument, got %s", name, sig->role, type_display(arg));
-		}
-		else
-		{
+		} else {
 			type_check_error("%s requires matrix %s argument, got %s", name, sig->role, type_display(arg));
 		}
 		break;
 	case BUILTIN_SHAPE_MATCH_REF:
-		if (ref && type_is_vector(ref))
-		{
+		if (ref && type_is_vector(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		}
-		else if (ref && type_is_scalar(ref))
-		{
+		} else if (ref && type_is_scalar(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		}
-		else if (ref && type_is_matrix(ref))
-		{
+		} else if (ref && type_is_matrix(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		}
-		else
-		{
+		} else {
 			type_check_error("%s requires %s argument to match %s argument shape", name, sig->role, ref_role);
 		}
 		break;
 	case BUILTIN_SHAPE_SCALAR_OR_MATCH:
-		if (ref && type_is_vector(ref))
-		{
+		if (ref && type_is_vector(ref)) {
 			type_check_error("%s requires %s argument scalar or %d components, got %s", name, sig->role, ref->cols, type_display(arg));
-		}
-		else if (ref && type_is_matrix(ref))
-		{
+		} else if (ref && type_is_matrix(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		}
-		else
-		{
+		} else {
 			type_check_error("%s requires scalar %s argument, got %s", name, sig->role, type_display(arg));
 		}
 		break;
@@ -4321,36 +4022,29 @@ static int builtin_check_args(const Symbol* sym, Type** args, int argc, const Bu
 {
 	int all_ok = 1;
 	const char* name = builtin_func_name(sym);
-	if (argc != sig_count)
-	{
+	if (argc != sig_count) {
 		type_check_error("%s expects %d arguments but received %d", name, sig_count, argc);
 	}
-	for (int i = 0; i < sig_count; ++i)
-	{
+	for (int i = 0; i < sig_count; ++i) {
 		const BuiltinArgSig* sig = &sigs[i];
 		Type* arg = (i < argc) ? args[i] : NULL;
-		if (!arg)
-		{
+		if (!arg) {
 			type_check_error("%s requires %s argument", name, sig->role);
 			all_ok = 0;
 			continue;
 		}
 		const Type* ref = NULL;
 		const char* ref_role = "referenced";
-		if (sig->ref_index >= 0 && sig->ref_index < argc)
-		{
+		if (sig->ref_index >= 0 && sig->ref_index < argc) {
 			ref = args[sig->ref_index];
 		}
-		if (sig->ref_index >= 0 && sig->ref_index < sig_count)
-		{
+		if (sig->ref_index >= 0 && sig->ref_index < sig_count) {
 			ref_role = sigs[sig->ref_index].role;
 		}
-		if (sig->base != BUILTIN_BASE_ANY)
-		{
+		if (sig->base != BUILTIN_BASE_ANY) {
 			builtin_require_base(sym, arg, sig, ref, ref_role);
 		}
-		if (sig->shape != BUILTIN_SHAPE_ANY)
-		{
+		if (sig->shape != BUILTIN_SHAPE_ANY) {
 			builtin_require_shape(sym, arg, sig, ref, ref_role);
 		}
 	}
@@ -4457,14 +4151,12 @@ static Type* builtin_result_atan(const Symbol* sym, Type** args, int argc)
 
 static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc)
 {
-	if (argc < 3)
-	{
+	if (argc < 3) {
 		type_check_error("%s requires third argument", builtin_func_name(sym));
 		return (argc > 0) ? args[0] : NULL;
 	}
 	Type* third = args[2];
-	if (third && type_is_bool_like(third))
-	{
+	if (third && type_is_bool_like(third)) {
 		builtin_check_args(sym, args, argc, builtin_mix_mask_sig, ARRAY_COUNT(builtin_mix_mask_sig));
 		return (argc > 0) ? args[0] : NULL;
 	}
@@ -4505,8 +4197,7 @@ static Type* builtin_result_texture(Type** args, int argc)
 	if (!sampler || sampler->tag != T_SAMPLER)
 		return type_system_get(sintern("vec4"));
 	TypeTag component = sampler->base ? (TypeTag)sampler->base : T_FLOAT;
-	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
-	{
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW) {
 		Type* scalar = type_get_scalar(component);
 		return scalar ? scalar : type_system_get(sintern("float"));
 	}
@@ -4527,8 +4218,7 @@ static int sampler_coord_components(const Type* sampler)
 {
 	int base_dim = sampler_base_dimension(sampler);
 	int components = 0;
-	switch (base_dim)
-	{
+	switch (base_dim) {
 	case TYPE_DIM_1D:
 		components = 1;
 		break;
@@ -4557,15 +4247,13 @@ static int sampler_coord_components(const Type* sampler)
 static Type* builtin_result_texture_size(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
-	if (!sampler || sampler->tag != T_SAMPLER)
-	{
+	if (!sampler || sampler->tag != T_SAMPLER) {
 		type_check_error("textureSize requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
 		return type_get_scalar(T_INT);
 	}
 	int base_dim = sampler_base_dimension(sampler);
 	int expected_args = 1;
-	switch (base_dim)
-	{
+	switch (base_dim) {
 	case TYPE_DIM_RECT:
 	case TYPE_DIM_BUFFER:
 	case TYPE_DIM_2D_MS:
@@ -4578,21 +4266,17 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 		expected_args = 2;
 		break;
 	}
-	if (argc != expected_args)
-	{
+	if (argc != expected_args) {
 		type_check_error("textureSize expects %d arguments but received %d", expected_args, argc);
 	}
-	if (expected_args == 2)
-	{
+	if (expected_args == 2) {
 		Type* lod = (argc > 1) ? args[1] : NULL;
-		if (!lod || !type_is_scalar(lod) || !type_is_integer(lod))
-		{
+		if (!lod || !type_is_scalar(lod) || !type_is_integer(lod)) {
 			type_check_error("textureSize LOD must be integer scalar, got %s", lod ? type_display(lod) : "<null>");
 		}
 	}
 	int components = sampler_coord_components(sampler);
-	if (!components)
-	{
+	if (!components) {
 		type_check_error("textureSize cannot determine dimensions for sampler %s", type_display(sampler));
 		return type_get_scalar(T_INT);
 	}
@@ -4608,13 +4292,11 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 {
 	const char* func_name = has_offset ? "texelFetchOffset" : "texelFetch";
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
-	if (!sampler || sampler->tag != T_SAMPLER)
-	{
+	if (!sampler || sampler->tag != T_SAMPLER) {
 		type_check_error("%s requires sampler argument, got %s", func_name, sampler ? type_display(sampler) : "<null>");
 		return builtin_result_texture(args, argc);
 	}
-	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
-	{
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW) {
 		type_check_error("%s does not support shadow samplers (%s)", func_name, type_display(sampler));
 	}
 	int base_dim = sampler_base_dimension(sampler);
@@ -4622,8 +4304,7 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 	int expected_args = 0;
 	int level_index = -1;
 	int sample_index = -1;
-	switch (base_dim)
-	{
+	switch (base_dim) {
 	case TYPE_DIM_BUFFER:
 		expected_args = 2;
 		coord_components = 1;
@@ -4645,63 +4326,44 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 		type_check_error("%s unsupported sampler type %s", func_name, type_display(sampler));
 		return builtin_result_texture(args, argc);
 	}
-	if (has_offset)
-	{
+	if (has_offset) {
 		expected_args += 1;
-		if (base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_2D_MS)
-		{
+		if (base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_2D_MS) {
 			type_check_error("%s does not support sampler type %s", func_name, type_display(sampler));
 		}
 	}
-	if (argc != expected_args)
-	{
+	if (argc != expected_args) {
 		type_check_error("%s expects %d arguments but received %d", func_name, expected_args, argc);
 	}
 	Type* coord = (argc > 1) ? args[1] : NULL;
-	if (coord_components <= 1)
-	{
-		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
-		{
+	if (coord_components <= 1) {
+		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
 		}
-	}
-	else
-	{
-		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
-		{
+	} else {
+		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
 		}
 	}
-	if (level_index >= 0)
-	{
+	if (level_index >= 0) {
 		Type* level = args[level_index];
-		if (!level || !type_is_scalar(level) || !type_is_integer(level))
-		{
+		if (!level || !type_is_scalar(level) || !type_is_integer(level)) {
 			type_check_error("%s LOD must be integer scalar, got %s", func_name, level ? type_display(level) : "<null>");
 		}
-	}
-	else if (sample_index >= 0)
-	{
+	} else if (sample_index >= 0) {
 		Type* sample = args[sample_index];
-		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample))
-		{
+		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample)) {
 			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
 		}
 	}
-	if (has_offset)
-	{
+	if (has_offset) {
 		Type* offset = args[expected_args - 1];
-		if (coord_components <= 1)
-		{
-			if (!offset || !type_is_scalar(offset) || !type_is_integer(offset))
-			{
+		if (coord_components <= 1) {
+			if (!offset || !type_is_scalar(offset) || !type_is_integer(offset)) {
 				type_check_error("%s offset must be integer scalar, got %s", func_name, offset ? type_display(offset) : "<null>");
 			}
-		}
-		else
-		{
-			if (!offset || !type_is_vector(offset) || offset->cols != coord_components || !type_is_integer(offset))
-			{
+		} else {
+			if (!offset || !type_is_vector(offset) || offset->cols != coord_components || !type_is_integer(offset)) {
 				type_check_error("%s offset must be ivec%d, got %s", func_name, coord_components, offset ? type_display(offset) : "<null>");
 			}
 		}
@@ -4714,13 +4376,11 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 static Type* builtin_result_inverse(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
-	if (!mat || !type_is_matrix(mat))
-	{
+	if (!mat || !type_is_matrix(mat)) {
 		type_check_error("inverse requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
 		return mat;
 	}
-	if (mat->cols != mat->rows)
-	{
+	if (mat->cols != mat->rows) {
 		type_check_error("inverse requires square matrix, got %s", type_display(mat));
 	}
 	return mat;
@@ -4731,8 +4391,7 @@ static Type* builtin_result_inverse(Type** args, int argc)
 static Type* builtin_result_transpose(Type** args, int argc)
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
-	if (!mat || !type_is_matrix(mat))
-	{
+	if (!mat || !type_is_matrix(mat)) {
 		type_check_error("transpose requires matrix argument, got %s", mat ? type_display(mat) : "<null>");
 		return mat;
 	}
@@ -4744,18 +4403,15 @@ static Type* builtin_result_determinant(const Symbol* sym, Type** args, int argc
 {
 	Type* mat = (args && argc > 0) ? args[0] : NULL;
 	const char* name = builtin_func_name(sym);
-	if (!mat || !type_is_matrix(mat))
-	{
+	if (!mat || !type_is_matrix(mat)) {
 		type_check_error("%s requires matrix argument, got %s", name, mat ? type_display(mat) : "<null>");
 		return type_get_scalar(T_FLOAT);
 	}
-	if (mat->cols != mat->rows)
-	{
+	if (mat->cols != mat->rows) {
 		type_check_error("%s requires square matrix, got %s", name, type_display(mat));
 	}
 	TypeTag base = type_base_type(mat);
-	if (base != T_FLOAT && base != T_DOUBLE)
-	{
+	if (base != T_FLOAT && base != T_DOUBLE) {
 		type_check_error("%s requires floating-point matrix, got %s", name, type_display(mat));
 		base = T_FLOAT;
 	}
@@ -4767,19 +4423,16 @@ static Type* builtin_result_outer_product(const Symbol* sym, Type** args, int ar
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
 	const char* name = builtin_func_name(sym);
-	if (!lhs || !rhs || !type_is_vector(lhs) || !type_is_vector(rhs))
-	{
+	if (!lhs || !rhs || !type_is_vector(lhs) || !type_is_vector(rhs)) {
 		type_check_error("%s requires vector arguments, got %s and %s", name, lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
 		return type_get_matrix(T_FLOAT, 2, 2);
 	}
 	TypeTag lhs_base = type_base_type(lhs);
 	TypeTag rhs_base = type_base_type(rhs);
-	if (lhs_base != rhs_base)
-	{
+	if (lhs_base != rhs_base) {
 		type_check_error("%s requires matching base types, got %s and %s", name, type_display(lhs), type_display(rhs));
 	}
-	if ((lhs_base != T_FLOAT && lhs_base != T_DOUBLE) || (rhs_base != T_FLOAT && rhs_base != T_DOUBLE))
-	{
+	if ((lhs_base != T_FLOAT && lhs_base != T_DOUBLE) || (rhs_base != T_FLOAT && rhs_base != T_DOUBLE)) {
 		type_check_error("%s requires floating-point vectors, got %s and %s", name, type_display(lhs), type_display(rhs));
 		lhs_base = T_FLOAT;
 	}
@@ -4799,27 +4452,22 @@ static Type* builtin_result_relational(Type** args, int argc, int allow_bool)
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
 	if (!lhs || !rhs)
 		return type_get_scalar(T_BOOL);
-	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs)))
-	{
+	if ((!type_is_scalar(lhs) && !type_is_vector(lhs)) || (!type_is_scalar(rhs) && !type_is_vector(rhs))) {
 		type_check_error("relational functions require scalar or vector arguments, got %s and %s", type_display(lhs), type_display(rhs));
 		return type_get_scalar(T_BOOL);
 	}
-	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs)))
-	{
+	if ((type_is_vector(lhs) && !type_is_vector(rhs)) || (type_is_scalar(lhs) && !type_is_scalar(rhs))) {
 		type_check_error("relational functions require matching argument shapes, got %s and %s", type_display(lhs), type_display(rhs));
 	}
-	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols)
-	{
+	if (type_is_vector(lhs) && type_is_vector(rhs) && lhs->cols != rhs->cols) {
 		type_check_error("relational functions require matching vector sizes, got %s and %s", type_display(lhs), type_display(rhs));
 	}
 	TypeTag lhs_base = type_base_type(lhs);
 	TypeTag rhs_base = type_base_type(rhs);
-	if (lhs_base != rhs_base)
-	{
+	if (lhs_base != rhs_base) {
 		type_check_error("relational functions require matching base types, got %s and %s", type_display(lhs), type_display(rhs));
 	}
-	if (!allow_bool && lhs_base == T_BOOL)
-	{
+	if (!allow_bool && lhs_base == T_BOOL) {
 		type_check_error("ordering relational functions do not support boolean arguments");
 	}
 	int components = type_is_vector(lhs) ? lhs->cols : 1;
@@ -4832,23 +4480,19 @@ static Type* builtin_result_matrix_comp_mult(Type** args, int argc)
 {
 	Type* lhs = (args && argc > 0) ? args[0] : NULL;
 	Type* rhs = (args && argc > 1) ? args[1] : NULL;
-	if (!lhs || !rhs || !type_is_matrix(lhs) || !type_is_matrix(rhs))
-	{
+	if (!lhs || !rhs || !type_is_matrix(lhs) || !type_is_matrix(rhs)) {
 		type_check_error("matrixCompMult requires matrix arguments, got %s and %s", lhs ? type_display(lhs) : "<null>", rhs ? type_display(rhs) : "<null>");
 		return lhs ? lhs : rhs;
 	}
-	if (lhs->cols != rhs->cols || lhs->rows != rhs->rows)
-	{
+	if (lhs->cols != rhs->cols || lhs->rows != rhs->rows) {
 		type_check_error("matrixCompMult requires matching matrix dimensions, got %s and %s", type_display(lhs), type_display(rhs));
 	}
 	TypeTag lhs_base = type_base_type(lhs);
 	TypeTag rhs_base = type_base_type(rhs);
-	if (lhs_base != rhs_base)
-	{
+	if (lhs_base != rhs_base) {
 		type_check_error("matrixCompMult requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
 	}
-	if (lhs_base != T_FLOAT && lhs_base != T_DOUBLE)
-	{
+	if (lhs_base != T_FLOAT && lhs_base != T_DOUBLE) {
 		type_check_error("matrixCompMult requires floating-point matrices, got %s", type_display(lhs));
 	}
 	return lhs;
@@ -4857,13 +4501,11 @@ static Type* builtin_result_matrix_comp_mult(Type** args, int argc)
 static Type* builtin_result_texture_query_lod(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
-	if (!sampler || sampler->tag != T_SAMPLER)
-	{
+	if (!sampler || sampler->tag != T_SAMPLER) {
 		type_check_error("textureQueryLod requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
 		return type_get_vector(T_FLOAT, 2);
 	}
-	if (sampler->dim & TYPE_DIM_FLAG_SHADOW)
-	{
+	if (sampler->dim & TYPE_DIM_FLAG_SHADOW) {
 		type_check_error("textureQueryLod does not support shadow samplers (%s)", type_display(sampler));
 	}
 	return type_get_vector(T_FLOAT, 2);
@@ -4872,8 +4514,7 @@ static Type* builtin_result_texture_query_lod(Type** args, int argc)
 static Type* builtin_result_texture_query_levels(Type** args, int argc)
 {
 	Type* sampler = (args && argc > 0) ? args[0] : NULL;
-	if (!sampler || sampler->tag != T_SAMPLER)
-	{
+	if (!sampler || sampler->tag != T_SAMPLER) {
 		type_check_error("textureQueryLevels requires sampler argument, got %s", sampler ? type_display(sampler) : "<null>");
 	}
 	return type_get_scalar(T_INT);
@@ -4881,8 +4522,7 @@ static Type* builtin_result_texture_query_levels(Type** args, int argc)
 
 static const char* image_atomic_name(BuiltinFuncKind kind)
 {
-	switch (kind)
-	{
+	switch (kind) {
 	case BUILTIN_IMAGE_ATOMIC_ADD:
 		return "imageAtomicAdd";
 	case BUILTIN_IMAGE_ATOMIC_MIN:
@@ -4908,20 +4548,17 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 {
 	const char* func_name = image_atomic_name(kind);
 	Type* image = (args && argc > 0) ? args[0] : NULL;
-	if (!image || image->tag != T_IMAGE)
-	{
+	if (!image || image->tag != T_IMAGE) {
 		type_check_error("%s requires image argument, got %s", func_name, image ? type_display(image) : "<null>");
 		return type_get_scalar(T_INT);
 	}
 	TypeTag base = (TypeTag)image->base;
-	if (base != T_INT && base != T_UINT)
-	{
+	if (base != T_INT && base != T_UINT) {
 		type_check_error("%s requires integer image types, got %s", func_name, type_display(image));
 		base = T_INT;
 	}
 	int coord_components = sampler_coord_components(image);
-	if (!coord_components)
-	{
+	if (!coord_components) {
 		type_check_error("%s cannot determine coordinate size for %s", func_name, type_display(image));
 		coord_components = 1;
 	}
@@ -4929,49 +4566,38 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 	int is_ms = (base_dim == TYPE_DIM_2D_MS);
 	int value_params = (kind == BUILTIN_IMAGE_ATOMIC_COMP_SWAP) ? 2 : 1;
 	int expected_args = 2 + value_params + (is_ms ? 1 : 0);
-	if (argc != expected_args)
-	{
+	if (argc != expected_args) {
 		type_check_error("%s expects %d arguments but received %d", func_name, expected_args, argc);
 	}
 	Type* coord = (argc > 1) ? args[1] : NULL;
-	if (coord_components <= 1)
-	{
-		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord))
-		{
+	if (coord_components <= 1) {
+		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
 		}
-	}
-	else
-	{
-		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord))
-		{
+	} else {
+		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
 		}
 	}
 	int index = 2;
-	if (is_ms)
-	{
+	if (is_ms) {
 		Type* sample = (argc > index) ? args[index] : NULL;
-		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample))
-		{
+		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample)) {
 			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
 		}
 		index += 1;
 	}
 	Type* compare = NULL;
-	if (kind == BUILTIN_IMAGE_ATOMIC_COMP_SWAP)
-	{
+	if (kind == BUILTIN_IMAGE_ATOMIC_COMP_SWAP) {
 		compare = (argc > index) ? args[index] : NULL;
-		if (!compare || !type_is_scalar(compare) || type_base_type(compare) != base)
-		{
+		if (!compare || !type_is_scalar(compare) || type_base_type(compare) != base) {
 			const char* expected = (base == T_UINT) ? "uint" : "int";
 			type_check_error("%s compare value must be %s scalar, got %s", func_name, expected, compare ? type_display(compare) : "<null>");
 		}
 		index += 1;
 	}
 	Type* value = (argc > index) ? args[index] : NULL;
-	if (!value || !type_is_scalar(value) || type_base_type(value) != base)
-	{
+	if (!value || !type_is_scalar(value) || type_base_type(value) != base) {
 		const char* expected = (base == T_UINT) ? "uint" : "int";
 		type_check_error("%s value must be %s scalar, got %s", func_name, expected, value ? type_display(value) : "<null>");
 	}
@@ -4985,8 +4611,7 @@ static Type* builtin_result_any_all(Type** args, int argc)
 	Type* arg = (args && argc > 0) ? args[0] : NULL;
 	if (!arg)
 		return type_get_scalar(T_BOOL);
-	if (!type_is_vector(arg) || type_base_type(arg) != T_BOOL)
-	{
+	if (!type_is_vector(arg) || type_base_type(arg) != T_BOOL) {
 		type_check_error("any/all require boolean vector argument, got %s", type_display(arg));
 	}
 	return type_get_scalar(T_BOOL);
@@ -5001,8 +4626,7 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	const BuiltinSignature* signature = builtin_find_signature(sym->builtin_kind);
 	if (signature)
 		return builtin_apply_signature(signature, sym, args, argc);
-	switch (sym->builtin_kind)
-	{
+	switch (sym->builtin_kind) {
 	case BUILTIN_TEXTURE:
 	case BUILTIN_TEXTURE_LOD:
 	case BUILTIN_TEXTURE_PROJ:
@@ -5105,20 +4729,17 @@ int type_can_assign(const Type* dst, const Type* src)
 		return 0;
 	if (type_equal(dst, src))
 		return 1;
-	if (type_is_scalar(dst) && type_is_scalar(src))
-	{
+	if (type_is_scalar(dst) && type_is_scalar(src)) {
 		return type_scalar_can_convert(src, dst);
 	}
-	if (type_is_vector(dst) && type_is_vector(src))
-	{
+	if (type_is_vector(dst) && type_is_vector(src)) {
 		if (dst->cols != src->cols)
 			return 0;
 		if (type_base_type(dst) != type_base_type(src))
 			return 0;
 		return 1;
 	}
-	if (type_is_matrix(dst) && type_is_matrix(src))
-	{
+	if (type_is_matrix(dst) && type_is_matrix(src)) {
 		if (dst->cols != src->cols || dst->rows != src->rows)
 			return 0;
 		if (type_base_type(dst) != type_base_type(src))
@@ -5165,24 +4786,21 @@ static int type_align_component_counts(Type** a, Type** b)
 		return 0;
 	Type* lhs = *a;
 	Type* rhs = *b;
-	if (type_is_matrix(lhs) || type_is_matrix(rhs))
-	{
+	if (type_is_matrix(lhs) || type_is_matrix(rhs)) {
 		if (type_is_matrix(lhs) && type_is_matrix(rhs) && lhs->cols == rhs->cols && lhs->rows == rhs->rows)
 			return 1;
 		return 0;
 	}
 	if (type_is_vector(lhs) && type_is_vector(rhs))
 		return lhs->cols == rhs->cols;
-	if (type_is_vector(lhs) && type_is_scalar(rhs))
-	{
+	if (type_is_vector(lhs) && type_is_scalar(rhs)) {
 		Type* promoted = type_promote_scalar_to_components(rhs, lhs->cols);
 		if (!promoted || !type_is_vector(promoted) || promoted->cols != lhs->cols)
 			return 0;
 		*b = promoted;
 		return 1;
 	}
-	if (type_is_scalar(lhs) && type_is_vector(rhs))
-	{
+	if (type_is_scalar(lhs) && type_is_vector(rhs)) {
 		Type* promoted = type_promote_scalar_to_components(lhs, rhs->cols);
 		if (!promoted || !type_is_vector(promoted) || promoted->cols != rhs->cols)
 			return 0;
@@ -5196,8 +4814,7 @@ static int type_align_component_counts(Type** a, Type** b)
 
 static int type_numeric_rank(TypeTag tag)
 {
-	switch (tag)
-	{
+	switch (tag) {
 	case T_DOUBLE:
 		return 6;
 	case T_FLOAT:
@@ -5228,8 +4845,7 @@ static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
 	if (type_base_can_convert(a, preferred) && type_base_can_convert(b, preferred))
 		return preferred;
 	const TypeTag fallback[] = { T_DOUBLE, T_FLOAT, T_UINT64, T_INT64, T_UINT, T_INT };
-	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)
-	{
+	for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i) {
 		TypeTag candidate = fallback[i];
 		if (type_base_can_convert(a, candidate) && type_base_can_convert(b, candidate))
 			return candidate;
@@ -5271,8 +4887,7 @@ static const UnaryRule u_rules[] = {
 
 static const UnaryRule* find_unary_rule(Tok tok)
 {
-	for (size_t i = 0; i < sizeof(u_rules) / sizeof(u_rules[0]); ++i)
-	{
+	for (size_t i = 0; i < sizeof(u_rules) / sizeof(u_rules[0]); ++i) {
 		if (u_rules[i].tok == tok)
 			return &u_rules[i];
 	}
@@ -5307,14 +4922,12 @@ Type* type_check_unary(const IR_Cmd* inst, Type* operand)
 	const UnaryRule* ur = find_unary_rule(inst->tok);
 	if (!ur)
 		type_check_error("unsupported unary operator %s", tok_name[inst->tok]);
-	if (ur->needs_lvalue)
-	{
+	if (ur->needs_lvalue) {
 		int idx = inst->arg0;
 		if (idx < 0 || idx >= acount(g_ir) || !g_ir[idx].is_lvalue)
 			type_check_error("operator %s requires l-value operand", tok_name[inst->tok]);
 	}
-	switch (ur->base_rule)
-	{
+	switch (ur->base_rule) {
 	case U_NUMERIC:
 		require_numeric_operand(inst->tok, operand);
 		if (!type_is_scalar(operand) && !type_is_vector(operand))
@@ -5369,8 +4982,7 @@ static void require_same_base(Tok tok, Type* lhs, Type* rhs)
 
 static int same_vec_len_or_error(Tok tok, const Type* lhs, const Type* rhs)
 {
-	if (lhs && rhs && lhs->cols != rhs->cols)
-	{
+	if (lhs && rhs && lhs->cols != rhs->cols) {
 		type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
 		return 0;
 	}
@@ -5387,15 +4999,13 @@ static Type* result_componentwise_num(Tok tok, Type* lhs, Type* rhs, int allow_m
 		return want_bool ? type_get_vector(T_BOOL, rhs->cols) : rhs;
 	if (type_is_vector(lhs) && type_is_scalar(rhs))
 		return want_bool ? type_get_vector(T_BOOL, lhs->cols) : lhs;
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
+	if (type_is_vector(lhs) && type_is_vector(rhs)) {
 		same_vec_len_or_error(tok, lhs, rhs);
 		return want_bool ? type_get_vector(T_BOOL, lhs->cols) : lhs;
 	}
 	const int allow_matrix_scalar = allow_matrix & 1;
 	const int allow_matrix_matrix = allow_matrix & 2;
-	if (allow_matrix_matrix && type_is_matrix(lhs) && type_is_matrix(rhs))
-	{
+	if (allow_matrix_matrix && type_is_matrix(lhs) && type_is_matrix(rhs)) {
 		if (lhs->cols != rhs->cols || lhs->rows != rhs->rows)
 			type_check_error("operator %s requires matching matrix sizes", tok_name[tok]);
 		return lhs;
@@ -5412,16 +5022,14 @@ static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 {
 	if (!lhs || !rhs)
 		return lhs ? lhs : rhs;
-	if (type_is_matrix(lhs) && type_is_vector(rhs))
-	{
+	if (type_is_matrix(lhs) && type_is_vector(rhs)) {
 		same_vec_len_or_error(tok, lhs, rhs);
 		Type* result = type_get_vector(type_base_type(lhs), lhs->rows);
 		if (!result)
 			type_check_error("unsupported matrix-vector multiplication result size %dx1", lhs->rows);
 		return result;
 	}
-	if (type_is_vector(lhs) && type_is_matrix(rhs))
-	{
+	if (type_is_vector(lhs) && type_is_matrix(rhs)) {
 		if (lhs->cols != rhs->rows)
 			type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
 		Type* result = type_get_vector(type_base_type(lhs), rhs->cols);
@@ -5429,8 +5037,7 @@ static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 			type_check_error("unsupported vector-matrix multiplication result size %dx1", rhs->cols);
 		return result;
 	}
-	if (type_is_matrix(lhs) && type_is_matrix(rhs))
-	{
+	if (type_is_matrix(lhs) && type_is_matrix(rhs)) {
 		if (lhs->cols != rhs->rows)
 			type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
 		Type* result = type_get_matrix(type_base_type(lhs), rhs->cols, lhs->rows);
@@ -5506,8 +5113,7 @@ Type* type_binary_assign(Type* lhs, Type* rhs)
 
 static const BinRule* find_bin_rule(Tok tok)
 {
-	for (size_t i = 0; i < sizeof(bin_rules) / sizeof(bin_rules[0]); ++i)
-	{
+	for (size_t i = 0; i < sizeof(bin_rules) / sizeof(bin_rules[0]); ++i) {
 		if (bin_rules[i].tok == tok)
 			return &bin_rules[i];
 	}
@@ -5519,10 +5125,8 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 	const BinRule* br = find_bin_rule(tok);
 	if (!br)
 		type_check_error("unsupported binary operator %s", tok_name[tok]);
-	if (!lhs || !rhs)
-	{
-		switch (br->kind)
-		{
+	if (!lhs || !rhs) {
+		switch (br->kind) {
 		case BR_REL:
 		case BR_EQ:
 		case BR_LOGICAL:
@@ -5531,12 +5135,10 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 			return lhs ? lhs : rhs;
 		}
 	}
-	switch (br->kind)
-	{
+	switch (br->kind) {
 	case BR_ASSIGN:
 		return type_binary_assign(lhs, rhs);
-	case BR_COMPOUND:
-	{
+	case BR_COMPOUND: {
 		Type* value = type_check_binary(br->underlying, lhs, rhs);
 		return type_binary_assign(lhs, value);
 	}
@@ -5565,19 +5167,15 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 	case BR_SHIFT:
 		require_integer(tok, lhs, "left");
 		require_integer(tok, rhs, "right");
-		if (type_is_vector(lhs))
-		{
+		if (type_is_vector(lhs)) {
 			if (type_is_scalar(rhs))
 				return lhs;
-			if (type_is_vector(rhs))
-			{
+			if (type_is_vector(rhs)) {
 				same_vec_len_or_error(tok, lhs, rhs);
 				require_same_base(tok, lhs, rhs);
 				return lhs;
 			}
-		}
-		else if (type_is_scalar(lhs))
-		{
+		} else if (type_is_scalar(lhs)) {
 			if (!type_is_scalar(rhs))
 				type_check_error("operator %s requires scalar shift amount", tok_name[tok]);
 			return lhs;
@@ -5592,14 +5190,12 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 			type_check_error("operator %s requires scalar operands", tok_name[tok]);
 		return type_get_scalar(T_BOOL);
 	case BR_EQ:
-		if (type_is_vector(lhs) && type_is_vector(rhs))
-		{
+		if (type_is_vector(lhs) && type_is_vector(rhs)) {
 			same_vec_len_or_error(tok, lhs, rhs);
 			require_same_base(tok, lhs, rhs);
 			return type_get_vector(T_BOOL, lhs->cols);
 		}
-		if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		{
+		if (type_is_scalar(lhs) && type_is_scalar(rhs)) {
 			require_same_base(tok, lhs, rhs);
 			return type_get_scalar(T_BOOL);
 		}
@@ -5613,16 +5209,14 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 }
 Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 {
-	if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
-	{
+	if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond))) {
 		type_check_error("ternary condition must be boolean scalar, got %s", type_display(cond));
 	}
 	if (!true_type || !false_type)
 		return true_type ? true_type : false_type;
 	if (type_equal(true_type, false_type))
 		return true_type;
-	if (type_base_type(true_type) == T_BOOL && type_base_type(false_type) == T_BOOL)
-	{
+	if (type_base_type(true_type) == T_BOOL && type_base_type(false_type) == T_BOOL) {
 		Type* aligned_true = true_type;
 		Type* aligned_false = false_type;
 		if (type_align_component_counts(&aligned_true, &aligned_false))
@@ -5630,11 +5224,9 @@ Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 	}
 	Type* aligned_true = true_type;
 	Type* aligned_false = false_type;
-	if (type_align_component_counts(&aligned_true, &aligned_false))
-	{
+	if (type_align_component_counts(&aligned_true, &aligned_false)) {
 		TypeTag shared_base = type_shared_numeric_base(type_base_type(true_type), type_base_type(false_type));
-		if (shared_base != T_VOID)
-		{
+		if (shared_base != T_VOID) {
 			if (type_is_scalar(aligned_true) && type_is_scalar(aligned_false))
 				return type_get_scalar(shared_base);
 			if (type_is_vector(aligned_true) && type_is_vector(aligned_false))
@@ -5650,16 +5242,11 @@ static void type_constructor_error(const Type* target, const char* owner, const 
 {
 	const char* type_name = type_display(target);
 	char prefix[256];
-	if (owner && member)
-	{
+	if (owner && member) {
 		snprintf(prefix, sizeof(prefix), "constructor for %s member %s (%s)", owner, member, type_name);
-	}
-	else if (owner)
-	{
+	} else if (owner) {
 		snprintf(prefix, sizeof(prefix), "constructor for %s (%s)", owner, type_name);
-	}
-	else
-	{
+	} else {
 		snprintf(prefix, sizeof(prefix), "constructor %s", type_name);
 	}
 	va_list args_list;
@@ -5679,17 +5266,13 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 	int remaining = argc - start;
 	if (remaining < 0)
 		remaining = 0;
-	switch (target->tag)
-	{
-	case T_VEC:
-	{
+	switch (target->tag) {
+	case T_VEC: {
 		int needed = target->cols;
 		TypeTag base = type_base_type(target);
-		if (needed > 1 && remaining == 1)
-		{
+		if (needed > 1 && remaining == 1) {
 			Type* arg = args[start];
-			if (arg && type_is_scalar(arg))
-			{
+			if (arg && type_is_scalar(arg)) {
 				if (!type_base_can_convert(type_base_type(arg), base))
 					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
 				return 1;
@@ -5697,23 +5280,17 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 		}
 		int count = 0;
 		int consumed = 0;
-		while (count < needed)
-		{
+		while (count < needed) {
 			if (start + consumed >= argc)
 				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
 			Type* arg = args[start + consumed];
 			if (!type_base_can_convert(type_base_type(arg), base))
 				type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
-			if (type_is_scalar(arg))
-			{
+			if (type_is_scalar(arg)) {
 				count += 1;
-			}
-			else if (type_is_vector(arg))
-			{
+			} else if (type_is_vector(arg)) {
 				count += arg->cols;
-			}
-			else
-			{
+			} else {
 				type_constructor_error(target, owner, member, "arguments must be scalar or vector, got %s", type_display(arg));
 			}
 			if (count > needed)
@@ -5722,15 +5299,12 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 		}
 		return consumed;
 	}
-	case T_MAT:
-	{
+	case T_MAT: {
 		int needed = target->cols * target->rows;
 		TypeTag base = type_base_type(target);
-		if (needed > 1 && remaining == 1)
-		{
+		if (needed > 1 && remaining == 1) {
 			Type* arg = args[start];
-			if (arg && type_is_scalar(arg))
-			{
+			if (arg && type_is_scalar(arg)) {
 				if (!type_base_can_convert(type_base_type(arg), base))
 					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
 				return 1;
@@ -5738,25 +5312,19 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 		}
 		int count = 0;
 		int consumed = 0;
-		while (count < needed)
-		{
+		while (count < needed) {
 			if (start + consumed >= argc)
 				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
 			Type* arg = args[start + consumed];
 			if (!type_base_can_convert(type_base_type(arg), base))
 				type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
-			if (type_is_scalar(arg))
-			{
+			if (type_is_scalar(arg)) {
 				count += 1;
-			}
-			else if (type_is_vector(arg))
-			{
+			} else if (type_is_vector(arg)) {
 				if (arg->cols != target->rows)
 					type_constructor_error(target, owner, member, "column argument expected %d components, got %d", target->rows, arg->cols);
 				count += arg->cols;
-			}
-			else
-			{
+			} else {
 				type_constructor_error(target, owner, member, "arguments must be scalars or column vectors, got %s", type_display(arg));
 			}
 			if (count > needed)
@@ -5765,42 +5333,36 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 		}
 		return consumed;
 	}
-	case T_ARRAY:
-	{
+	case T_ARRAY: {
 		if (target->array_len < 0)
 			type_constructor_error(target, owner, member, "requires known array size");
 		Type* element = target->user ? (Type*)target->user : NULL;
 		if (!element)
 			type_constructor_error(target, owner, member, "has unknown element type");
-		if (remaining > 0)
-		{
+		if (remaining > 0) {
 			Type* arg0 = args[start];
 			if (arg0 && arg0 == target)
 				return 1;
 		}
 		int consumed = 0;
-		for (int i = 0; i < target->array_len; ++i)
-		{
+		for (int i = 0; i < target->array_len; ++i) {
 			consumed += type_constructor_validate(element, args, argc, start + consumed, owner, member);
 		}
 		return consumed;
 	}
-	case T_STRUCT:
-	{
+	case T_STRUCT: {
 		StructInfo* info = type_struct_info(target);
 		if (!info)
 			type_constructor_error(target, owner, member, "is incomplete");
 		const char* struct_name = target->name ? target->name : type_display(target);
-		if (remaining > 0)
-		{
+		if (remaining > 0) {
 			Type* arg0 = args[start];
 			if (arg0 && arg0 == target)
 				return 1;
 		}
 		int consumed = 0;
 		int member_count = type_struct_member_count(target);
-		for (int i = 0; i < member_count; ++i)
-		{
+		for (int i = 0; i < member_count; ++i) {
 			StructMember* field = type_struct_member_at(target, i);
 			if (!field)
 				continue;
@@ -5811,8 +5373,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 		}
 		return consumed;
 	}
-	default:
-	{
+	default: {
 		if (!type_is_scalar(target))
 			type_constructor_error(target, owner, member, "unsupported target");
 		if (remaining <= 0)
@@ -5830,10 +5391,8 @@ void type_check_constructor(Type* target, Type** args, int argc)
 	if (!target)
 		return;
 	int has_unknown = 0;
-	for (int i = 0; i < argc; ++i)
-	{
-		if (!args[i])
-		{
+	for (int i = 0; i < argc; ++i) {
+		if (!args[i]) {
 			has_unknown = 1;
 			break;
 		}
@@ -5841,8 +5400,7 @@ void type_check_constructor(Type* target, Type** args, int argc)
 	if (has_unknown)
 		return;
 	int consumed = type_constructor_validate(target, args, argc, 0, NULL, NULL);
-	if (consumed != argc)
-	{
+	if (consumed != argc) {
 		type_check_error("constructor %s expected %d arguments but received %d", type_display(target), consumed, argc);
 	}
 }
@@ -5882,11 +5440,9 @@ void type_check_ir()
 	dyna Symbol** symbol_stack = NULL;
 	Type* current_decl_type = NULL;
 	const char* current_decl_name = NULL;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
-		switch (inst->op)
-		{
+		switch (inst->op) {
 		case IR_PUSH_INT:
 			inst->type = inst->is_unsigned_literal ? g_type_uint : g_type_int;
 			apush(stack, inst->type);
@@ -5911,31 +5467,23 @@ void type_check_ir()
 			apush(storage_stack, 0);
 			apush(symbol_stack, NULL);
 			break;
-		case IR_PUSH_IDENT:
-		{
+		case IR_PUSH_IDENT: {
 			Type* type = NULL;
 			Symbol* sym = NULL;
-			if (inst->str0)
-			{
+			if (inst->str0) {
 				sym = symbol_table_find(inst->str0);
-				if (!sym)
-				{
-					for (int j = acount(st->symbols) - 1; j >= 0; --j)
-					{
+				if (!sym) {
+					for (int j = acount(st->symbols) - 1; j >= 0; --j) {
 						Symbol* candidate = &st->symbols[j];
-						if (candidate->name == inst->str0)
-						{
+						if (candidate->name == inst->str0) {
 							sym = candidate;
 							break;
 						}
 					}
 				}
-				if (sym && sym->type)
-				{
+				if (sym && sym->type) {
 					type = sym->type;
-				}
-				else
-				{
+				} else {
 					type = type_system_get(inst->str0);
 				}
 			}
@@ -5950,8 +5498,7 @@ void type_check_ir()
 			apush(symbol_stack, sym);
 			break;
 		}
-		case IR_UNARY:
-		{
+		case IR_UNARY: {
 			Type* operand = type_stack_pop(stack, "unary expression");
 			unsigned operand_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			if (acount(storage_stack))
@@ -5959,8 +5506,7 @@ void type_check_ir()
 			if (acount(symbol_stack))
 				(void)apop(symbol_stack);
 			Type* result = type_check_unary(inst, operand);
-			if ((inst->tok == TOK_PLUS_PLUS || inst->tok == TOK_MINUS_MINUS) && (operand_qualifier & SYM_QUAL_CONST))
-			{
+			if ((inst->tok == TOK_PLUS_PLUS || inst->tok == TOK_MINUS_MINUS) && (operand_qualifier & SYM_QUAL_CONST)) {
 				type_check_error("cannot modify const-qualified value");
 			}
 			if (!result)
@@ -5973,8 +5519,7 @@ void type_check_ir()
 			apush(symbol_stack, NULL);
 			break;
 		}
-		case IR_BINARY:
-		{
+		case IR_BINARY: {
 			Type* rhs = type_stack_pop(stack, "binary rhs");
 			if (acount(storage_stack))
 				(void)apop(storage_stack);
@@ -5987,8 +5532,7 @@ void type_check_ir()
 				(void)apop(qualifier_stack);
 			unsigned lhs_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			int is_assignment = 0;
-			switch (inst->tok)
-			{
+			switch (inst->tok) {
 			case TOK_ASSIGN:
 			case TOK_PLUS_ASSIGN:
 			case TOK_MINUS_ASSIGN:
@@ -6005,14 +5549,11 @@ void type_check_ir()
 			default:
 				break;
 			}
-			if (is_assignment)
-			{
-				if (lhs_qualifier & SYM_QUAL_CONST)
-				{
+			if (is_assignment) {
+				if (lhs_qualifier & SYM_QUAL_CONST) {
 					type_check_error("cannot assign to const-qualified value");
 				}
-				if ((lhs_storage & SYM_STORAGE_IN) && !(lhs_storage & SYM_STORAGE_OUT))
-				{
+				if ((lhs_storage & SYM_STORAGE_IN) && !(lhs_storage & SYM_STORAGE_OUT)) {
 					const char* target = lhs_symbol ? lhs_symbol->name : "value";
 					type_check_error("cannot assign to input %s", target);
 				}
@@ -6031,11 +5572,9 @@ void type_check_ir()
 			apush(symbol_stack, is_assignment ? lhs_symbol : NULL);
 			break;
 		}
-		case IR_CALL:
-		{
+		case IR_CALL: {
 			Type** args = NULL;
-			for (int arg = 0; arg < inst->arg0; ++arg)
-			{
+			for (int arg = 0; arg < inst->arg0; ++arg) {
 				Type* arg_type = type_stack_pop(stack, "call argument");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
@@ -6046,8 +5585,7 @@ void type_check_ir()
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
-			for (int l = 0, r = argc - 1; l < r; ++l, --r)
-			{
+			for (int l = 0, r = argc - 1; l < r; ++l, --r) {
 				Type* tmp = args[l];
 				args[l] = args[r];
 				args[r] = tmp;
@@ -6061,53 +5599,37 @@ void type_check_ir()
 				(void)apop(symbol_stack);
 			Type* result = callee;
 			Symbol* sym = NULL;
-			if (inst->str0)
-			{
+			if (inst->str0) {
 				sym = symbol_table_find(inst->str0);
 			}
-			if (sym && sym->kind == SYM_FUNC)
-			{
-				if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
-				{
+			if (sym && sym->kind == SYM_FUNC) {
+				if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc) {
 					type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->builtin_param_count, argc);
 				}
-				if (sym->param_signature_set)
-				{
-					if (sym->param_count != argc)
-					{
+				if (sym->param_signature_set) {
+					if (sym->param_count != argc) {
 						type_check_error("function %s expects %d arguments but received %d", inst->str0, sym->param_count, argc);
 					}
-					for (int i = 0; i < sym->param_count; ++i)
-					{
+					for (int i = 0; i < sym->param_count; ++i) {
 						Type* param_type = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
 						Type* arg_type = args ? args[i] : NULL;
-						if (param_type && arg_type)
-						{
-							if (!type_can_assign(param_type, arg_type))
-							{
+						if (param_type && arg_type) {
+							if (!type_can_assign(param_type, arg_type)) {
 								type_check_error("argument %d to %s expects %s but got %s", i + 1, inst->str0, type_display(param_type), type_display(arg_type));
 							}
-						}
-						else if (param_type != arg_type)
-						{
+						} else if (param_type != arg_type) {
 							type_check_error("argument %d to %s has incompatible type", i + 1, inst->str0);
 						}
 					}
 				}
-				if (sym->builtin_kind != BUILTIN_NONE)
-				{
+				if (sym->builtin_kind != BUILTIN_NONE) {
 					Type* builtin_result = type_infer_builtin_call(sym, args, argc);
-					if (builtin_result)
-					{
+					if (builtin_result) {
 						result = builtin_result;
-					}
-					else if (sym->type)
-					{
+					} else if (sym->type) {
 						result = sym->type;
 					}
-				}
-				else if (sym->type)
-				{
+				} else if (sym->type) {
 					result = sym->type;
 				}
 			}
@@ -6120,11 +5642,9 @@ void type_check_ir()
 			apush(symbol_stack, NULL);
 			break;
 		}
-		case IR_CONSTRUCT:
-		{
+		case IR_CONSTRUCT: {
 			Type** args = NULL;
-			for (int arg = 0; arg < inst->arg0; ++arg)
-			{
+			for (int arg = 0; arg < inst->arg0; ++arg) {
 				Type* arg_type = type_stack_pop(stack, "constructor argument");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
@@ -6135,8 +5655,7 @@ void type_check_ir()
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
-			for (int l = 0, r = argc - 1; l < r; ++l, --r)
-			{
+			for (int l = 0, r = argc - 1; l < r; ++l, --r) {
 				Type* tmp = args[l];
 				args[l] = args[r];
 				args[r] = tmp;
@@ -6158,8 +5677,7 @@ void type_check_ir()
 			apush(symbol_stack, NULL);
 			break;
 		}
-		case IR_INDEX:
-		{
+		case IR_INDEX: {
 			Type* index = type_stack_pop(stack, "index expression");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
@@ -6171,27 +5689,18 @@ void type_check_ir()
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
 			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
-			if (index && (!type_is_scalar(index) || !type_is_integer(index)))
-			{
+			if (index && (!type_is_scalar(index) || !type_is_integer(index))) {
 				type_check_error("index expression must be integer scalar, got %s", type_display(index));
 			}
 			Type* result = NULL;
-			if (base)
-			{
-				if (type_is_vector(base))
-				{
+			if (base) {
+				if (type_is_vector(base)) {
 					result = type_get_scalar(type_base_type(base));
-				}
-				else if (type_is_matrix(base))
-				{
+				} else if (type_is_matrix(base)) {
 					result = type_get_vector(type_base_type(base), base->rows);
-				}
-				else if (base->tag == T_ARRAY)
-				{
+				} else if (base->tag == T_ARRAY) {
 					result = base->user ? (Type*)base->user : NULL;
-				}
-				else
-				{
+				} else {
 					type_check_error("type %s is not indexable", type_display(base));
 				}
 			}
@@ -6204,30 +5713,23 @@ void type_check_ir()
 			apush(symbol_stack, base_symbol);
 			break;
 		}
-		case IR_SWIZZLE:
-		{
+		case IR_SWIZZLE: {
 			Type* base = type_stack_pop(stack, "swizzle base");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
 			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
-			if (base && !type_is_vector(base))
-			{
+			if (base && !type_is_vector(base)) {
 				type_check_error("cannot swizzle non-vector type %s", type_display(base));
 			}
 			Type* result = NULL;
-			if (base)
-			{
-				if (inst->arg0 == 1)
-				{
+			if (base) {
+				if (inst->arg0 == 1) {
 					result = type_get_scalar(type_base_type(base));
-				}
-				else
-				{
+				} else {
 					result = type_get_vector(type_base_type(base), inst->arg0);
 				}
 			}
-			if (!result)
-			{
+			if (!result) {
 				type_check_error("unsupported swizzle size %d on %s", inst->arg0, type_display(base));
 			}
 			inst->type = result;
@@ -6239,18 +5741,15 @@ void type_check_ir()
 			apush(symbol_stack, base_symbol);
 			break;
 		}
-		case IR_MEMBER:
-		{
+		case IR_MEMBER: {
 			Type* base = type_stack_pop(stack, "member access");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
 			Symbol* base_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			Type* result = base;
-			if (base && base->tag == T_STRUCT)
-			{
+			if (base && base->tag == T_STRUCT) {
 				StructMember* member = type_struct_find_member(base, inst->str0);
-				if (!member)
-				{
+				if (!member) {
 					type_check_error("struct %s has no member %s", type_display(base), inst->str0 ? inst->str0 : "<anon>");
 				}
 				result = member->type;
@@ -6264,8 +5763,7 @@ void type_check_ir()
 			apush(symbol_stack, base_symbol);
 			break;
 		}
-		case IR_SELECT:
-		{
+		case IR_SELECT: {
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
@@ -6311,13 +5809,11 @@ void type_check_ir()
 			current_decl_name = NULL;
 			break;
 		case IR_DECL_INIT_END:
-			if (acount(stack) > 0)
-			{
+			if (acount(stack) > 0) {
 				Type* value = type_stack_pop(stack, "initializer");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
-				if (current_decl_type && value && !type_can_assign(current_decl_type, value))
-				{
+				if (current_decl_type && value && !type_can_assign(current_decl_type, value)) {
 					type_check_error("initializer type %s cannot initialize %s %s", type_display(value), current_decl_name ? current_decl_name : "value", type_display(current_decl_type));
 				}
 			}
@@ -6328,13 +5824,11 @@ void type_check_ir()
 			break;
 		case IR_DECL_ARRAY_SIZE_END:
 		case IR_FUNC_PARAM_ARRAY_SIZE_END:
-			if (acount(stack) > 0)
-			{
+			if (acount(stack) > 0) {
 				Type* size = type_stack_pop(stack, "array size");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
-				if (size && (!type_is_scalar(size) || !type_is_integer(size)))
-				{
+				if (size && (!type_is_scalar(size) || !type_is_integer(size))) {
 					type_check_error("array size must be integer scalar, got %s", type_display(size));
 				}
 			}
@@ -6348,75 +5842,59 @@ void type_check_ir()
 			break;
 		case IR_SWITCH_SELECTOR_BEGIN:
 			break;
-		case IR_SWITCH_SELECTOR_END:
-		{
+		case IR_SWITCH_SELECTOR_END: {
 			Type* selector = type_stack_pop(stack, "switch selector");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
-			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector)))
-			{
+			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector))) {
 				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
 			}
 			break;
 		}
-		case IR_SWITCH_CASE:
-		{
-			if (!acount(switch_stack))
-			{
+		case IR_SWITCH_CASE: {
+			if (!acount(switch_stack)) {
 				type_check_error("switch case outside of switch");
 			}
 			TypeCheckSwitch* ctx = &switch_stack[acount(switch_stack) - 1];
 			TypeCheckSwitchCase label = (TypeCheckSwitchCase){ 0 };
 			label.flags = inst->arg1;
-			if (!(inst->arg1 & SWITCH_CASE_FLAG_DEFAULT))
-			{
+			if (!(inst->arg1 & SWITCH_CASE_FLAG_DEFAULT)) {
 				label.value = inst->arg0;
 				label.has_value = 1;
 			}
 			apush(ctx->cases, label);
 			break;
 		}
-		case IR_SWITCH_END:
-		{
-			if (!acount(switch_stack))
-			{
+		case IR_SWITCH_END: {
+			if (!acount(switch_stack)) {
 				type_check_error("mismatched switch end");
 			}
 			TypeCheckSwitch* ctx = &switch_stack[acount(switch_stack) - 1];
 			int default_count = 0;
-			for (int idx = 0; idx < acount(ctx->cases); ++idx)
-			{
+			for (int idx = 0; idx < acount(ctx->cases); ++idx) {
 				TypeCheckSwitchCase* label = &ctx->cases[idx];
-				if (label->flags & SWITCH_CASE_FLAG_DEFAULT)
-				{
+				if (label->flags & SWITCH_CASE_FLAG_DEFAULT) {
 					default_count++;
 				}
-				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) == 0)
-				{
-					if (!(label->flags & SWITCH_CASE_FLAG_FALLTHROUGH))
-					{
+				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) == 0) {
+					if (!(label->flags & SWITCH_CASE_FLAG_FALLTHROUGH)) {
 						type_check_error("case label with no statements must fall through to another label");
 					}
 				}
-				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) && (label->flags & SWITCH_CASE_FLAG_FALLTHROUGH))
-				{
+				if ((label->flags & SWITCH_CASE_FLAG_HAS_BODY) && (label->flags & SWITCH_CASE_FLAG_FALLTHROUGH)) {
 					type_check_error("case label with statements cannot be marked as fallthrough");
 				}
 			}
-			if (default_count > 1)
-			{
+			if (default_count > 1) {
 				type_check_error("multiple default labels in switch");
 			}
-			for (int i = 0; i < acount(ctx->cases); ++i)
-			{
+			for (int i = 0; i < acount(ctx->cases); ++i) {
 				TypeCheckSwitchCase* a = &ctx->cases[i];
 				if (!a->has_value)
 					continue;
-				for (int j = i + 1; j < acount(ctx->cases); ++j)
-				{
+				for (int j = i + 1; j < acount(ctx->cases); ++j) {
 					TypeCheckSwitchCase* b = &ctx->cases[j];
-					if (b->has_value && a->value == b->value)
-					{
+					if (b->has_value && a->value == b->value) {
 						type_check_error("duplicate case label value %d in switch", a->value);
 					}
 				}
@@ -6426,8 +5904,7 @@ void type_check_ir()
 			break;
 		}
 		case IR_STMT_EXPR:
-			if (acount(stack) > 0)
-			{
+			if (acount(stack) > 0) {
 				type_stack_pop(stack, "expression result");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
@@ -6445,8 +5922,7 @@ void type_check_ir()
 			if (acount(symbol_stack) > 0)
 				aclear(symbol_stack);
 			break;
-		case IR_IF_THEN:
-		{
+		case IR_IF_THEN: {
 			Type* cond = type_stack_pop(stack, "if condition");
 			if (acount(qualifier_stack))
 				(void)apop(qualifier_stack);
@@ -6454,17 +5930,14 @@ void type_check_ir()
 				(void)apop(storage_stack);
 			if (acount(symbol_stack))
 				(void)apop(symbol_stack);
-			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
-			{
+			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond))) {
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
 			}
 			break;
 		}
-		case IR_RETURN:
-		{
+		case IR_RETURN: {
 			Type* ret_type = acount(func_stack) ? func_stack[acount(func_stack) - 1] : NULL;
-			if (inst->arg0)
-			{
+			if (inst->arg0) {
 				Type* value = type_stack_pop(stack, "return value");
 				if (acount(qualifier_stack))
 					(void)apop(qualifier_stack);
@@ -6472,19 +5945,15 @@ void type_check_ir()
 					(void)apop(storage_stack);
 				if (acount(symbol_stack))
 					(void)apop(symbol_stack);
-				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value))
-				{
+				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value)) {
 					type_check_error("return type mismatch: expected %s got %s", type_display(ret_type), type_display(value));
 				}
-			}
-			else if (ret_type && ret_type != g_type_void)
-			{
+			} else if (ret_type && ret_type != g_type_void) {
 				type_check_error("return statement missing value for function returning %s", type_display(ret_type));
 			}
 			break;
 		}
-		case IR_FUNC_BEGIN:
-		{
+		case IR_FUNC_BEGIN: {
 			Type* ret = type_system_get(inst->str0);
 			inst->type = ret;
 			apush(func_stack, ret);
@@ -6499,8 +5968,7 @@ void type_check_ir()
 			break;
 		}
 	}
-	for (int i = 0; i < acount(switch_stack); ++i)
-	{
+	for (int i = 0; i < acount(switch_stack); ++i) {
 		afree(switch_stack[i].cases);
 	}
 	afree(switch_stack);
@@ -6547,18 +6015,14 @@ const char* snippet_control_flow = SPINDLE_SNIPPET(
 			adjustments++;
 			--adjustments;
 			accum += adjustments.x;
-			for (int i = 0; i < 4; ++i)
-			{
+			for (int i = 0; i < 4; ++i) {
 				accum += float(i) * 0.25;
 			}
 			counter--;
 			--counter;
-			if (accum > 0.5)
-			{
+			if (accum > 0.5) {
 				out_color = vec4(accum, 1.0 - accum, accum * 0.5, 1.0);
-			}
-			else
-			{
+			} else {
 				out_color = vec4(1.0 - accum);
 			}
 		});
@@ -6594,8 +6058,7 @@ const char* snippet_array_indexing = SPINDLE_SNIPPET(
 			bool flag = flags[1];
 			bool literal_true = true;
 			uint value = uints[2];
-			if (literal_true && flag)
-			{
+			if (literal_true && flag) {
 				out_color.xy += vec2(float(value));
 			}
 		});
@@ -6668,17 +6131,14 @@ const char* snippet_looping = SPINDLE_SNIPPET(
 		void main() {
 			int counter = 0;
 			float total = 0.0;
-			while (counter < 4)
-			{
+			while (counter < 4) {
 				total += float(counter);
 				counter = counter + 1;
 			}
-			do
-			{
+			do {
 				total = total + 0.5;
 				counter = counter - 1;
-				if (counter == 1)
-				{
+				if (counter == 1) {
 					continue;
 				}
 			} while (counter > 0);
@@ -6724,8 +6184,7 @@ const char* snippet_switch_stmt = SPINDLE_SNIPPET(
 		void main() {
 			int mode = in_mode;
 			vec4 color = vec4(0.0);
-			switch (mode)
-			{
+			switch (mode) {
 			case 0:
 				color = vec4(1.0, 0.0, 0.0, 1.0);
 				break;
@@ -6745,8 +6204,7 @@ const char* snippet_discard = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
 		void main() {
 			vec4 color = in_color;
-			if (color.a == 0.0)
-			{
+			if (color.a == 0.0) {
 				discard;
 			}
 			out_color = color;
@@ -6758,8 +6216,7 @@ const char* snippet_stage_builtins_fragment = SPINDLE_SNIPPET(
 			vec4 coord = gl_FragCoord;
 			int sample_id = gl_SampleID;
 			int sample_mask = gl_SampleMaskIn[0];
-			if (gl_HelperInvocation)
-			{
+			if (gl_HelperInvocation) {
 				gl_SampleMask[0] = 0;
 			}
 			out_color = coord + vec4(float(sample_id + sample_mask));
@@ -6943,28 +6400,23 @@ void dump_storage_flags(unsigned flags)
 		return;
 	printf(" storage=");
 	int first = 1;
-	if (flags & SYM_STORAGE_IN)
-	{
+	if (flags & SYM_STORAGE_IN) {
 		printf("%sin", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_STORAGE_OUT)
-	{
+	if (flags & SYM_STORAGE_OUT) {
 		printf("%sout", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_STORAGE_UNIFORM)
-	{
+	if (flags & SYM_STORAGE_UNIFORM) {
 		printf("%suniform", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_STORAGE_BUFFER)
-	{
+	if (flags & SYM_STORAGE_BUFFER) {
 		printf("%sbuffer", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_STORAGE_SHARED)
-	{
+	if (flags & SYM_STORAGE_SHARED) {
 		printf("%sshared", first ? "" : "|");
 		first = 0;
 	}
@@ -6976,28 +6428,23 @@ void dump_qualifier_flags(unsigned flags)
 		return;
 	printf(" qualifiers=");
 	int first = 1;
-	if (flags & SYM_QUAL_CONST)
-	{
+	if (flags & SYM_QUAL_CONST) {
 		printf("%sconst", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_QUAL_VOLATILE)
-	{
+	if (flags & SYM_QUAL_VOLATILE) {
 		printf("%svolatile", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_QUAL_RESTRICT)
-	{
+	if (flags & SYM_QUAL_RESTRICT) {
 		printf("%srestrict", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_QUAL_READONLY)
-	{
+	if (flags & SYM_QUAL_READONLY) {
 		printf("%sreadonly", first ? "" : "|");
 		first = 0;
 	}
-	if (flags & SYM_QUAL_WRITEONLY)
-	{
+	if (flags & SYM_QUAL_WRITEONLY) {
 		printf("%swriteonly", first ? "" : "|");
 		first = 0;
 	}
@@ -7009,18 +6456,15 @@ void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
 		return;
 	printf(" layout(");
 	int first = 1;
-	if (layout_flags & SYM_LAYOUT_SET)
-	{
+	if (layout_flags & SYM_LAYOUT_SET) {
 		printf("%sset=%d", first ? "" : ", ", set);
 		first = 0;
 	}
-	if (layout_flags & SYM_LAYOUT_BINDING)
-	{
+	if (layout_flags & SYM_LAYOUT_BINDING) {
 		printf("%sbinding=%d", first ? "" : ", ", binding);
 		first = 0;
 	}
-	if (layout_flags & SYM_LAYOUT_LOCATION)
-	{
+	if (layout_flags & SYM_LAYOUT_LOCATION) {
 		printf("%slocation=%d", first ? "" : ", ", location);
 		first = 0;
 	}
@@ -7030,12 +6474,10 @@ void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
 void dump_ir()
 {
 	printf("IR:\n");
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		printf("  %s", ir_op_name[inst->op]);
-		switch (inst->op)
-		{
+		switch (inst->op) {
 		case IR_DECL_BEGIN:
 		case IR_FUNC_PARAM_BEGIN:
 			dump_storage_flags(inst->storage_flags);
@@ -7144,12 +6586,10 @@ void dump_ir()
 void dump_symbols()
 {
 	printf("Symbols:\n");
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
+	for (int i = 0; i < acount(st->symbols); ++i) {
 		const Symbol* sym = &st->symbols[i];
 		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name, sym->type_name);
-		if (sym->type)
-		{
+		if (sym->type) {
 			printf(" (tag=%s)", type_tag_name(sym->type->tag));
 		}
 		dump_storage_flags(sym->storage_flags);
@@ -7178,8 +6618,7 @@ static void run_test_case(const TestCase* test)
 
 static void run_tests(const TestCase* tests, int count)
 {
-	for (int i = 0; i < count; ++i)
-	{
+	for (int i = 0; i < count; ++i) {
 		run_test_case(&tests[i]);
 	}
 	printf("[test] %d tests passed\n", count);
@@ -7256,8 +6695,7 @@ DEFINE_TEST(test_builtin_function_metadata)
 		{ sintern("determinant"), BUILTIN_DETERMINANT, 1 },
 		{ sintern("imageAtomicAdd"), BUILTIN_IMAGE_ATOMIC_ADD, -1 },
 	};
-	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
-	{
+	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i) {
 		Symbol* sym = symbol_table_find(cases[i].name);
 		assert(sym);
 		assert(sym->builtin_kind == cases[i].kind);
@@ -7351,8 +6789,7 @@ DEFINE_TEST(test_resource_type_registration)
 		{ "uimage2DMSArray", T_IMAGE, T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
 		{ "uimage2DRect", T_IMAGE, T_UINT, TYPE_DIM_RECT },
 	};
-	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
-	{
+	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i) {
 		const char* name = sintern(cases[i].name);
 		Type* type = type_system_get(name);
 		assert(type);
@@ -7375,8 +6812,7 @@ DEFINE_TEST(test_resource_texture_inference)
 	int saw_shadow = 0;
 	int saw_int_vec = 0;
 	int saw_uint_vec = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_CALL || inst->str0 != texture_name)
 			continue;
@@ -7442,10 +6878,8 @@ DEFINE_TEST(test_array_indexing_ir)
 	int saw_vec_index = 0;
 	int saw_mat_index = 0;
 	int saw_bool_literal = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_PUSH_BOOL)
-		{
+	for (int i = 0; i < acount(g_ir); ++i) {
+		if (g_ir[i].op == IR_PUSH_BOOL) {
 			saw_bool_literal = 1;
 		}
 		if (g_ir[i].op != IR_INDEX)
@@ -7454,10 +6888,8 @@ DEFINE_TEST(test_array_indexing_ir)
 		Type* type = g_ir[i].type;
 		if (!type)
 			continue;
-		if (type_is_scalar(type))
-		{
-			switch (type_base_type(type))
-			{
+		if (type_is_scalar(type)) {
+			switch (type_base_type(type)) {
 			case T_FLOAT:
 				saw_float_index = 1;
 				break;
@@ -7494,8 +6926,7 @@ DEFINE_TEST(test_swizzle_ir)
 {
 	compiler_setup(snippet_swizzle);
 	int saw_swizzle[5] = { 0 };
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		if (g_ir[i].op != IR_SWIZZLE)
 			continue;
 		int count = g_ir[i].arg0;
@@ -7524,8 +6955,7 @@ DEFINE_TEST(test_control_flow_unary_ops)
 	int saw_if_begin = 0;
 	int saw_if_else = 0;
 	int saw_if_end = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op == IR_FOR_BEGIN)
 			saw_for_begin = 1;
@@ -7537,31 +6967,22 @@ DEFINE_TEST(test_control_flow_unary_ops)
 			saw_if_end = 1;
 		if (inst->op != IR_UNARY)
 			continue;
-		if (inst->tok == TOK_PLUS_PLUS)
-		{
-			if (inst->arg1 == 0)
-			{
+		if (inst->tok == TOK_PLUS_PLUS) {
+			if (inst->arg1 == 0) {
 				saw_pre_inc = 1;
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_pre_inc_lvalue = g_ir[inst->arg0].is_lvalue;
-			}
-			else if (inst->arg1 == 1)
-			{
+			} else if (inst->arg1 == 1) {
 				saw_post_inc = 1;
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_post_inc_lvalue = g_ir[inst->arg0].is_lvalue;
 			}
-		}
-		else if (inst->tok == TOK_MINUS_MINUS)
-		{
-			if (inst->arg1 == 0)
-			{
+		} else if (inst->tok == TOK_MINUS_MINUS) {
+			if (inst->arg1 == 0) {
 				saw_pre_dec = 1;
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_pre_dec_lvalue = g_ir[inst->arg0].is_lvalue;
-			}
-			else if (inst->arg1 == 1)
-			{
+			} else if (inst->arg1 == 1) {
 				saw_post_dec = 1;
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_post_dec_lvalue = g_ir[inst->arg0].is_lvalue;
@@ -7588,8 +7009,7 @@ DEFINE_TEST(test_ternary_vector_promotions)
 	compiler_setup(snippet_ternary_vectors);
 	int saw_vec3_select = 0;
 	int saw_vec4_select = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_SELECT)
 			continue;
@@ -7616,28 +7036,22 @@ DEFINE_TEST(test_function_call_symbols)
 	int saw_apply_gain_symbol = 0;
 	int saw_main_symbol = 0;
 	int saw_apply_gain_call = 0;
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
+	for (int i = 0; i < acount(st->symbols); ++i) {
 		Symbol* sym = &st->symbols[i];
-		if (sym->name == saturate)
-		{
+		if (sym->name == saturate) {
 			saw_saturate_symbol = sym->kind == SYM_FUNC;
 			assert(sym->type && sym->type->tag == T_FLOAT);
 		}
-		if (sym->name == apply_gain)
-		{
+		if (sym->name == apply_gain) {
 			saw_apply_gain_symbol = sym->kind == SYM_FUNC;
 			assert(sym->type && sym->type->tag == T_VEC);
 		}
-		if (sym->name == main_name)
-		{
+		if (sym->name == main_name) {
 			saw_main_symbol = sym->kind == SYM_FUNC;
 		}
 	}
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_CALL && g_ir[i].str0 == apply_gain)
-		{
+	for (int i = 0; i < acount(g_ir); ++i) {
+		if (g_ir[i].op == IR_CALL && g_ir[i].str0 == apply_gain) {
 			saw_apply_gain_call = 1;
 			break;
 		}
@@ -7687,26 +7101,20 @@ DEFINE_TEST(test_matrix_operations_ir)
 	int saw_matrix_vector = 0;
 	int saw_vector_matrix = 0;
 	int saw_rectangular_matrix = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		if (g_ir[i].op == IR_CONSTRUCT && g_ir[i].str0 == mat3_name)
 			saw_mat_ctor = 1;
 		if (g_ir[i].op == IR_INDEX)
 			index_count++;
-		if (g_ir[i].op == IR_BINARY && g_ir[i].tok == TOK_STAR)
-		{
+		if (g_ir[i].op == IR_BINARY && g_ir[i].tok == TOK_STAR) {
 			IR_Cmd* lhs = NULL;
 			IR_Cmd* rhs = NULL;
-			for (int j = i - 1; j >= 0 && (!lhs || !rhs); --j)
-			{
+			for (int j = i - 1; j >= 0 && (!lhs || !rhs); --j) {
 				if (g_ir[j].op != IR_PUSH_IDENT)
 					continue;
-				if (!rhs)
-				{
+				if (!rhs) {
 					rhs = &g_ir[j];
-				}
-				else if (!lhs)
-				{
+				} else if (!lhs) {
 					lhs = &g_ir[j];
 				}
 			}
@@ -7734,8 +7142,7 @@ DEFINE_TEST(test_looping_constructs)
 	int saw_do_begin = 0;
 	int saw_do_end = 0;
 	int saw_continue = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		if (g_ir[i].op == IR_WHILE_BEGIN)
 			saw_while_begin = 1;
 		if (g_ir[i].op == IR_WHILE_END)
@@ -7768,13 +7175,11 @@ DEFINE_TEST(test_bitwise_operations)
 	int saw_bxor_assign = 0;
 	int saw_shl_assign = 0;
 	int saw_shr_assign = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_BINARY)
 			continue;
-		switch (inst->tok)
-		{
+		switch (inst->tok) {
 		case TOK_AMP:
 			saw_band = 1;
 			break;
@@ -7832,42 +7237,26 @@ DEFINE_TEST(test_numeric_literal_bases)
 	int saw_bin_uint = 0;
 	int saw_oct_uint = 0;
 	int saw_dec_uint = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_PUSH_INT)
 			continue;
-		if (inst->is_unsigned_literal)
-		{
-			if (inst->arg0 == 31)
-			{
+		if (inst->is_unsigned_literal) {
+			if (inst->arg0 == 31) {
 				saw_hex_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 10)
-			{
+			} else if (inst->arg0 == 10) {
 				saw_bin_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 61)
-			{
+			} else if (inst->arg0 == 61) {
 				saw_oct_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 42)
-			{
+			} else if (inst->arg0 == 42) {
 				saw_dec_uint = inst->type == g_type_uint;
 			}
-		}
-		else
-		{
-			if (inst->arg0 == 31)
-			{
+		} else {
+			if (inst->arg0 == 31) {
 				saw_hex_int = inst->type == g_type_int;
-			}
-			else if (inst->arg0 == 10)
-			{
+			} else if (inst->arg0 == 10) {
 				saw_bin_int = inst->type == g_type_int;
-			}
-			else if (inst->arg0 == 61)
-			{
+			} else if (inst->arg0 == 61) {
 				saw_oct_int = inst->type == g_type_int;
 			}
 		}
@@ -7886,10 +7275,8 @@ DEFINE_TEST(test_discard_instruction)
 {
 	compiler_setup(snippet_discard);
 	int saw_discard = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_DISCARD)
-		{
+	for (int i = 0; i < acount(g_ir); ++i) {
+		if (g_ir[i].op == IR_DISCARD) {
 			saw_discard = 1;
 			break;
 		}
@@ -7911,29 +7298,23 @@ DEFINE_TEST(test_struct_block_layout)
 	int saw_block_layout_identifier = 0;
 	int saw_block_instance = 0;
 	int saw_block_member_array = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_STRUCT_BEGIN && inst->str0 == light_struct)
-		{
+		if (inst->op == IR_STRUCT_BEGIN && inst->str0 == light_struct) {
 			saw_struct = 1;
 		}
-		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
-		{
+		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name) {
 			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
 					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
 					inst->layout_set == 1 && inst->layout_binding == 0;
 		}
-		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
-		{
+		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name) {
 			saw_block_layout_identifier = 1;
 		}
-		if (inst->op == IR_BLOCK_DECL_INSTANCE && inst->str0 == instance_name)
-		{
+		if (inst->op == IR_BLOCK_DECL_INSTANCE && inst->str0 == instance_name) {
 			saw_block_instance = 1;
 		}
-		if (inst->op == IR_BLOCK_DECL_MEMBER && inst->str0 == member_name && inst->arg0 == 2)
-		{
+		if (inst->op == IR_BLOCK_DECL_MEMBER && inst->str0 == member_name && inst->arg0 == 2) {
 			saw_block_member_array = 1;
 		}
 	}
@@ -7952,8 +7333,7 @@ DEFINE_TEST(test_struct_constructor_ir)
 	compiler_setup(snippet_struct_constructor);
 	int saw_inner_ctor = 0;
 	int saw_outer_ctor = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_CONSTRUCT)
 			continue;
@@ -8002,8 +7382,7 @@ DEFINE_TEST(test_switch_statement_cases)
 	int case_zero = 0;
 	int case_one = 0;
 	int case_two = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op == IR_SWITCH_BEGIN)
 			saw_switch_begin = 1;
@@ -8047,8 +7426,7 @@ DEFINE_TEST(test_builtin_function_calls)
 	int saw_frac = 0;
 	int saw_dot = 0;
 	int saw_normalize = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_CALL)
 			continue;
@@ -8094,8 +7472,7 @@ DEFINE_TEST(test_texture_query_builtins)
 	int saw_not_equal = 0;
 	int saw_any = 0;
 	int saw_all = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_CALL)
 			continue;
@@ -8150,8 +7527,7 @@ DEFINE_TEST(test_extended_intrinsic_calls)
 	int saw_image_atomic_comp_swap = 0;
 	int saw_outer_product = 0;
 	int saw_fwidth_fine = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op != IR_CALL)
 			continue;
@@ -8287,16 +7663,13 @@ DEFINE_TEST(test_compute_layout_and_storage)
 	const char* local_size_x = sintern("local_size_x");
 	const char* local_size_y = sintern("local_size_y");
 	const char* local_size_z = sintern("local_size_z");
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_STAGE_LAYOUT_BEGIN)
-		{
+		if (inst->op == IR_STAGE_LAYOUT_BEGIN) {
 			saw_stage_layout = 1;
 			continue;
 		}
-		if (inst->op == IR_STAGE_LAYOUT_VALUE)
-		{
+		if (inst->op == IR_STAGE_LAYOUT_VALUE) {
 			if (inst->str0 == local_size_x && inst->arg0 == 8)
 				saw_x = 1;
 			if (inst->str0 == local_size_y && inst->arg0 == 4)
@@ -8330,10 +7703,8 @@ DEFINE_TEST(test_preprocessor_passthrough)
 	Symbol* macro_sym = symbol_table_find(unused_constant);
 	assert(!macro_sym);
 	int saw_func = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_FUNC_BEGIN)
-		{
+	for (int i = 0; i < acount(g_ir); ++i) {
+		if (g_ir[i].op == IR_FUNC_BEGIN) {
 			saw_func = 1;
 			break;
 		}
@@ -8349,15 +7720,12 @@ DEFINE_TEST(test_const_qualifier_metadata)
 	compiler_setup(snippet_const_qualifier);
 	int saw_const_symbol = 0;
 	int saw_mutable_symbol = 0;
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
+	for (int i = 0; i < acount(st->symbols); ++i) {
 		Symbol* sym = &st->symbols[i];
-		if (sym->name == factor)
-		{
+		if (sym->name == factor) {
 			saw_const_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
 		}
-		if (sym->name == mutable_val)
-		{
+		if (sym->name == mutable_val) {
 			saw_mutable_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
 		}
 	}
@@ -8367,24 +7735,19 @@ DEFINE_TEST(test_const_qualifier_metadata)
 	int saw_const_lvalue = 0;
 	int saw_mutable_ident = 0;
 	int saw_mutable_lvalue = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
+	for (int i = 0; i < acount(g_ir); ++i) {
 		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_DECL_VAR && inst->str0 == factor)
-		{
+		if (inst->op == IR_DECL_VAR && inst->str0 == factor) {
 			saw_const_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 		}
-		if (inst->op == IR_DECL_VAR && inst->str0 == mutable_val)
-		{
+		if (inst->op == IR_DECL_VAR && inst->str0 == mutable_val) {
 			saw_mutable_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 		}
-		if (inst->op == IR_PUSH_IDENT && inst->str0 == factor)
-		{
+		if (inst->op == IR_PUSH_IDENT && inst->str0 == factor) {
 			saw_const_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 			saw_const_lvalue |= inst->is_lvalue;
 		}
-		if (inst->op == IR_PUSH_IDENT && inst->str0 == mutable_val)
-		{
+		if (inst->op == IR_PUSH_IDENT && inst->str0 == mutable_val) {
 			saw_mutable_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 			saw_mutable_lvalue |= inst->is_lvalue;
 		}

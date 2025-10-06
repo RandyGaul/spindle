@@ -14,11 +14,23 @@ IndentGotoLabels: false
 ColumnLimit: 0          # never hard-wrap; keep author-chosen breaks
 
 # Braces & layout
-BreakBeforeBraces: Allman   # opening brace on its own line
-AllowShortIfStatementsOnASingleLine: false
-AllowShortBlocksOnASingleLine: Empty
-AllowShortFunctionsOnASingleLine: Empty
-AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: false   # if/for/while … { on same line
+  BeforeElse: false              # "} else {" on same line
+  BeforeCatch: false
+  AfterFunction: true            # functions put { on next line
+  AfterClass: true               # classes/structs/enums put { on next line
+  AfterStruct: true
+  AfterEnum: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
 
 # Spacing
 SpaceBeforeParens: ControlStatements   # "if (" but "func("
