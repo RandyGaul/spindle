@@ -6042,6 +6042,8 @@ typedef struct SpirvFunctionInfo
 	Type* return_type;
 	dyna Type** param_types;
 	int has_definition;
+	int ir_begin;
+	int ir_end;
 } SpirvFunctionInfo;
 
 typedef struct SpirvFunctionEmit
@@ -6061,6 +6063,8 @@ enum
 enum SpirvOp
 {
 	SpvOpUndef = 1,
+	SpvOpConstantTrue = 41,
+	SpvOpConstantFalse = 42,
 	SpvOpDecorate = 71,
 	SpvOpMemoryModel = 14,
 	SpvOpEntryPoint = 15,
@@ -6081,9 +6085,26 @@ enum SpirvOp
 	SpvOpFunctionParameter = 55,
 	SpvOpFunctionEnd = 56,
 	SpvOpVariable = 59,
+	SpvOpLoopMerge = 246,
+	SpvOpSelectionMerge = 247,
 	SpvOpLabel = 248,
-	SpvOpReturn = 253,
-	SpvOpReturnValue = 254,
+	SpvOpBranch = 249,
+	SpvOpBranchConditional = 250,
+        SpvOpSwitch = 251,
+        SpvOpKill = 252,
+        SpvOpReturn = 253,
+        SpvOpReturnValue = 254,
+        SpvOpUnreachable = 255,
+};
+
+enum SpirvSelectionControl
+{
+	SpvSelectionControlMaskNone = 0,
+};
+
+enum SpirvLoopControl
+{
+	SpvLoopControlMaskNone = 0,
 };
 
 enum SpirvExecutionModel
@@ -6249,6 +6270,97 @@ static uint32_t spirv_constant_uint(SpirvConstantCache* cache, uint32_t type_id,
 	entry.id = id;
 	apush(cache->entries, entry);
 	return id;
+}
+
+static uint32_t spirv_constant_bool(SpirvConstantCache* cache, uint32_t type_id, int value)
+{
+	if (!cache)
+		return 0;
+	uint32_t key = value ? 1u : 0u;
+	for (int i = 0; i < acount(cache->entries); ++i)
+	{
+		SpirvConstantEntry* entry = &cache->entries[i];
+		if (entry->type_id == type_id && entry->value == key)
+			return entry->id;
+	}
+	uint32_t id = spirv_alloc_id(cache->builder);
+	int inst = spirv_inst_start(cache->builder, value ? SpvOpConstantTrue : SpvOpConstantFalse);
+	spirv_inst_append(cache->builder, type_id);
+	spirv_inst_append(cache->builder, id);
+	spirv_inst_finalize(cache->builder, inst);
+	SpirvConstantEntry entry = (SpirvConstantEntry){ 0 };
+	entry.type_id = type_id;
+	entry.value = key;
+	entry.id = id;
+	apush(cache->entries, entry);
+	return id;
+}
+
+static uint32_t spirv_const_bool(SpirvTypeCache* cache, SpirvConstantCache* const_cache, int value)
+{
+	uint32_t bool_type = spirv_type_cache_get(cache, g_type_bool);
+	return spirv_constant_bool(const_cache, bool_type, value);
+}
+
+static uint32_t spirv_const_uint32(SpirvTypeCache* cache, SpirvConstantCache* const_cache, uint32_t value)
+{
+	uint32_t uint_type = spirv_type_cache_get(cache, g_type_uint);
+	return spirv_constant_uint(const_cache, uint_type, value);
+}
+
+static void spirv_emit_control_flow_stub(const SpirvFunctionInfo* info)
+{
+	if (!info)
+		return;
+	if (info->ir_begin < 0 || info->ir_end < 0)
+		return;
+	for (int i = info->ir_begin; i < info->ir_end; ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		switch (inst->op)
+		{
+		case IR_IF_BEGIN:
+		case IR_IF_THEN:
+		case IR_IF_ELSE:
+		case IR_IF_END:
+		case IR_FOR_BEGIN:
+		case IR_FOR_INIT_BEGIN:
+		case IR_FOR_INIT_END:
+		case IR_FOR_COND_BEGIN:
+		case IR_FOR_COND_END:
+		case IR_FOR_STEP_BEGIN:
+		case IR_FOR_STEP_END:
+		case IR_FOR_BODY_BEGIN:
+		case IR_FOR_BODY_END:
+		case IR_FOR_END:
+		case IR_WHILE_BEGIN:
+		case IR_WHILE_COND_BEGIN:
+		case IR_WHILE_COND_END:
+		case IR_WHILE_BODY_BEGIN:
+		case IR_WHILE_BODY_END:
+		case IR_WHILE_END:
+		case IR_DO_BEGIN:
+		case IR_DO_BODY_BEGIN:
+		case IR_DO_BODY_END:
+		case IR_DO_COND_BEGIN:
+		case IR_DO_COND_END:
+		case IR_DO_END:
+		case IR_SWITCH_BEGIN:
+		case IR_SWITCH_SELECTOR_BEGIN:
+		case IR_SWITCH_SELECTOR_END:
+		case IR_SWITCH_CASE:
+		case IR_SWITCH_END:
+		case IR_BLOCK_BEGIN:
+		case IR_BLOCK_END:
+		case IR_RETURN:
+		case IR_BREAK:
+		case IR_CONTINUE:
+		case IR_DISCARD:
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 static uint32_t spirv_type_pointer(SpirvTypeCache* cache, uint32_t value_type_id, uint32_t storage_class)
@@ -6440,6 +6552,8 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 			SpirvFunctionInfo info = (SpirvFunctionInfo){ 0 };
 			info.name = inst->str1 ? inst->str1 : "";
 			info.return_type = inst->type ? inst->type : g_type_void;
+			info.ir_begin = -1;
+			info.ir_end = -1;
 			apush(funcs, info);
 			apush(stack, acount(funcs) - 1);
 			break;
@@ -6447,38 +6561,48 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 		case IR_FUNC_PROTOTYPE_END:
 		{
 			if (acount(stack))
-			(void)apop(stack);
+			{
+				apop(stack);
+			}
 			break;
 		}
 		case IR_FUNC_DEFINITION_BEGIN:
 		{
 			if (acount(stack))
 			{
-			int idx = stack[acount(stack) - 1];
-			funcs[idx].has_definition = 1;
+				int idx = stack[acount(stack) - 1];
+				SpirvFunctionInfo* info = &funcs[idx];
+				info->has_definition = 1;
+				info->ir_begin = i + 1;
 			}
 			break;
 		}
 		case IR_FUNC_DEFINITION_END:
 		{
 			if (acount(stack))
-			(void)apop(stack);
+			{
+				int idx = stack[acount(stack) - 1];
+				funcs[idx].ir_end = i;
+				apop(stack);
+			}
 			break;
 		}
 		case IR_FUNC_PARAM_TYPE:
 		{
 			if (acount(stack))
 			{
-			int idx = stack[acount(stack) - 1];
-			Type* param_type = type_system_get(inst->str0);
-			if (!param_type)
-			param_type = g_type_void;
-			apush(funcs[idx].param_types, param_type);
+				int idx = stack[acount(stack) - 1];
+				Type* param_type = type_system_get(inst->str0);
+				if (!param_type)
+				{
+					param_type = g_type_void;
+				}
+				apush(funcs[idx].param_types, param_type);
 			}
 			break;
 		}
 		default:
-		break;
+			break;
 		}
 	}
 	afree(stack);
@@ -6595,6 +6719,7 @@ dyna uint32_t* emit_spirv()
 		}
 		uint32_t label_id = spirv_alloc_id(&builder);
 		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
+		spirv_emit_control_flow_stub(info);
 		if (info->return_type && info->return_type != g_type_void)
 		{
 			uint32_t undef_id = spirv_alloc_id(&builder);
@@ -6647,6 +6772,388 @@ dyna uint32_t* emit_spirv()
 	afree(cache.entries);
 	afree(const_cache.entries);
 	return builder.words;
+}
+
+typedef struct SpirvEntryPointState
+{
+	uint32_t id;
+	int completed;
+} SpirvEntryPointState;
+
+// Validate structured modules like `void main() { for (int i = 0; i < 4; ++i) { if (i == 2) continue; } }`.
+// ...This keeps the emitter honest before drivers see the shader binary.
+static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, const char** out_error)
+{
+	const char* error = NULL;
+	dyna SpirvEntryPointState* entry_points = NULL;
+	dyna uint32_t* finished_functions = NULL;
+	if (word_count < 5)
+	{
+		error = "module_too_small";
+		goto spirv_module_validate_cleanup;
+	}
+	if (words[0] != SPIRV_MAGIC)
+	{
+		error = "bad_magic";
+		goto spirv_module_validate_cleanup;
+	}
+	uint32_t bound = words[3];
+	if (!bound)
+	{
+		error = "invalid_bound";
+		goto spirv_module_validate_cleanup;
+	}
+	int in_function = 0;
+	uint32_t current_function = 0;
+	int saw_block = 0;
+	int block_terminated = 0;
+	for (int offset = 5; offset < word_count;)
+	{
+		uint32_t inst_word = words[offset];
+		uint16_t inst_word_count = (uint16_t)(inst_word >> 16);
+		uint16_t opcode = (uint16_t)(inst_word & 0xFFFFu);
+		if (!inst_word_count)
+		{
+			error = "zero_word_instruction";
+			goto spirv_module_validate_fail;
+		}
+		if (offset + inst_word_count > word_count)
+		{
+			error = "truncated_instruction";
+			goto spirv_module_validate_fail;
+		}
+		if (in_function && block_terminated && opcode != SpvOpLabel && opcode != SpvOpFunctionEnd)
+		{
+			error = "instruction_after_terminator";
+			goto spirv_module_validate_fail;
+		}
+		switch (opcode)
+		{
+		case SpvOpEntryPoint:
+		{
+			if (inst_word_count < 4)
+			{
+				error = "entry_point_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t function_id = words[offset + 2];
+			if (function_id >= bound)
+			{
+				error = "entry_point_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			int entry_index = -1;
+			for (int i = 0; i < acount(entry_points); ++i)
+			{
+				if (entry_points[i].id == function_id)
+				{
+					entry_index = i;
+					break;
+				}
+			}
+			if (entry_index < 0)
+			{
+				SpirvEntryPointState state = { function_id, 0 };
+				apush(entry_points, state);
+				entry_index = acount(entry_points) - 1;
+			}
+			for (int i = 0; i < acount(finished_functions); ++i)
+			{
+				if (finished_functions[i] == function_id)
+				{
+					entry_points[entry_index].completed = 1;
+					break;
+				}
+			}
+			break;
+		}
+		case SpvOpFunction:
+		{
+			if (inst_word_count < 5)
+			{
+				error = "function_too_short";
+				goto spirv_module_validate_fail;
+			}
+			if (in_function)
+			{
+				error = "nested_function";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t result_type = words[offset + 1];
+			uint32_t func_id = words[offset + 2];
+			if (result_type >= bound || func_id >= bound)
+			{
+				error = "function_id_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			in_function = 1;
+			current_function = func_id;
+			saw_block = 0;
+			block_terminated = 0;
+			break;
+		}
+		case SpvOpFunctionEnd:
+		{
+			if (!in_function)
+			{
+				error = "function_end_without_function";
+				goto spirv_module_validate_fail;
+			}
+			if (!saw_block)
+			{
+				error = "function_missing_label";
+				goto spirv_module_validate_fail;
+			}
+			if (!block_terminated)
+			{
+				error = "function_missing_terminator";
+				goto spirv_module_validate_fail;
+			}
+			for (int i = 0; i < acount(entry_points); ++i)
+			{
+				if (entry_points[i].id == current_function)
+				{
+					entry_points[i].completed = 1;
+					break;
+				}
+			}
+			apush(finished_functions, current_function);
+			in_function = 0;
+			current_function = 0;
+			saw_block = 0;
+			block_terminated = 0;
+			break;
+		}
+		case SpvOpLabel:
+		{
+			if (!in_function)
+			{
+				error = "label_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 2)
+			{
+				error = "label_too_short";
+				goto spirv_module_validate_fail;
+			}
+			if (saw_block && !block_terminated)
+			{
+				error = "unterminated_block";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t label_id = words[offset + 1];
+			if (label_id >= bound)
+			{
+				error = "label_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			saw_block = 1;
+			block_terminated = 0;
+			break;
+		}
+		case SpvOpLoopMerge:
+		{
+			if (!in_function)
+			{
+				error = "loop_merge_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 3)
+			{
+				error = "loop_merge_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t merge = words[offset + 1];
+			uint32_t cont = words[offset + 2];
+			if (merge >= bound || cont >= bound)
+			{
+				error = "loop_merge_id_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			break;
+		}
+		case SpvOpSelectionMerge:
+		{
+			if (!in_function)
+			{
+				error = "selection_merge_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 2)
+			{
+				error = "selection_merge_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t merge = words[offset + 1];
+			if (merge >= bound)
+			{
+				error = "selection_merge_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			break;
+		}
+		case SpvOpBranch:
+		{
+			if (!in_function)
+			{
+				error = "branch_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 2)
+			{
+				error = "branch_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t target = words[offset + 1];
+			if (target >= bound)
+			{
+				error = "branch_target_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			block_terminated = 1;
+			break;
+		}
+		case SpvOpBranchConditional:
+		{
+			if (!in_function)
+			{
+				error = "branch_cond_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 4)
+			{
+				error = "branch_cond_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t cond = words[offset + 1];
+			uint32_t true_label = words[offset + 2];
+			uint32_t false_label = words[offset + 3];
+			if (cond >= bound || true_label >= bound || false_label >= bound)
+			{
+				error = "branch_cond_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			block_terminated = 1;
+			break;
+		}
+		case SpvOpSwitch:
+		{
+			if (!in_function)
+			{
+				error = "switch_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 3)
+			{
+				error = "switch_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t selector = words[offset + 1];
+			uint32_t default_label = words[offset + 2];
+			if (selector >= bound || default_label >= bound)
+			{
+				error = "switch_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			for (int idx = 3; idx < inst_word_count; idx += 2)
+			{
+				if (idx + 1 >= inst_word_count)
+				{
+					error = "switch_missing_target";
+					goto spirv_module_validate_fail;
+				}
+				uint32_t label = words[offset + idx + 1];
+				if (label >= bound)
+				{
+					error = "switch_label_out_of_bounds";
+					goto spirv_module_validate_fail;
+				}
+			}
+			block_terminated = 1;
+			break;
+		}
+		case SpvOpReturn:
+		{
+			if (!in_function)
+			{
+				error = "return_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			block_terminated = 1;
+			break;
+		}
+		case SpvOpReturnValue:
+		{
+			if (!in_function)
+			{
+				error = "return_value_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			if (inst_word_count < 2)
+			{
+				error = "return_value_too_short";
+				goto spirv_module_validate_fail;
+			}
+			uint32_t value_id = words[offset + 1];
+			if (value_id >= bound)
+			{
+				error = "return_value_out_of_bounds";
+				goto spirv_module_validate_fail;
+			}
+			block_terminated = 1;
+			break;
+		}
+		case SpvOpKill:
+		case SpvOpUnreachable:
+		{
+			if (!in_function)
+			{
+				error = "kill_or_unreachable_outside_function";
+				goto spirv_module_validate_fail;
+			}
+			block_terminated = 1;
+			break;
+		}
+		default:
+			break;
+		}
+		offset += inst_word_count;
+	}
+	if (in_function)
+	{
+		error = "missing_function_end";
+		goto spirv_module_validate_fail;
+	}
+	if (!acount(entry_points))
+	{
+		error = "missing_entry_point";
+		goto spirv_module_validate_fail;
+	}
+	for (int i = 0; i < acount(entry_points); ++i)
+	{
+		if (!entry_points[i].completed)
+		{
+			error = "entry_point_not_completed";
+			goto spirv_module_validate_fail;
+		}
+	}
+	goto spirv_module_validate_cleanup;
+
+spirv_module_validate_fail:
+	afree(entry_points);
+	afree(finished_functions);
+	if (!error)
+		error = "validation_failed";
+	if (out_error)
+		*out_error = error;
+	return 0;
+
+spirv_module_validate_cleanup:
+	afree(entry_points);
+	afree(finished_functions);
+	if (out_error)
+		*out_error = error;
+	return error == NULL;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -8553,6 +9060,36 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 }
 
+
+DEFINE_TEST(test_spirv_emit_control_flow_structures)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup(snippet_looping);
+	dyna uint32_t* words = emit_spirv();
+	const char* error = NULL;
+	int valid = spirv_module_is_valid_shader(words, acount(words), &error);
+	if (!valid)
+	{
+		printf("validation failed for snippet_looping: %s\n", error ? error : "unknown");
+	}
+	assert(valid);
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup(snippet_switch_stmt);
+	words = emit_spirv();
+	error = NULL;
+	valid = spirv_module_is_valid_shader(words, acount(words), &error);
+	if (!valid)
+	{
+		printf("validation failed for snippet_switch_stmt: %s\n", error ? error : "unknown");
+	}
+	assert(valid);
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_preprocessor_passthrough)
 {
 	const char* out_color = sintern("out_color");
@@ -8657,6 +9194,7 @@ void unit_test()
 		TEST_ENTRY(test_compute_layout_and_storage),
 		TEST_ENTRY(test_spirv_emit_minimal_vertex_main),
 		TEST_ENTRY(test_spirv_emit_non_void_return_helper),
+		TEST_ENTRY(test_spirv_emit_control_flow_structures),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_const_qualifier_metadata),
 	};
