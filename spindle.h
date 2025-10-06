@@ -27,20 +27,20 @@ extern "C"
 {
 #endif
 
-typedef enum ShaderStage
-{
-	SHADER_STAGE_VERTEX,
-	SHADER_STAGE_FRAGMENT,
-	SHADER_STAGE_COMPUTE,
-	SHADER_STAGE_COUNT
-} ShaderStage;
+	typedef enum ShaderStage
+	{
+		SHADER_STAGE_VERTEX,
+		SHADER_STAGE_FRAGMENT,
+		SHADER_STAGE_COMPUTE,
+		SHADER_STAGE_COUNT
+	} ShaderStage;
 
-void compiler_set_shader_stage(ShaderStage stage);
-void compiler_setup(const char* source);
-void compiler_teardown();
-void dump_ir();
-void dump_symbols();
-void unit_test();
+	void compiler_set_shader_stage(ShaderStage stage);
+	void compiler_setup(const char* source);
+	void compiler_teardown();
+	void dump_ir();
+	void dump_symbols();
+	void unit_test();
 
 #ifdef __cplusplus
 }
@@ -1192,8 +1192,8 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 		Type* incoming = params ? params[i] : NULL;
 		apush(sym->params, incoming);
 	}
-sym->param_count = param_count;
-sym->param_signature_set = 1;
+	sym->param_count = param_count;
+	sym->param_signature_set = 1;
 }
 
 void symbol_table_free()
@@ -1202,13 +1202,13 @@ void symbol_table_free()
 	{
 		symbol_table_leave_scope();
 	}
-for (int i = 0; i < acount(st->symbols); ++i)
-{
-Symbol* sym = &st->symbols[i];
-afree(sym->params);
-}
-afree(st->symbols);
-afree(st->scopes);
+	for (int i = 0; i < acount(st->symbols); ++i)
+	{
+		Symbol* sym = &st->symbols[i];
+		afree(sym->params);
+	}
+	afree(st->symbols);
+	afree(st->scopes);
 }
 
 typedef enum Prec
@@ -5305,12 +5305,12 @@ typedef struct UnaryRule
 } UnaryRule;
 
 static const UnaryRule u_rules[] = {
-	{ TOK_PLUS,        0, U_NUMERIC_OR_MATRIX, UR_SAME },
-	{ TOK_MINUS,       0, U_NUMERIC_OR_MATRIX, UR_SAME },
-	{ TOK_NOT,         0, U_BOOL,              UR_BOOL_SAME_SHAPE },
-	{ TOK_TILDE,       0, U_INTEGER,           UR_SAME },
-	{ TOK_PLUS_PLUS,   1, U_NUMERIC,           UR_SAME },
-	{ TOK_MINUS_MINUS, 1, U_NUMERIC,           UR_SAME },
+	{ TOK_PLUS, 0, U_NUMERIC_OR_MATRIX, UR_SAME },
+	{ TOK_MINUS, 0, U_NUMERIC_OR_MATRIX, UR_SAME },
+	{ TOK_NOT, 0, U_BOOL, UR_BOOL_SAME_SHAPE },
+	{ TOK_TILDE, 0, U_INTEGER, UR_SAME },
+	{ TOK_PLUS_PLUS, 1, U_NUMERIC, UR_SAME },
+	{ TOK_MINUS_MINUS, 1, U_NUMERIC, UR_SAME },
 };
 
 static const UnaryRule* find_unary_rule(Tok tok)
@@ -5455,7 +5455,7 @@ static Type* result_componentwise_num(Tok tok, Type* lhs, Type* rhs, int allow_m
 static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 {
 	if (!lhs || !rhs)
-	return lhs ? lhs : rhs;
+		return lhs ? lhs : rhs;
 	if (type_is_matrix(lhs) && type_is_vector(rhs))
 	{
 		same_vec_len_or_error(tok, lhs, rhs);
@@ -5467,7 +5467,7 @@ static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 	if (type_is_vector(lhs) && type_is_matrix(rhs))
 	{
 		if (lhs->cols != rhs->rows)
-		type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
+			type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
 		Type* result = type_get_vector(type_base_type(lhs), rhs->cols);
 		if (!result)
 			type_check_error("unsupported vector-matrix multiplication result size %dx1", rhs->cols);
@@ -5476,7 +5476,7 @@ static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 	if (type_is_matrix(lhs) && type_is_matrix(rhs))
 	{
 		if (lhs->cols != rhs->rows)
-		type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
+			type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
 		Type* result = type_get_matrix(type_base_type(lhs), rhs->cols, lhs->rows);
 		if (!result)
 			type_check_error("unsupported matrix multiplication result size %dx%d", rhs->cols, lhs->rows);
@@ -5506,35 +5506,35 @@ typedef struct BinRule
 } BinRule;
 
 static const BinRule bin_rules[] = {
-	{ TOK_PLUS,           BR_ARITH,    TOK_EOF },
-	{ TOK_MINUS,          BR_ARITH,    TOK_EOF },
-	{ TOK_SLASH,          BR_ARITH,    TOK_EOF },
-	{ TOK_PERCENT,        BR_MOD,      TOK_EOF },
-	{ TOK_STAR,           BR_ARITH,    TOK_EOF },
-	{ TOK_AMP,            BR_BITWISE,  TOK_EOF },
-	{ TOK_PIPE,           BR_BITWISE,  TOK_EOF },
-	{ TOK_CARET,          BR_BITWISE,  TOK_EOF },
-	{ TOK_LSHIFT,         BR_SHIFT,    TOK_EOF },
-	{ TOK_RSHIFT,         BR_SHIFT,    TOK_EOF },
-	{ TOK_LT,             BR_REL,      TOK_EOF },
-	{ TOK_LE,             BR_REL,      TOK_EOF },
-	{ TOK_GT,             BR_REL,      TOK_EOF },
-	{ TOK_GE,             BR_REL,      TOK_EOF },
-	{ TOK_EQ,             BR_EQ,       TOK_EOF },
-	{ TOK_NE,             BR_EQ,       TOK_EOF },
-	{ TOK_AND_AND,        BR_LOGICAL,  TOK_EOF },
-	{ TOK_OR_OR,          BR_LOGICAL,  TOK_EOF },
-	{ TOK_ASSIGN,         BR_ASSIGN,   TOK_EOF },
-	{ TOK_PLUS_ASSIGN,    BR_COMPOUND, TOK_PLUS },
-	{ TOK_MINUS_ASSIGN,   BR_COMPOUND, TOK_MINUS },
-	{ TOK_STAR_ASSIGN,    BR_COMPOUND, TOK_STAR },
-	{ TOK_SLASH_ASSIGN,   BR_COMPOUND, TOK_SLASH },
+	{ TOK_PLUS, BR_ARITH, TOK_EOF },
+	{ TOK_MINUS, BR_ARITH, TOK_EOF },
+	{ TOK_SLASH, BR_ARITH, TOK_EOF },
+	{ TOK_PERCENT, BR_MOD, TOK_EOF },
+	{ TOK_STAR, BR_ARITH, TOK_EOF },
+	{ TOK_AMP, BR_BITWISE, TOK_EOF },
+	{ TOK_PIPE, BR_BITWISE, TOK_EOF },
+	{ TOK_CARET, BR_BITWISE, TOK_EOF },
+	{ TOK_LSHIFT, BR_SHIFT, TOK_EOF },
+	{ TOK_RSHIFT, BR_SHIFT, TOK_EOF },
+	{ TOK_LT, BR_REL, TOK_EOF },
+	{ TOK_LE, BR_REL, TOK_EOF },
+	{ TOK_GT, BR_REL, TOK_EOF },
+	{ TOK_GE, BR_REL, TOK_EOF },
+	{ TOK_EQ, BR_EQ, TOK_EOF },
+	{ TOK_NE, BR_EQ, TOK_EOF },
+	{ TOK_AND_AND, BR_LOGICAL, TOK_EOF },
+	{ TOK_OR_OR, BR_LOGICAL, TOK_EOF },
+	{ TOK_ASSIGN, BR_ASSIGN, TOK_EOF },
+	{ TOK_PLUS_ASSIGN, BR_COMPOUND, TOK_PLUS },
+	{ TOK_MINUS_ASSIGN, BR_COMPOUND, TOK_MINUS },
+	{ TOK_STAR_ASSIGN, BR_COMPOUND, TOK_STAR },
+	{ TOK_SLASH_ASSIGN, BR_COMPOUND, TOK_SLASH },
 	{ TOK_PERCENT_ASSIGN, BR_COMPOUND, TOK_PERCENT },
-	{ TOK_AND_ASSIGN,     BR_COMPOUND, TOK_AMP },
-	{ TOK_OR_ASSIGN,      BR_COMPOUND, TOK_PIPE },
-	{ TOK_XOR_ASSIGN,     BR_COMPOUND, TOK_CARET },
-	{ TOK_LSHIFT_ASSIGN,  BR_COMPOUND, TOK_LSHIFT },
-	{ TOK_RSHIFT_ASSIGN,  BR_COMPOUND, TOK_RSHIFT },
+	{ TOK_AND_ASSIGN, BR_COMPOUND, TOK_AMP },
+	{ TOK_OR_ASSIGN, BR_COMPOUND, TOK_PIPE },
+	{ TOK_XOR_ASSIGN, BR_COMPOUND, TOK_CARET },
+	{ TOK_LSHIFT_ASSIGN, BR_COMPOUND, TOK_LSHIFT },
+	{ TOK_RSHIFT_ASSIGN, BR_COMPOUND, TOK_RSHIFT },
 };
 
 Type* type_binary_assign(Type* lhs, Type* rhs)
@@ -5578,80 +5578,80 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 	switch (br->kind)
 	{
 	case BR_ASSIGN:
-	return type_binary_assign(lhs, rhs);
+		return type_binary_assign(lhs, rhs);
 	case BR_COMPOUND:
 	{
-	Type* value = type_check_binary(br->underlying, lhs, rhs);
-	return type_binary_assign(lhs, value);
+		Type* value = type_check_binary(br->underlying, lhs, rhs);
+		return type_binary_assign(lhs, value);
 	}
 	case BR_ARITH:
-	require_numeric(tok, lhs, "left");
-	require_numeric(tok, rhs, "right");
-	require_same_base(tok, lhs, rhs);
-	if (tok == TOK_STAR)
-		return type_mul_with_mat_rules(tok, lhs, rhs);
-	int matrix_mask = 0;
-	if (tok == TOK_PLUS || tok == TOK_MINUS)
-		matrix_mask = 3;
-	else if (tok == TOK_SLASH)
-		matrix_mask = 1;
-	return result_componentwise_num(tok, lhs, rhs, matrix_mask, 0);
+		require_numeric(tok, lhs, "left");
+		require_numeric(tok, rhs, "right");
+		require_same_base(tok, lhs, rhs);
+		if (tok == TOK_STAR)
+			return type_mul_with_mat_rules(tok, lhs, rhs);
+		int matrix_mask = 0;
+		if (tok == TOK_PLUS || tok == TOK_MINUS)
+			matrix_mask = 3;
+		else if (tok == TOK_SLASH)
+			matrix_mask = 1;
+		return result_componentwise_num(tok, lhs, rhs, matrix_mask, 0);
 	case BR_MOD:
-	require_integer(tok, lhs, "left");
-	require_integer(tok, rhs, "right");
-	require_same_base(tok, lhs, rhs);
-	return result_componentwise_num(tok, lhs, rhs, 0, 0);
+		require_integer(tok, lhs, "left");
+		require_integer(tok, rhs, "right");
+		require_same_base(tok, lhs, rhs);
+		return result_componentwise_num(tok, lhs, rhs, 0, 0);
 	case BR_BITWISE:
-	require_integer(tok, lhs, "left");
-	require_integer(tok, rhs, "right");
-	require_same_base(tok, lhs, rhs);
-	return result_componentwise_num(tok, lhs, rhs, 0, 0);
+		require_integer(tok, lhs, "left");
+		require_integer(tok, rhs, "right");
+		require_same_base(tok, lhs, rhs);
+		return result_componentwise_num(tok, lhs, rhs, 0, 0);
 	case BR_SHIFT:
-	require_integer(tok, lhs, "left");
-	require_integer(tok, rhs, "right");
-	if (type_is_vector(lhs))
-	{
-	if (type_is_scalar(rhs))
-	return lhs;
-	if (type_is_vector(rhs))
-	{
-	same_vec_len_or_error(tok, lhs, rhs);
-	require_same_base(tok, lhs, rhs);
-	return lhs;
-	}
-	}
-	else if (type_is_scalar(lhs))
-	{
-	if (!type_is_scalar(rhs))
-	type_check_error("operator %s requires scalar shift amount", tok_name[tok]);
-	return lhs;
-	}
-	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	return lhs ? lhs : rhs;
+		require_integer(tok, lhs, "left");
+		require_integer(tok, rhs, "right");
+		if (type_is_vector(lhs))
+		{
+			if (type_is_scalar(rhs))
+				return lhs;
+			if (type_is_vector(rhs))
+			{
+				same_vec_len_or_error(tok, lhs, rhs);
+				require_same_base(tok, lhs, rhs);
+				return lhs;
+			}
+		}
+		else if (type_is_scalar(lhs))
+		{
+			if (!type_is_scalar(rhs))
+				type_check_error("operator %s requires scalar shift amount", tok_name[tok]);
+			return lhs;
+		}
+		type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+		return lhs ? lhs : rhs;
 	case BR_REL:
-	require_numeric(tok, lhs, "left");
-	require_numeric(tok, rhs, "right");
-	require_same_base(tok, lhs, rhs);
-	if (!type_is_scalar(lhs) || !type_is_scalar(rhs))
-	type_check_error("operator %s requires scalar operands", tok_name[tok]);
-	return type_get_scalar(T_BOOL);
+		require_numeric(tok, lhs, "left");
+		require_numeric(tok, rhs, "right");
+		require_same_base(tok, lhs, rhs);
+		if (!type_is_scalar(lhs) || !type_is_scalar(rhs))
+			type_check_error("operator %s requires scalar operands", tok_name[tok]);
+		return type_get_scalar(T_BOOL);
 	case BR_EQ:
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-	same_vec_len_or_error(tok, lhs, rhs);
-	require_same_base(tok, lhs, rhs);
-	return type_get_vector(T_BOOL, lhs->cols);
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-	{
-	require_same_base(tok, lhs, rhs);
-	return type_get_scalar(T_BOOL);
-	}
-	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+		if (type_is_vector(lhs) && type_is_vector(rhs))
+		{
+			same_vec_len_or_error(tok, lhs, rhs);
+			require_same_base(tok, lhs, rhs);
+			return type_get_vector(T_BOOL, lhs->cols);
+		}
+		if (type_is_scalar(lhs) && type_is_scalar(rhs))
+		{
+			require_same_base(tok, lhs, rhs);
+			return type_get_scalar(T_BOOL);
+		}
+		type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
 	case BR_LOGICAL:
-	require_bool_scalar(tok, lhs, "left");
-	require_bool_scalar(tok, rhs, "right");
-	return type_get_scalar(T_BOOL);
+		require_bool_scalar(tok, lhs, "left");
+		require_bool_scalar(tok, rhs, "right");
+		return type_get_scalar(T_BOOL);
 	}
 	return NULL;
 }
@@ -6105,10 +6105,10 @@ void type_check_ir()
 				(void)apop(symbol_stack);
 			Type* result = callee;
 			Symbol* sym = NULL;
-		if (inst->str0)
-		{
-			sym = symbol_table_find(inst->str0);
-		}
+			if (inst->str0)
+			{
+				sym = symbol_table_find(inst->str0);
+			}
 			if (sym && sym->kind == SYM_FUNC)
 			{
 				if (sym->builtin_param_count >= 0 && sym->builtin_param_count != argc)
