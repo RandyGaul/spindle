@@ -4076,25 +4076,36 @@ static Type* builtin_result_same(Type** args, int argc, int index)
 	return args[index];
 }
 
-typedef struct BuiltinArgConstraint
+typedef enum BuiltinBaseSet
+{
+	BUILTIN_BASE_ANY,
+	BUILTIN_BASE_FLOATING,
+	BUILTIN_BASE_FLOAT_ONLY,
+	BUILTIN_BASE_NUMERIC,
+	BUILTIN_BASE_BOOL,
+	BUILTIN_BASE_SAME_AS_REF,
+	BUILTIN_BASE_FLOAT_OR_BOOL,
+} BuiltinBaseSet;
+
+typedef enum BuiltinShapeRule
+{
+	BUILTIN_SHAPE_ANY,
+	BUILTIN_SHAPE_SCALAR,
+	BUILTIN_SHAPE_VECTOR,
+	BUILTIN_SHAPE_SCALAR_OR_VECTOR,
+	BUILTIN_SHAPE_MATCH_REF,
+	BUILTIN_SHAPE_SCALAR_OR_MATCH,
+	BUILTIN_SHAPE_MATRIX,
+	BUILTIN_SHAPE_SQUARE_MATRIX,
+} BuiltinShapeRule;
+
+typedef struct BuiltinArgSig
 {
 	const char* role;
-	unsigned flags;
+	BuiltinBaseSet base;
+	BuiltinShapeRule shape;
 	int ref_index;
-} BuiltinArgConstraint;
-
-enum
-{
-	BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR = 1 << 0,
-	BUILTIN_ARG_REQUIRE_FLOATING = 1 << 1,
-	BUILTIN_ARG_REQUIRE_FLOAT_BASE = 1 << 2,
-	BUILTIN_ARG_REQUIRE_SCALAR = 1 << 3,
-	BUILTIN_ARG_REQUIRE_VECTOR = 1 << 4,
-	BUILTIN_ARG_MATCH_BASE = 1 << 5,
-	BUILTIN_ARG_MATCH_SHAPE = 1 << 6,
-	BUILTIN_ARG_REQUIRE_MATRIX = 1 << 7,
-	BUILTIN_ARG_REQUIRE_SQUARE = 1 << 8,
-};
+} BuiltinArgSig;
 
 #define ARRAY_COUNT(arr) ((int)(sizeof(arr) / sizeof((arr)[0])))
 
@@ -4112,8 +4123,8 @@ typedef Type* (*BuiltinSignatureCustomResult)(const Symbol* sym, Type** args, in
 typedef struct BuiltinSignature
 {
 	BuiltinFuncKind kind;
-	const BuiltinArgConstraint* constraints;
-	int constraint_count;
+	const BuiltinArgSig* args;
+	int arg_count;
 	BuiltinSignatureResultKind result_kind;
 	int result_index;
 	int result_components;
@@ -4123,72 +4134,78 @@ typedef struct BuiltinSignature
 static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc);
 static Type* builtin_result_determinant(const Symbol* sym, Type** args, int argc);
 static Type* builtin_result_outer_product(const Symbol* sym, Type** args, int argc);
-static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const BuiltinArgConstraint* constraints, int constraint_count);
+static int builtin_check_args(const Symbol* sym, Type** args, int argc, const BuiltinArgSig* sigs, int sig_count);
 static Type* builtin_result_scalar(Type** args, int argc, int index);
 static Type* builtin_result_vector(Type** args, int argc, int index, int components);
 
-static const BuiltinArgConstraint builtin_length_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+static const BuiltinArgSig builtin_length_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
 };
 
-static const BuiltinArgConstraint builtin_distance_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+static const BuiltinArgSig builtin_distance_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_MATCH_REF, 0 },
 };
 
-static const BuiltinArgConstraint builtin_derivative_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
+static const BuiltinArgSig builtin_derivative_sig[] = {
+	{ "first", BUILTIN_BASE_FLOAT_ONLY, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
 };
 
-static const BuiltinArgConstraint builtin_normalize_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
+static const BuiltinArgSig builtin_normalize_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
 };
 
-static const BuiltinArgConstraint builtin_reflect_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
+static const BuiltinArgSig builtin_reflect_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_MATCH_REF, 0 },
 };
 
-static const BuiltinArgConstraint builtin_refract_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	{ "third", BUILTIN_ARG_REQUIRE_SCALAR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
+static const BuiltinArgSig builtin_refract_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_MATCH_REF, 0 },
+	{ "third", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR, 0 },
 };
 
-static const BuiltinArgConstraint builtin_mix_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	{ "third", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR, -1 },
+static const BuiltinArgSig builtin_mix_float_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	{ "third", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
 };
 
-static const BuiltinArgConstraint builtin_determinant_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_MATRIX | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_SQUARE, -1 },
+static const BuiltinArgSig builtin_mix_mask_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	{ "third", BUILTIN_BASE_BOOL, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
 };
 
-static const BuiltinArgConstraint builtin_outer_product_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
+static const BuiltinArgSig builtin_determinant_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SQUARE_MATRIX, -1 },
+};
+
+static const BuiltinArgSig builtin_outer_product_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_VECTOR, 0 },
 };
 
 static const BuiltinSignature builtin_signatures[] = {
-	{ BUILTIN_LENGTH, builtin_length_constraints, ARRAY_COUNT(builtin_length_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_DISTANCE, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_DOT, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_NORMALIZE, builtin_normalize_constraints, ARRAY_COUNT(builtin_normalize_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_REFLECT, builtin_reflect_constraints, ARRAY_COUNT(builtin_reflect_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_REFRACT, builtin_refract_constraints, ARRAY_COUNT(builtin_refract_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_MIX, builtin_mix_constraints, ARRAY_COUNT(builtin_mix_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
-	{ BUILTIN_DETERMINANT, builtin_determinant_constraints, ARRAY_COUNT(builtin_determinant_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant },
-	{ BUILTIN_OUTER_PRODUCT, builtin_outer_product_constraints, ARRAY_COUNT(builtin_outer_product_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product },
-	{ BUILTIN_FWIDTH, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_FWIDTH_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_FWIDTH_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_LENGTH, builtin_length_sig, ARRAY_COUNT(builtin_length_sig), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_DISTANCE, builtin_distance_sig, ARRAY_COUNT(builtin_distance_sig), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_DOT, builtin_distance_sig, ARRAY_COUNT(builtin_distance_sig), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
+	{ BUILTIN_NORMALIZE, builtin_normalize_sig, ARRAY_COUNT(builtin_normalize_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_REFLECT, builtin_reflect_sig, ARRAY_COUNT(builtin_reflect_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_REFRACT, builtin_refract_sig, ARRAY_COUNT(builtin_refract_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_MIX, builtin_mix_float_sig, ARRAY_COUNT(builtin_mix_float_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
+	{ BUILTIN_DETERMINANT, builtin_determinant_sig, ARRAY_COUNT(builtin_determinant_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant },
+	{ BUILTIN_OUTER_PRODUCT, builtin_outer_product_sig, ARRAY_COUNT(builtin_outer_product_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product },
+	{ BUILTIN_FWIDTH, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_FWIDTH_FINE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_FWIDTH_COARSE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX_FINE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDX_COARSE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY_FINE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	{ BUILTIN_DFDY_COARSE, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
 };
 
 static const BuiltinSignature* builtin_find_signature(BuiltinFuncKind kind)
@@ -4206,7 +4223,7 @@ static Type* builtin_apply_signature(const BuiltinSignature* signature, const Sy
 {
 	if (!signature)
 		return NULL;
-	builtin_validate_args(sym, args, argc, signature->constraints, signature->constraint_count);
+	builtin_check_args(sym, args, argc, signature->args, signature->arg_count);
 	switch (signature->result_kind)
 	{
 	case BUILTIN_SIGNATURE_RESULT_NONE:
@@ -4228,108 +4245,210 @@ static Type* builtin_apply_signature(const BuiltinSignature* signature, const Sy
 
 // Validate a builtin invocation against per-argument rules before resolving it.
 // ...error: distance requires second argument to match first argument shape, got vec3 and vec2
-static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const BuiltinArgConstraint* constraints, int constraint_count)
+static int builtin_arg_in_base_set(const Type* type, BuiltinBaseSet base, const Type* ref)
+{
+	switch (base)
+	{
+	case BUILTIN_BASE_ANY:
+		return 1;
+	case BUILTIN_BASE_FLOATING:
+		return type_is_floating_point(type);
+	case BUILTIN_BASE_FLOAT_ONLY:
+		return type && type_base_type(type) == T_FLOAT;
+	case BUILTIN_BASE_NUMERIC:
+		return type_is_numeric(type);
+	case BUILTIN_BASE_BOOL:
+		return type_is_bool_like(type);
+	case BUILTIN_BASE_SAME_AS_REF:
+		return ref && type_base_type(type) == type_base_type(ref);
+	case BUILTIN_BASE_FLOAT_OR_BOOL:
+		return type_is_floating_point(type) || type_is_bool_like(type);
+	default:
+		return 0;
+	}
+}
+
+static int builtin_shape_matches(const Type* type, BuiltinShapeRule rule, const Type* ref)
+{
+	switch (rule)
+	{
+	case BUILTIN_SHAPE_ANY:
+		return 1;
+	case BUILTIN_SHAPE_SCALAR:
+		return type_is_scalar(type);
+	case BUILTIN_SHAPE_VECTOR:
+		return type_is_vector(type);
+	case BUILTIN_SHAPE_SCALAR_OR_VECTOR:
+		return type_is_scalar_or_vector(type);
+	case BUILTIN_SHAPE_MATRIX:
+		return type_is_matrix(type);
+	case BUILTIN_SHAPE_SQUARE_MATRIX:
+		return type_is_matrix(type) && type->cols == type->rows;
+	case BUILTIN_SHAPE_MATCH_REF:
+		if (!ref)
+			return 0;
+		if (type_is_vector(ref))
+			return type_is_vector(type) && type->cols == ref->cols;
+		if (type_is_scalar(ref))
+			return type_is_scalar(type);
+		if (type_is_matrix(ref))
+			return type_is_matrix(type) && type->cols == ref->cols && type->rows == ref->rows;
+		return 0;
+	case BUILTIN_SHAPE_SCALAR_OR_MATCH:
+		if (type_is_scalar(type))
+			return 1;
+		if (!ref)
+			return 0;
+		if (type_is_vector(ref))
+			return type_is_vector(type) && type->cols == ref->cols;
+		if (type_is_scalar(ref))
+			return type_is_scalar(type);
+		if (type_is_matrix(ref))
+			return type_is_matrix(type) && type->cols == ref->cols && type->rows == ref->rows;
+		return 0;
+	default:
+		return 0;
+	}
+}
+
+static void builtin_require_base(const Symbol* sym, const Type* arg, const BuiltinArgSig* sig, const Type* ref, const char* ref_role)
+{
+	if (builtin_arg_in_base_set(arg, sig->base, ref))
+		return;
+	const char* name = builtin_func_name(sym);
+	switch (sig->base)
+	{
+	case BUILTIN_BASE_FLOATING:
+		type_check_error("%s requires floating-point %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_BASE_FLOAT_ONLY:
+		type_check_error("%s requires %s argument to be float-based, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_BASE_NUMERIC:
+		type_check_error("%s requires numeric %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_BASE_BOOL:
+		type_check_error("%s requires boolean %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_BASE_SAME_AS_REF:
+		if (ref)
+		{
+			type_check_error("%s requires %s argument to match %s argument base type, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
+		}
+		else
+		{
+			type_check_error("%s requires %s argument to match %s argument base type", name, sig->role, ref_role);
+		}
+		break;
+	case BUILTIN_BASE_FLOAT_OR_BOOL:
+		type_check_error("%s requires floating-point or boolean %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	default:
+		break;
+	}
+}
+
+static void builtin_require_shape(const Symbol* sym, const Type* arg, const BuiltinArgSig* sig, const Type* ref, const char* ref_role)
+{
+	if (builtin_shape_matches(arg, sig->shape, ref))
+		return;
+	const char* name = builtin_func_name(sym);
+	switch (sig->shape)
+	{
+	case BUILTIN_SHAPE_SCALAR:
+		type_check_error("%s requires scalar %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_SHAPE_VECTOR:
+		type_check_error("%s requires vector %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_SHAPE_SCALAR_OR_VECTOR:
+		type_check_error("%s requires scalar or vector %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_SHAPE_MATRIX:
+		type_check_error("%s requires matrix %s argument, got %s", name, sig->role, type_display(arg));
+		break;
+	case BUILTIN_SHAPE_SQUARE_MATRIX:
+		if (arg && type_is_matrix(arg))
+		{
+			type_check_error("%s requires square matrix %s argument, got %s", name, sig->role, type_display(arg));
+		}
+		else
+		{
+			type_check_error("%s requires matrix %s argument, got %s", name, sig->role, type_display(arg));
+		}
+		break;
+	case BUILTIN_SHAPE_MATCH_REF:
+		if (ref && type_is_vector(ref))
+		{
+			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
+		}
+		else if (ref && type_is_scalar(ref))
+		{
+			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
+		}
+		else if (ref && type_is_matrix(ref))
+		{
+			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
+		}
+		else
+		{
+			type_check_error("%s requires %s argument to match %s argument shape", name, sig->role, ref_role);
+		}
+		break;
+	case BUILTIN_SHAPE_SCALAR_OR_MATCH:
+		if (ref && type_is_vector(ref))
+		{
+			type_check_error("%s requires %s argument scalar or %d components, got %s", name, sig->role, ref->cols, type_display(arg));
+		}
+		else if (ref && type_is_matrix(ref))
+		{
+			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
+		}
+		else
+		{
+			type_check_error("%s requires scalar %s argument, got %s", name, sig->role, type_display(arg));
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+static int builtin_check_args(const Symbol* sym, Type** args, int argc, const BuiltinArgSig* sigs, int sig_count)
 {
 	int all_ok = 1;
 	const char* name = builtin_func_name(sym);
-	if (argc != constraint_count)
+	if (argc != sig_count)
 	{
-		type_check_error("%s expects %d arguments but received %d", name, constraint_count, argc);
+		type_check_error("%s expects %d arguments but received %d", name, sig_count, argc);
 	}
-	for (int i = 0; i < constraint_count; ++i)
+	for (int i = 0; i < sig_count; ++i)
 	{
-		const BuiltinArgConstraint* constraint = &constraints[i];
+		const BuiltinArgSig* sig = &sigs[i];
 		Type* arg = (i < argc) ? args[i] : NULL;
 		if (!arg)
 		{
-			type_check_error("%s requires %s argument", name, constraint->role);
+			type_check_error("%s requires %s argument", name, sig->role);
 			all_ok = 0;
 			continue;
 		}
-		int is_scalar = type_is_scalar(arg);
-		int is_vector = type_is_vector(arg);
-		int is_matrix = type_is_matrix(arg);
-		int is_scalar_or_vector = is_scalar || is_vector;
-		if ((constraint->flags & BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR) && !is_scalar_or_vector)
+		const Type* ref = NULL;
+		const char* ref_role = "referenced";
+		if (sig->ref_index >= 0 && sig->ref_index < argc)
 		{
-			type_check_error("%s requires %s argument to be scalar or vector, got %s", name, constraint->role, type_display(arg));
-			all_ok = 0;
+			ref = args[sig->ref_index];
 		}
-		if ((constraint->flags & BUILTIN_ARG_REQUIRE_SCALAR) && !is_scalar)
+		if (sig->ref_index >= 0 && sig->ref_index < sig_count)
 		{
-			type_check_error("%s requires %s argument to be scalar, got %s", name, constraint->role, type_display(arg));
-			all_ok = 0;
+			ref_role = sigs[sig->ref_index].role;
 		}
-		if ((constraint->flags & BUILTIN_ARG_REQUIRE_VECTOR) && !is_vector)
+		if (sig->base != BUILTIN_BASE_ANY)
 		{
-			type_check_error("%s requires %s argument to be vector, got %s", name, constraint->role, type_display(arg));
-			all_ok = 0;
+			builtin_require_base(sym, arg, sig, ref, ref_role);
 		}
-		if ((constraint->flags & BUILTIN_ARG_REQUIRE_MATRIX) && !is_matrix)
+		if (sig->shape != BUILTIN_SHAPE_ANY)
 		{
-			type_check_error("%s requires %s argument to be matrix, got %s", name, constraint->role, type_display(arg));
-			all_ok = 0;
-		}
-		if (constraint->flags & BUILTIN_ARG_REQUIRE_SQUARE)
-		{
-			if (!is_matrix || arg->cols != arg->rows)
-			{
-				type_check_error("%s requires %s argument to be square matrix, got %s", name, constraint->role, type_display(arg));
-				all_ok = 0;
-			}
-		}
-		if (constraint->flags & BUILTIN_ARG_REQUIRE_FLOATING)
-		{
-			if (!type_is_floating_point(arg))
-			{
-				type_check_error("%s requires floating-point %s argument, got %s", name, constraint->role, type_display(arg));
-				all_ok = 0;
-			}
-		}
-		if (constraint->flags & BUILTIN_ARG_REQUIRE_FLOAT_BASE)
-		{
-			if (type_base_type(arg) != T_FLOAT)
-			{
-				type_check_error("%s requires %s argument to be float-based, got %s", name, constraint->role, type_display(arg));
-				all_ok = 0;
-			}
-		}
-		if ((constraint->flags & (BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE)) && constraint->ref_index >= 0 && constraint->ref_index < argc)
-		{
-			Type* ref = args[constraint->ref_index];
-			if (ref)
-			{
-				if (constraint->flags & BUILTIN_ARG_MATCH_BASE)
-				{
-					if (type_base_type(arg) != type_base_type(ref))
-					{
-						const char* ref_role = constraints[constraint->ref_index].role;
-						type_check_error("%s requires %s argument to match %s argument base type, got %s and %s", name, constraint->role, ref_role, type_display(arg), type_display(ref));
-						all_ok = 0;
-					}
-				}
-				if (constraint->flags & BUILTIN_ARG_MATCH_SHAPE)
-				{
-					int ref_is_scalar = type_is_scalar(ref);
-					int ref_is_vector = type_is_vector(ref);
-					const char* ref_role = constraints[constraint->ref_index].role;
-					if (ref_is_vector && !is_vector)
-					{
-						type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, constraint->role, ref_role, type_display(arg), type_display(ref));
-						all_ok = 0;
-					}
-					else if (ref_is_scalar && !is_scalar)
-					{
-						type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, constraint->role, ref_role, type_display(arg), type_display(ref));
-						all_ok = 0;
-					}
-					else if (ref_is_vector && is_vector && ref->cols != arg->cols)
-					{
-						type_check_error("%s requires %s argument with %d components to match %s argument, got %s", name, constraint->role, ref->cols, ref_role, type_display(arg));
-						all_ok = 0;
-					}
-				}
-			}
+			builtin_require_shape(sym, arg, sig, ref, ref_role);
 		}
 	}
 	return all_ok;
@@ -4351,280 +4470,69 @@ static Type* builtin_result_vector(Type** args, int argc, int index, int compone
 	return type_get_vector(type_base_type(source), components);
 }
 
-static Type* builtin_result_length(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_distance(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-		{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_dot(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-		{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_derivative(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_same(args, argc, 0);
-}
-
 // Enforce numeric scalar/vector arguments so min/max style builtins report clear errors.
 // ...error: min requires numeric second argument, got mat2
-static int builtin_validate_numeric_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
-{
-	const char* name = builtin_func_name(sym);
-	if (!arg)
-	{
-		type_check_error("%s requires %s argument", name, role);
-		return 0;
-	}
-	if (!type_is_scalar_or_vector(arg))
-	{
-		type_check_error("%s requires numeric scalar or vector %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	if (!type_is_numeric(arg))
-	{
-		type_check_error("%s requires numeric %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	return 1;
-}
-
-static int builtin_validate_floating_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
-{
-	const char* name = builtin_func_name(sym);
-	if (!arg)
-	{
-		type_check_error("%s requires %s argument", name, role);
-		return 0;
-	}
-	if (!type_is_scalar_or_vector(arg))
-	{
-		type_check_error("%s requires floating-point scalar or vector %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	if (!type_is_floating_point(arg))
-	{
-		type_check_error("%s requires floating-point %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	return 1;
-}
-
-static int builtin_validate_bool_scalar_vector(const Symbol* sym, const Type* arg, const char* role, int components)
-{
-	const char* name = builtin_func_name(sym);
-	if (!arg)
-	{
-		type_check_error("%s requires %s argument", name, role);
-		return 0;
-	}
-	if (!type_is_scalar_or_vector(arg))
-	{
-		type_check_error("%s requires boolean scalar or vector %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	if (!type_is_bool_like(arg))
-	{
-		type_check_error("%s requires boolean %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	if (type_is_vector(arg) && type_component_count(arg) != components)
-	{
-		type_check_error("%s requires %s argument with %d components, got %s", name, role, components, type_display(arg));
-		return 0;
-	}
-	return 1;
-}
-
 static Type* builtin_result_min_max(const Symbol* sym, Type** args, int argc)
 {
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* y = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, y, "second"))
-		return x;
-	if (type_base_type(x) != type_base_type(y))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(y))
-		{
-			if (x->cols != y->cols)
-			{
-				type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-			}
-		}
-		else if (!type_is_scalar(y))
-		{
-			/* already handled */
-		}
-	}
-	else if (type_is_vector(y))
-	{
-		type_check_error("%s requires second argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_NUMERIC, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 // Validate clamp(x, min, max) and return the clamped value type.
 // ...vec3 lit = clamp(raw, vec3(0.0), vec3(1.0));
 static Type* builtin_result_clamp(const Symbol* sym, Type** args, int argc)
 {
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* min_val = (argc > 1) ? args[1] : NULL;
-	Type* max_val = (argc > 2) ? args[2] : NULL;
-	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, min_val, "second"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, max_val, "third"))
-		return x;
-	TypeTag base = type_base_type(x);
-	if (type_base_type(min_val) != base)
-	{
-		type_check_error("%s requires minimum argument to match first argument base type, got %s and %s", builtin_func_name(sym), type_display(x), type_display(min_val));
-	}
-	if (type_base_type(max_val) != base)
-	{
-		type_check_error("%s requires maximum argument to match first argument base type, got %s and %s", builtin_func_name(sym), type_display(x), type_display(max_val));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(min_val) && min_val->cols != x->cols)
-		{
-			type_check_error("%s requires minimum argument with %d components, got %s", builtin_func_name(sym), x->cols, type_display(min_val));
-		}
-		if (type_is_vector(max_val) && max_val->cols != x->cols)
-		{
-			type_check_error("%s requires maximum argument with %d components, got %s", builtin_func_name(sym), x->cols, type_display(max_val));
-		}
-	}
-	else
-	{
-		if (type_is_vector(min_val))
-		{
-			type_check_error("%s requires minimum argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(min_val));
-		}
-		if (type_is_vector(max_val))
-		{
-			type_check_error("%s requires maximum argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(max_val));
-		}
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_NUMERIC, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+		{ "third", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 // Resolve abs/similar functions that mirror their argument type.
 // ...vec3 mag = abs(force);
 static Type* builtin_result_abs_like(const Symbol* sym, Type** args, int argc)
 {
-	Type* value = (argc > 0) ? args[0] : NULL;
-	const char* name = builtin_func_name(sym);
-	if (!value)
-		return value;
-	if (!type_is_scalar_or_vector(value))
-	{
-		type_check_error("%s requires scalar or vector argument, got %s", name, type_display(value));
-		return value;
-	}
-	if (!type_is_floating_point(value) && !type_is_integer(value))
-	{
-		type_check_error("%s requires floating-point or integer argument, got %s", name, type_display(value));
-	}
-	return value;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_NUMERIC, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_unary_float(const Symbol* sym, Type** args, int argc)
 {
-	Type* value = (argc > 0) ? args[0] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, value, "first"))
-		return value;
-	return value;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_pow(const Symbol* sym, Type** args, int argc)
 {
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* y = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-		return x;
-	if (type_base_type(x) != type_base_type(y))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(y) && y->cols != x->cols)
-		{
-			type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-		}
-		else if (!type_is_scalar(y) && !type_is_vector(y))
-		{
-			return x;
-		}
-	}
-	else if (type_is_vector(y))
-	{
-		type_check_error("%s requires second argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_mod(const Symbol* sym, Type** args, int argc)
 {
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* y = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, y, "second"))
-		return x;
-	if (type_base_type(x) != type_base_type(y))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(y) && y->cols != x->cols)
-		{
-			type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-		}
-		else if (!type_is_scalar(y) && !type_is_vector(y))
-		{
-			return x;
-		}
-	}
-	else if (type_is_vector(y))
-	{
-		type_check_error("%s requires second argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_trig(const Symbol* sym, Type** args, int argc)
@@ -4634,149 +4542,56 @@ static Type* builtin_result_trig(const Symbol* sym, Type** args, int argc)
 
 static Type* builtin_result_atan(const Symbol* sym, Type** args, int argc)
 {
-	Type* y_over_x = (argc > 0) ? args[0] : NULL;
 	if (argc == 1)
-	{
 		return builtin_result_unary_float(sym, args, argc);
-	}
-	Type* x = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, y_over_x, "first"))
-		return y_over_x;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "second"))
-		return y_over_x;
-	if (type_base_type(y_over_x) != type_base_type(x))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(y_over_x), type_display(x));
-	}
-	if (type_is_vector(y_over_x) != type_is_vector(x))
-	{
-		type_check_error("%s requires both arguments to have matching shapes, got %s and %s", builtin_func_name(sym), type_display(y_over_x), type_display(x));
-	}
-	else if (type_is_vector(y_over_x) && y_over_x->cols != x->cols)
-	{
-		type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(y_over_x), type_display(x));
-	}
-	return y_over_x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_MATCH_REF, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_mix(const Symbol* sym, Type** args, int argc)
 {
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* y = (argc > 1) ? args[1] : NULL;
-	Type* a = (argc > 2) ? args[2] : NULL;
-	const char* name = builtin_func_name(sym);
-	if (!x)
-		return NULL;
-	if (!y)
-		return x;
-	if (!a)
+	if (argc < 3)
 	{
-		type_check_error("%s requires third argument", name);
-		return x;
+		type_check_error("%s requires third argument", builtin_func_name(sym));
+		return (argc > 0) ? args[0] : NULL;
 	}
-	if (type_is_bool_like(a))
+	Type* third = args[2];
+	if (third && type_is_bool_like(third))
 	{
-		int components = type_component_count(x);
-		builtin_validate_bool_scalar_vector(sym, a, "third", components);
-		return x;
+		builtin_check_args(sym, args, argc, builtin_mix_mask_sig, ARRAY_COUNT(builtin_mix_mask_sig));
+		return (argc > 0) ? args[0] : NULL;
 	}
-	if (!type_is_scalar_or_vector(a))
-	{
-		type_check_error("%s requires scalar or vector third argument, got %s", name, type_display(a));
-		return x;
-	}
-	if (!type_is_floating_point(a))
-	{
-		type_check_error("%s requires floating-point third argument, got %s", name, type_display(a));
-		return x;
-	}
-	if (type_base_type(a) != type_base_type(x))
-	{
-		type_check_error("%s requires third argument to match first argument base type, got %s and %s", name, type_display(x), type_display(a));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(a) && a->cols != x->cols)
-		{
-			type_check_error("%s requires third argument with %d components, got %s", name, x->cols, type_display(a));
-		}
-	}
-	else if (type_is_vector(a))
-	{
-		type_check_error("%s requires third argument to match first argument shape, got %s and %s", name, type_display(x), type_display(a));
-	}
-	return x;
+	builtin_check_args(sym, args, argc, builtin_mix_float_sig, ARRAY_COUNT(builtin_mix_float_sig));
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_step(const Symbol* sym, Type** args, int argc)
 {
-	Type* edge = (argc > 0) ? args[0] : NULL;
-	Type* x = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "second"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, edge, "first"))
-		return x;
-	if (type_base_type(edge) != type_base_type(x))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(edge), type_display(x));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(edge) && edge->cols != x->cols)
-		{
-			type_check_error("%s requires edge argument with %d components, got %s", builtin_func_name(sym), x->cols, type_display(edge));
-		}
-	}
-	else if (type_is_vector(edge))
-	{
-		type_check_error("%s requires edge argument to match second argument shape, got %s and %s", builtin_func_name(sym), type_display(edge), type_display(x));
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_MATCH, 1 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_VECTOR, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	if (argc > 1)
+		return args[1];
+	return (argc > 0) ? args[0] : NULL;
 }
 
 static Type* builtin_result_smoothstep(const Symbol* sym, Type** args, int argc)
 {
-	Type* edge0 = (argc > 0) ? args[0] : NULL;
-	Type* edge1 = (argc > 1) ? args[1] : NULL;
-	Type* x = (argc > 2) ? args[2] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, x, "third"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, edge0, "first"))
-		return x;
-	if (!builtin_validate_floating_scalar_vector(sym, edge1, "second"))
-		return x;
-	TypeTag base = type_base_type(x);
-	if (type_base_type(edge0) != base)
-	{
-		type_check_error("%s requires edge0 to match third argument base type, got %s and %s", builtin_func_name(sym), type_display(edge0), type_display(x));
-	}
-	if (type_base_type(edge1) != base)
-	{
-		type_check_error("%s requires edge1 to match third argument base type, got %s and %s", builtin_func_name(sym), type_display(edge1), type_display(x));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(edge0) && edge0->cols != x->cols)
-		{
-			type_check_error("%s requires edge0 with %d components, got %s", builtin_func_name(sym), x->cols, type_display(edge0));
-		}
-		if (type_is_vector(edge1) && edge1->cols != x->cols)
-		{
-			type_check_error("%s requires edge1 with %d components, got %s", builtin_func_name(sym), x->cols, type_display(edge1));
-		}
-	}
-	else
-	{
-		if (type_is_vector(edge0))
-		{
-			type_check_error("%s requires edge0 to match third argument shape, got %s and %s", builtin_func_name(sym), type_display(edge0), type_display(x));
-		}
-		if (type_is_vector(edge1))
-		{
-			type_check_error("%s requires edge1 to match third argument shape, got %s and %s", builtin_func_name(sym), type_display(edge1), type_display(x));
-		}
-	}
-	return x;
+	const BuiltinArgSig sig[] = {
+		{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_MATCH, 2 },
+		{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 2 },
+		{ "third", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_VECTOR, 0 },
+	};
+	builtin_check_args(sym, args, argc, sig, ARRAY_COUNT(sig));
+	if (argc > 2)
+		return args[2];
+	return (argc > 0) ? args[0] : NULL;
 }
 
 // Pick the return type for sampling helpers like texture().
