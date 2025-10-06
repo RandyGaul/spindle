@@ -7,6 +7,8 @@
 		#define SPINDLE_IMPLEMENTATION
 		#include "spindle.h"
 
+	Define SPINDLE_NO_TESTS before including spindle.h to omit snippets and unit tests.
+
 	Requires ckit.h for dynamic arrays, maps, and string interning.
 	Be sure to include ckit before spindle to provide those facilities.
 
@@ -40,7 +42,10 @@ void compiler_teardown();
 void dump_ir();
 void dump_symbols();
 dyna uint32_t* emit_spirv();
+  
+#ifndef SPINDLE_NO_TESTS
 void unit_test();
+#endif
 
 #ifdef __cplusplus
 }
@@ -55,6 +60,14 @@ void unit_test();
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-value"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+#endif
 
 #ifndef CKIT_H
 #error "spindle.h requires ckit.h to be included before it."
@@ -775,7 +788,7 @@ void symbol_table_leave_scope()
 	if (scope->entries)
 		afree(scope->entries);
 	map_free(scope->map);
-	(void)apop(st->scopes);
+	apop(st->scopes);
 }
 
 static SymbolScopeEntry* symbol_scope_entry(SymbolScope* scope, const char* name, int create)
@@ -5503,9 +5516,9 @@ void type_check_ir()
 			Type* operand = type_stack_pop(stack, "unary expression");
 			unsigned operand_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* result = type_check_unary(inst, operand);
 			if ((inst->tok == TOK_PLUS_PLUS || inst->tok == TOK_MINUS_MINUS) && (operand_qualifier & SYM_QUAL_CONST)) {
 				type_check_error("cannot modify const-qualified value");
@@ -5523,14 +5536,14 @@ void type_check_ir()
 		case IR_BINARY: {
 			Type* rhs = type_stack_pop(stack, "binary rhs");
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* lhs = type_stack_pop(stack, "binary lhs");
 			unsigned lhs_storage = acount(storage_stack) ? apop(storage_stack) : 0;
 			Symbol* lhs_symbol = acount(symbol_stack) ? apop(symbol_stack) : NULL;
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			unsigned lhs_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			int is_assignment = 0;
 			switch (inst->tok) {
@@ -5578,11 +5591,11 @@ void type_check_ir()
 			for (int arg = 0; arg < inst->arg0; ++arg) {
 				Type* arg_type = type_stack_pop(stack, "call argument");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (acount(storage_stack))
-					(void)apop(storage_stack);
+					apop(storage_stack);
 				if (acount(symbol_stack))
-					(void)apop(symbol_stack);
+					apop(symbol_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -5593,11 +5606,11 @@ void type_check_ir()
 			}
 			Type* callee = type_stack_pop(stack, "call target");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* result = callee;
 			Symbol* sym = NULL;
 			if (inst->str0) {
@@ -5648,11 +5661,11 @@ void type_check_ir()
 			for (int arg = 0; arg < inst->arg0; ++arg) {
 				Type* arg_type = type_stack_pop(stack, "constructor argument");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (acount(storage_stack))
-					(void)apop(storage_stack);
+					apop(storage_stack);
 				if (acount(symbol_stack))
-					(void)apop(symbol_stack);
+					apop(symbol_stack);
 				apush(args, arg_type);
 			}
 			int argc = acount(args);
@@ -5664,9 +5677,9 @@ void type_check_ir()
 			Type* target = type_stack_pop(stack, "constructor target");
 			Type* result = inst->type ? inst->type : target;
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			inst->type = result;
 			if (result)
 				type_check_constructor(result, args, argc);
@@ -5681,11 +5694,11 @@ void type_check_ir()
 		case IR_INDEX: {
 			Type* index = type_stack_pop(stack, "index expression");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* base = type_stack_pop(stack, "index base");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
 			unsigned base_storage = acount(storage_stack) ? apop(storage_stack) : 0;
@@ -5767,25 +5780,25 @@ void type_check_ir()
 		case IR_SELECT: {
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* true_type = type_stack_pop(stack, "ternary true branch");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* cond_type = type_stack_pop(stack, "ternary condition");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			Type* result = type_select_result(cond_type, true_type, false_type);
 			if (!result)
 				result = true_type ? true_type : false_type;
@@ -5813,7 +5826,7 @@ void type_check_ir()
 			if (acount(stack) > 0) {
 				Type* value = type_stack_pop(stack, "initializer");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (current_decl_type && value && !type_can_assign(current_decl_type, value)) {
 					type_check_error("initializer type %s cannot initialize %s %s", type_display(value), current_decl_name ? current_decl_name : "value", type_display(current_decl_type));
 				}
@@ -5828,7 +5841,7 @@ void type_check_ir()
 			if (acount(stack) > 0) {
 				Type* size = type_stack_pop(stack, "array size");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (size && (!type_is_scalar(size) || !type_is_integer(size))) {
 					type_check_error("array size must be integer scalar, got %s", type_display(size));
 				}
@@ -5846,7 +5859,7 @@ void type_check_ir()
 		case IR_SWITCH_SELECTOR_END: {
 			Type* selector = type_stack_pop(stack, "switch selector");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (selector && (!type_is_scalar(selector) || !type_is_integer(selector))) {
 				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
 			}
@@ -5901,18 +5914,18 @@ void type_check_ir()
 				}
 			}
 			afree(ctx->cases);
-			(void)apop(switch_stack);
+			apop(switch_stack);
 			break;
 		}
 		case IR_STMT_EXPR:
 			if (acount(stack) > 0) {
 				type_stack_pop(stack, "expression result");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (acount(storage_stack))
-					(void)apop(storage_stack);
+					apop(storage_stack);
 				if (acount(symbol_stack))
-					(void)apop(symbol_stack);
+					apop(symbol_stack);
 			}
 			if (acount(stack) > 0)
 				aclear(stack);
@@ -5926,11 +5939,11 @@ void type_check_ir()
 		case IR_IF_THEN: {
 			Type* cond = type_stack_pop(stack, "if condition");
 			if (acount(qualifier_stack))
-				(void)apop(qualifier_stack);
+				apop(qualifier_stack);
 			if (acount(storage_stack))
-				(void)apop(storage_stack);
+				apop(storage_stack);
 			if (acount(symbol_stack))
-				(void)apop(symbol_stack);
+				apop(symbol_stack);
 			if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond))) {
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
 			}
@@ -5941,11 +5954,11 @@ void type_check_ir()
 			if (inst->arg0) {
 				Type* value = type_stack_pop(stack, "return value");
 				if (acount(qualifier_stack))
-					(void)apop(qualifier_stack);
+					apop(qualifier_stack);
 				if (acount(storage_stack))
-					(void)apop(storage_stack);
+					apop(storage_stack);
 				if (acount(symbol_stack))
-					(void)apop(symbol_stack);
+					apop(symbol_stack);
 				if (ret_type && ret_type != g_type_void && value && !type_can_assign(ret_type, value)) {
 					type_check_error("return type mismatch: expected %s got %s", type_display(ret_type), type_display(value));
 				}
@@ -5963,7 +5976,7 @@ void type_check_ir()
 		case IR_FUNC_PROTOTYPE_END:
 		case IR_FUNC_DEFINITION_END:
 			if (acount(func_stack) > 0)
-				(void)apop(func_stack);
+				apop(func_stack);
 			break;
 		default:
 			break;
@@ -7081,6 +7094,7 @@ void dump_symbols()
 	}
 }
 
+#ifndef SPINDLE_NO_TESTS
 typedef void (*TestFunc)(void);
 
 typedef struct TestCase
@@ -8402,5 +8416,13 @@ void unit_test()
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
+
+#endif /* SPINDLE_NO_TESTS */
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif /* SPINDLE_IMPLEMENTATION */
