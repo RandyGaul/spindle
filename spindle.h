@@ -4107,6 +4107,12 @@ static const BuiltinArgSig builtin_refract_sig[] = {
 	{ "third", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR, 0 },
 };
 
+static const BuiltinArgSig builtin_mix_base_sig[] = {
+	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
+	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+	{ "third", BUILTIN_BASE_ANY, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
+};
+
 static const BuiltinArgSig builtin_mix_float_sig[] = {
 	{ "first", BUILTIN_BASE_FLOATING, BUILTIN_SHAPE_SCALAR_OR_VECTOR, -1 },
 	{ "second", BUILTIN_BASE_SAME_AS_REF, BUILTIN_SHAPE_SCALAR_OR_MATCH, 0 },
@@ -4135,7 +4141,7 @@ static const BuiltinSignature builtin_signatures[] = {
 	{ BUILTIN_NORMALIZE, builtin_normalize_sig, ARRAY_COUNT(builtin_normalize_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
 	{ BUILTIN_REFLECT, builtin_reflect_sig, ARRAY_COUNT(builtin_reflect_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
 	{ BUILTIN_REFRACT, builtin_refract_sig, ARRAY_COUNT(builtin_refract_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_MIX, builtin_mix_float_sig, ARRAY_COUNT(builtin_mix_float_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
+	{ BUILTIN_MIX, builtin_mix_base_sig, ARRAY_COUNT(builtin_mix_base_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
 	{ BUILTIN_DETERMINANT, builtin_determinant_sig, ARRAY_COUNT(builtin_determinant_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant },
 	{ BUILTIN_OUTER_PRODUCT, builtin_outer_product_sig, ARRAY_COUNT(builtin_outer_product_sig), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product },
 	{ BUILTIN_FWIDTH, builtin_derivative_sig, ARRAY_COUNT(builtin_derivative_sig), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
