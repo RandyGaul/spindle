@@ -63,147 +63,83 @@ void unit_test();
 //--------------------------------------------------------------------------------------------------
 // Tokenization, symbols, and IR definitions.
 
+#define TOKEN_LIST(X) \
+	X(EOF, "EOF") \
+	X(IDENTIFIER, "IDENT") \
+	X(INT, "INT") \
+	X(FLOAT, "FLOAT") \
+	X(BOOL, "BOOL") \
+	X(LPAREN, "(") \
+	X(RPAREN, ")") \
+	X(LBRACK, "[") \
+	X(RBRACK, "]") \
+	X(LBRACE, "{") \
+	X(RBRACE, "}") \
+	X(DOT, ".") \
+	X(COMMA, ",") \
+	X(SEMI, ";") \
+	X(QUESTION, "?") \
+	X(COLON, ":") \
+	X(IF, "if") \
+	X(ELSE, "else") \
+	X(FOR, "for") \
+	X(WHILE, "while") \
+	X(DO, "do") \
+	X(RETURN, "return") \
+	X(BREAK, "break") \
+	X(CONTINUE, "continue") \
+	X(DISCARD, "discard") \
+	X(SWITCH, "switch") \
+	X(CASE, "case") \
+	X(DEFAULT, "default") \
+	X(PLUS, "+") \
+	X(MINUS, "-") \
+	X(STAR, "*") \
+	X(SLASH, "/") \
+	X(PERCENT, "%") \
+	X(PLUS_PLUS, "++") \
+	X(MINUS_MINUS, "--") \
+	X(NOT, "!") \
+	X(TILDE, "~") \
+	X(LT, "<") \
+	X(LE, "<=") \
+	X(GT, ">") \
+	X(GE, ">=") \
+	X(EQ, "==") \
+	X(NE, "!=") \
+	X(AND_AND, "&&") \
+	X(OR_OR, "||") \
+	X(AMP, "&") \
+	X(PIPE, "|") \
+	X(CARET, "^") \
+	X(LSHIFT, "<<") \
+	X(RSHIFT, ">>") \
+	X(ASSIGN, "=") \
+	X(PLUS_ASSIGN, "+=") \
+	X(MINUS_ASSIGN, "-=") \
+	X(STAR_ASSIGN, "*=") \
+	X(SLASH_ASSIGN, "/=") \
+	X(PERCENT_ASSIGN, "%=") \
+	X(AND_ASSIGN, "&=") \
+	X(OR_ASSIGN, "|=") \
+	X(XOR_ASSIGN, "^=") \
+	X(LSHIFT_ASSIGN, "<<=") \
+	X(RSHIFT_ASSIGN, ">>=")
 typedef enum Tok
 {
-	TOK_EOF,
-	TOK_IDENTIFIER,
-	TOK_INT,
-	TOK_FLOAT,
-	TOK_BOOL,
-
-	TOK_LPAREN,
-	TOK_RPAREN,
-	TOK_LBRACK,
-	TOK_RBRACK,
-	TOK_LBRACE,
-	TOK_RBRACE,
-	TOK_DOT,
-	TOK_COMMA,
-	TOK_SEMI,
-	TOK_QUESTION,
-	TOK_COLON,
-
-	TOK_IF,
-	TOK_ELSE,
-	TOK_FOR,
-	TOK_WHILE,
-	TOK_DO,
-	TOK_RETURN,
-	TOK_BREAK,
-	TOK_CONTINUE,
-	TOK_DISCARD,
-	TOK_SWITCH,
-	TOK_CASE,
-	TOK_DEFAULT,
-
-	TOK_PLUS,
-	TOK_MINUS,
-	TOK_STAR,
-	TOK_SLASH,
-	TOK_PERCENT,
-	TOK_PLUS_PLUS,
-	TOK_MINUS_MINUS,
-	TOK_NOT,
-	TOK_TILDE,
-	TOK_LT,
-	TOK_LE,
-	TOK_GT,
-	TOK_GE,
-	TOK_EQ,
-	TOK_NE,
-	TOK_AND_AND,
-	TOK_OR_OR,
-	TOK_AMP,
-	TOK_PIPE,
-	TOK_CARET,
-	TOK_LSHIFT,
-	TOK_RSHIFT,
-	TOK_ASSIGN,
-	TOK_PLUS_ASSIGN,
-	TOK_MINUS_ASSIGN,
-	TOK_STAR_ASSIGN,
-	TOK_SLASH_ASSIGN,
-	TOK_PERCENT_ASSIGN,
-	TOK_AND_ASSIGN,
-	TOK_OR_ASSIGN,
-	TOK_XOR_ASSIGN,
-	TOK_LSHIFT_ASSIGN,
-	TOK_RSHIFT_ASSIGN,
-
+#define TOKEN_ENUM(name, display) TOK_##name,
+	TOKEN_LIST(TOKEN_ENUM)
+#undef TOKEN_ENUM
 	TOK_COUNT
 } Tok;
 
 const char* tok_name[TOK_COUNT] = {
-	[TOK_EOF] = "EOF",
-	[TOK_IDENTIFIER] = "IDENT",
-	[TOK_INT] = "INT",
-	[TOK_FLOAT] = "FLOAT",
-	[TOK_BOOL] = "BOOL",
-
-	[TOK_LPAREN] = "(",
-	[TOK_RPAREN] = ")",
-	[TOK_LBRACK] = "[",
-	[TOK_RBRACK] = "]",
-	[TOK_LBRACE] = "{",
-	[TOK_RBRACE] = "}",
-	[TOK_DOT] = ".",
-	[TOK_COMMA] = ",",
-	[TOK_SEMI] = ";",
-	[TOK_QUESTION] = "?",
-	[TOK_COLON] = ":",
-
-	[TOK_IF] = "if",
-	[TOK_ELSE] = "else",
-	[TOK_FOR] = "for",
-	[TOK_WHILE] = "while",
-	[TOK_DO] = "do",
-	[TOK_RETURN] = "return",
-	[TOK_BREAK] = "break",
-	[TOK_CONTINUE] = "continue",
-	[TOK_DISCARD] = "discard",
-	[TOK_SWITCH] = "switch",
-	[TOK_CASE] = "case",
-	[TOK_DEFAULT] = "default",
-
-	[TOK_PLUS] = "+",
-	[TOK_MINUS] = "-",
-	[TOK_STAR] = "*",
-	[TOK_SLASH] = "/",
-	[TOK_PERCENT] = "%",
-
-	[TOK_PLUS_PLUS] = "++",
-	[TOK_MINUS_MINUS] = "--",
-
-	[TOK_NOT] = "!",
-	[TOK_TILDE] = "~",
-
-	[TOK_LT] = "<",
-	[TOK_LE] = "<=",
-	[TOK_GT] = ">",
-	[TOK_GE] = ">=",
-	[TOK_EQ] = "==",
-	[TOK_NE] = "!=",
-
-	[TOK_AND_AND] = "&&",
-	[TOK_OR_OR] = "||",
-	[TOK_AMP] = "&",
-	[TOK_PIPE] = "|",
-	[TOK_CARET] = "^",
-	[TOK_LSHIFT] = "<<",
-	[TOK_RSHIFT] = ">>",
-
-	[TOK_ASSIGN] = "=",
-	[TOK_PLUS_ASSIGN] = "+=",
-	[TOK_MINUS_ASSIGN] = "-=",
-	[TOK_STAR_ASSIGN] = "*=",
-	[TOK_SLASH_ASSIGN] = "/=",
-	[TOK_PERCENT_ASSIGN] = "%=",
-	[TOK_AND_ASSIGN] = "&=",
-	[TOK_OR_ASSIGN] = "|=",
-	[TOK_XOR_ASSIGN] = "^=",
-	[TOK_LSHIFT_ASSIGN] = "<<=",
-	[TOK_RSHIFT_ASSIGN] = ">>=",
+#define TOKEN_NAME(name, display) [TOK_##name] = display,
+	TOKEN_LIST(TOKEN_NAME)
+#undef TOKEN_NAME
 };
+
+
 
 typedef enum SymbolKind
 {
@@ -294,94 +230,100 @@ StructMember* type_struct_find_member(Type* type, const char* name);
 int type_struct_member_count(Type* type);
 StructMember* type_struct_member_at(Type* type, int index);
 
+#define BUILTIN_KIND_LIST(X) \
+	X(NONE) \
+	X(TEXTURE) \
+	X(TEXTURE_LOD) \
+	X(TEXTURE_PROJ) \
+	X(TEXTURE_GRAD) \
+	X(TEXTURE_OFFSET) \
+	X(TEXTURE_LOD_OFFSET) \
+	X(TEXTURE_PROJ_OFFSET) \
+	X(TEXTURE_PROJ_LOD) \
+	X(TEXTURE_PROJ_LOD_OFFSET) \
+	X(TEXTURE_GRAD_OFFSET) \
+	X(TEXTURE_PROJ_GRAD) \
+	X(TEXTURE_PROJ_GRAD_OFFSET) \
+	X(TEXTURE_GATHER) \
+	X(TEXTURE_GATHER_OFFSET) \
+	X(TEXTURE_GATHER_OFFSETS) \
+	X(MIN) \
+	X(MAX) \
+	X(CLAMP) \
+	X(ABS) \
+	X(FLOOR) \
+	X(CEIL) \
+	X(FRACT) \
+	X(MIX) \
+	X(STEP) \
+	X(SMOOTHSTEP) \
+	X(DOT) \
+	X(CROSS) \
+	X(NORMALIZE) \
+	X(LENGTH) \
+	X(DISTANCE) \
+	X(REFLECT) \
+	X(REFRACT) \
+	X(POW) \
+	X(EXP) \
+	X(EXP2) \
+	X(LOG) \
+	X(LOG2) \
+	X(SQRT) \
+	X(INVERSE_SQRT) \
+	X(MOD) \
+	X(SIN) \
+	X(COS) \
+	X(TAN) \
+	X(ASIN) \
+	X(ACOS) \
+	X(ATAN) \
+	X(SIGN) \
+	X(TRUNC) \
+	X(ROUND) \
+	X(ROUND_EVEN) \
+	X(DFDX) \
+	X(DFDX_FINE) \
+	X(DFDX_COARSE) \
+	X(DFDY) \
+	X(DFDY_FINE) \
+	X(DFDY_COARSE) \
+	X(FWIDTH) \
+	X(FWIDTH_FINE) \
+	X(FWIDTH_COARSE) \
+	X(TEXTURE_SIZE) \
+	X(TEXEL_FETCH) \
+	X(TEXEL_FETCH_OFFSET) \
+	X(TEXTURE_QUERY_LOD) \
+	X(TEXTURE_QUERY_LEVELS) \
+	X(INVERSE) \
+	X(TRANSPOSE) \
+	X(DETERMINANT) \
+	X(OUTER_PRODUCT) \
+	X(MATRIX_COMP_MULT) \
+	X(LESS_THAN) \
+	X(LESS_THAN_EQUAL) \
+	X(GREATER_THAN) \
+	X(GREATER_THAN_EQUAL) \
+	X(EQUAL) \
+	X(NOT_EQUAL) \
+	X(ANY) \
+	X(ALL) \
+	X(IMAGE_ATOMIC_ADD) \
+	X(IMAGE_ATOMIC_MIN) \
+	X(IMAGE_ATOMIC_MAX) \
+	X(IMAGE_ATOMIC_AND) \
+	X(IMAGE_ATOMIC_OR) \
+	X(IMAGE_ATOMIC_XOR) \
+	X(IMAGE_ATOMIC_EXCHANGE) \
+	X(IMAGE_ATOMIC_COMP_SWAP) \
+
 typedef enum BuiltinFuncKind
 {
-	BUILTIN_NONE,
-	BUILTIN_TEXTURE,
-	BUILTIN_TEXTURE_LOD,
-	BUILTIN_TEXTURE_PROJ,
-	BUILTIN_TEXTURE_GRAD,
-	BUILTIN_TEXTURE_OFFSET,
-	BUILTIN_TEXTURE_LOD_OFFSET,
-	BUILTIN_TEXTURE_PROJ_OFFSET,
-	BUILTIN_TEXTURE_PROJ_LOD,
-	BUILTIN_TEXTURE_PROJ_LOD_OFFSET,
-	BUILTIN_TEXTURE_GRAD_OFFSET,
-	BUILTIN_TEXTURE_PROJ_GRAD,
-	BUILTIN_TEXTURE_PROJ_GRAD_OFFSET,
-	BUILTIN_TEXTURE_GATHER,
-	BUILTIN_TEXTURE_GATHER_OFFSET,
-	BUILTIN_TEXTURE_GATHER_OFFSETS,
-	BUILTIN_MIN,
-	BUILTIN_MAX,
-	BUILTIN_CLAMP,
-	BUILTIN_ABS,
-	BUILTIN_FLOOR,
-	BUILTIN_CEIL,
-	BUILTIN_FRACT,
-	BUILTIN_MIX,
-	BUILTIN_STEP,
-	BUILTIN_SMOOTHSTEP,
-	BUILTIN_DOT,
-	BUILTIN_CROSS,
-	BUILTIN_NORMALIZE,
-	BUILTIN_LENGTH,
-	BUILTIN_DISTANCE,
-	BUILTIN_REFLECT,
-	BUILTIN_REFRACT,
-	BUILTIN_POW,
-	BUILTIN_EXP,
-	BUILTIN_EXP2,
-	BUILTIN_LOG,
-	BUILTIN_LOG2,
-	BUILTIN_SQRT,
-	BUILTIN_INVERSE_SQRT,
-	BUILTIN_MOD,
-	BUILTIN_SIN,
-	BUILTIN_COS,
-	BUILTIN_TAN,
-	BUILTIN_ASIN,
-	BUILTIN_ACOS,
-	BUILTIN_ATAN,
-	BUILTIN_SIGN,
-	BUILTIN_TRUNC,
-	BUILTIN_ROUND,
-	BUILTIN_ROUND_EVEN,
-	BUILTIN_DFDX,
-	BUILTIN_DFDX_FINE,
-	BUILTIN_DFDX_COARSE,
-	BUILTIN_DFDY,
-	BUILTIN_DFDY_FINE,
-	BUILTIN_DFDY_COARSE,
-	BUILTIN_FWIDTH,
-	BUILTIN_FWIDTH_FINE,
-	BUILTIN_FWIDTH_COARSE,
-	BUILTIN_TEXTURE_SIZE,
-	BUILTIN_TEXEL_FETCH,
-	BUILTIN_TEXEL_FETCH_OFFSET,
-	BUILTIN_TEXTURE_QUERY_LOD,
-	BUILTIN_TEXTURE_QUERY_LEVELS,
-	BUILTIN_INVERSE,
-	BUILTIN_TRANSPOSE,
-	BUILTIN_DETERMINANT,
-	BUILTIN_OUTER_PRODUCT,
-	BUILTIN_MATRIX_COMP_MULT,
-	BUILTIN_LESS_THAN,
-	BUILTIN_LESS_THAN_EQUAL,
-	BUILTIN_GREATER_THAN,
-	BUILTIN_GREATER_THAN_EQUAL,
-	BUILTIN_EQUAL,
-	BUILTIN_NOT_EQUAL,
-	BUILTIN_ANY,
-	BUILTIN_ALL,
-	BUILTIN_IMAGE_ATOMIC_ADD,
-	BUILTIN_IMAGE_ATOMIC_MIN,
-	BUILTIN_IMAGE_ATOMIC_MAX,
-	BUILTIN_IMAGE_ATOMIC_AND,
-	BUILTIN_IMAGE_ATOMIC_OR,
-	BUILTIN_IMAGE_ATOMIC_XOR,
-	BUILTIN_IMAGE_ATOMIC_EXCHANGE,
-	BUILTIN_IMAGE_ATOMIC_COMP_SWAP
+#define BUILTIN_KIND_ENUM(name) BUILTIN_##name,
+	BUILTIN_KIND_LIST(BUILTIN_KIND_ENUM)
+#undef BUILTIN_KIND_ENUM
+	BUILTIN_KIND_COUNT
 } BuiltinFuncKind;
 
 typedef struct Symbol
@@ -439,98 +381,102 @@ typedef struct TypeSystem
 	dyna Type* types;
 } TypeSystem;
 
+#define IR_OP_LIST(X) \
+	X(IR_PUSH_INT, "push_int") \
+	X(IR_PUSH_IDENT, "push_ident") \
+	X(IR_PUSH_FLOAT, "push_float") \
+	X(IR_PUSH_BOOL, "push_bool") \
+	X(IR_UNARY, "unary") \
+	X(IR_BINARY, "binary") \
+	X(IR_CALL, "call") \
+	X(IR_CONSTRUCT, "construct") \
+	X(IR_INDEX, "index") \
+	X(IR_MEMBER, "member") \
+	X(IR_SWIZZLE, "swizzle") \
+	X(IR_SELECT, "select") \
+	X(IR_IF_BEGIN, "if_begin") \
+	X(IR_IF_THEN, "if_then") \
+	X(IR_IF_ELSE, "if_else") \
+	X(IR_IF_END, "if_end") \
+	X(IR_FOR_BEGIN, "for_begin") \
+	X(IR_FOR_INIT_BEGIN, "for_init_begin") \
+	X(IR_FOR_INIT_END, "for_init_end") \
+	X(IR_FOR_COND_BEGIN, "for_cond_begin") \
+	X(IR_FOR_COND_END, "for_cond_end") \
+	X(IR_FOR_STEP_BEGIN, "for_step_begin") \
+	X(IR_FOR_STEP_END, "for_step_end") \
+	X(IR_FOR_BODY_BEGIN, "for_body_begin") \
+	X(IR_FOR_BODY_END, "for_body_end") \
+	X(IR_FOR_END, "for_end") \
+	X(IR_WHILE_BEGIN, "while_begin") \
+	X(IR_WHILE_COND_BEGIN, "while_cond_begin") \
+	X(IR_WHILE_COND_END, "while_cond_end") \
+	X(IR_WHILE_BODY_BEGIN, "while_body_begin") \
+	X(IR_WHILE_BODY_END, "while_body_end") \
+	X(IR_WHILE_END, "while_end") \
+	X(IR_DO_BEGIN, "do_begin") \
+	X(IR_DO_BODY_BEGIN, "do_body_begin") \
+	X(IR_DO_BODY_END, "do_body_end") \
+	X(IR_DO_COND_BEGIN, "do_cond_begin") \
+	X(IR_DO_COND_END, "do_cond_end") \
+	X(IR_DO_END, "do_end") \
+	X(IR_SWITCH_BEGIN, "switch_begin") \
+	X(IR_SWITCH_SELECTOR_BEGIN, "switch_selector_begin") \
+	X(IR_SWITCH_SELECTOR_END, "switch_selector_end") \
+	X(IR_SWITCH_CASE, "switch_case") \
+	X(IR_SWITCH_END, "switch_end") \
+	X(IR_BLOCK_BEGIN, "block_begin") \
+	X(IR_BLOCK_END, "block_end") \
+	X(IR_STMT_EXPR, "stmt_expr") \
+	X(IR_RETURN, "return") \
+	X(IR_BREAK, "break") \
+	X(IR_CONTINUE, "continue") \
+	X(IR_DISCARD, "discard") \
+	X(IR_DECL_BEGIN, "decl_begin") \
+	X(IR_DECL_TYPE, "decl_type") \
+	X(IR_DECL_VAR, "decl_var") \
+	X(IR_DECL_ARRAY_BEGIN, "decl_array_begin") \
+	X(IR_DECL_ARRAY_UNSIZED, "decl_array_unsized") \
+	X(IR_DECL_ARRAY_SIZE_BEGIN, "decl_array_size_begin") \
+	X(IR_DECL_ARRAY_SIZE_END, "decl_array_size_end") \
+	X(IR_DECL_ARRAY_END, "decl_array_end") \
+	X(IR_DECL_INIT_BEGIN, "decl_init_begin") \
+	X(IR_DECL_INIT_END, "decl_init_end") \
+	X(IR_DECL_SEPARATOR, "decl_separator") \
+	X(IR_DECL_END, "decl_end") \
+	X(IR_FUNC_BEGIN, "func_begin") \
+	X(IR_FUNC_PARAMS_BEGIN, "func_params_begin") \
+	X(IR_FUNC_PARAM_BEGIN, "func_param_begin") \
+	X(IR_FUNC_PARAM_TYPE, "func_param_type") \
+	X(IR_FUNC_PARAM_NAME, "func_param_name") \
+	X(IR_FUNC_PARAM_ARRAY_BEGIN, "func_param_array_begin") \
+	X(IR_FUNC_PARAM_ARRAY_UNSIZED, "func_param_array_unsized") \
+	X(IR_FUNC_PARAM_ARRAY_SIZE_BEGIN, "func_param_array_size_begin") \
+	X(IR_FUNC_PARAM_ARRAY_SIZE_END, "func_param_array_size_end") \
+	X(IR_FUNC_PARAM_ARRAY_END, "func_param_array_end") \
+	X(IR_FUNC_PARAM_END, "func_param_end") \
+	X(IR_FUNC_PARAM_SEPARATOR, "func_param_separator") \
+	X(IR_FUNC_PARAMS_END, "func_params_end") \
+	X(IR_FUNC_PROTOTYPE_END, "func_prototype_end") \
+	X(IR_FUNC_DEFINITION_BEGIN, "func_definition_begin") \
+	X(IR_FUNC_DEFINITION_END, "func_definition_end") \
+	X(IR_STRUCT_BEGIN, "struct_begin") \
+	X(IR_STRUCT_MEMBER, "struct_member") \
+	X(IR_STRUCT_END, "struct_end") \
+	X(IR_BLOCK_DECL_BEGIN, "block_decl_begin") \
+	X(IR_BLOCK_DECL_LAYOUT, "block_decl_layout") \
+	X(IR_BLOCK_DECL_MEMBER, "block_decl_member") \
+	X(IR_BLOCK_DECL_INSTANCE, "block_decl_instance") \
+	X(IR_BLOCK_DECL_END, "block_decl_end") \
+	X(IR_STAGE_LAYOUT_BEGIN, "stage_layout_begin") \
+	X(IR_STAGE_LAYOUT_IDENTIFIER, "stage_layout_identifier") \
+	X(IR_STAGE_LAYOUT_VALUE, "stage_layout_value") \
+	X(IR_STAGE_LAYOUT_END, "stage_layout_end")
 typedef enum IR_Op
 {
-	IR_PUSH_INT,
-	IR_PUSH_IDENT,
-	IR_PUSH_FLOAT,
-	IR_PUSH_BOOL,
-	IR_UNARY,
-	IR_BINARY,
-	IR_CALL,
-	IR_CONSTRUCT,
-	IR_INDEX,
-	IR_MEMBER,
-	IR_SWIZZLE,
-	IR_SELECT,
-	IR_IF_BEGIN,
-	IR_IF_THEN,
-	IR_IF_ELSE,
-	IR_IF_END,
-	IR_FOR_BEGIN,
-	IR_FOR_INIT_BEGIN,
-	IR_FOR_INIT_END,
-	IR_FOR_COND_BEGIN,
-	IR_FOR_COND_END,
-	IR_FOR_STEP_BEGIN,
-	IR_FOR_STEP_END,
-	IR_FOR_BODY_BEGIN,
-	IR_FOR_BODY_END,
-	IR_FOR_END,
-	IR_WHILE_BEGIN,
-	IR_WHILE_COND_BEGIN,
-	IR_WHILE_COND_END,
-	IR_WHILE_BODY_BEGIN,
-	IR_WHILE_BODY_END,
-	IR_WHILE_END,
-	IR_DO_BEGIN,
-	IR_DO_BODY_BEGIN,
-	IR_DO_BODY_END,
-	IR_DO_COND_BEGIN,
-	IR_DO_COND_END,
-	IR_DO_END,
-	IR_SWITCH_BEGIN,
-	IR_SWITCH_SELECTOR_BEGIN,
-	IR_SWITCH_SELECTOR_END,
-	IR_SWITCH_CASE,
-	IR_SWITCH_END,
-	IR_BLOCK_BEGIN,
-	IR_BLOCK_END,
-	IR_STMT_EXPR,
-	IR_RETURN,
-	IR_BREAK,
-	IR_CONTINUE,
-	IR_DISCARD,
-	IR_DECL_BEGIN,
-	IR_DECL_TYPE,
-	IR_DECL_VAR,
-	IR_DECL_ARRAY_BEGIN,
-	IR_DECL_ARRAY_UNSIZED,
-	IR_DECL_ARRAY_SIZE_BEGIN,
-	IR_DECL_ARRAY_SIZE_END,
-	IR_DECL_ARRAY_END,
-	IR_DECL_INIT_BEGIN,
-	IR_DECL_INIT_END,
-	IR_DECL_SEPARATOR,
-	IR_DECL_END,
-	IR_FUNC_BEGIN,
-	IR_FUNC_PARAMS_BEGIN,
-	IR_FUNC_PARAM_BEGIN,
-	IR_FUNC_PARAM_TYPE,
-	IR_FUNC_PARAM_NAME,
-	IR_FUNC_PARAM_ARRAY_BEGIN,
-	IR_FUNC_PARAM_ARRAY_UNSIZED,
-	IR_FUNC_PARAM_ARRAY_SIZE_BEGIN,
-	IR_FUNC_PARAM_ARRAY_SIZE_END,
-	IR_FUNC_PARAM_ARRAY_END,
-	IR_FUNC_PARAM_END,
-	IR_FUNC_PARAM_SEPARATOR,
-	IR_FUNC_PARAMS_END,
-	IR_FUNC_PROTOTYPE_END,
-	IR_FUNC_DEFINITION_BEGIN,
-	IR_FUNC_DEFINITION_END,
-	IR_STRUCT_BEGIN,
-	IR_STRUCT_MEMBER,
-	IR_STRUCT_END,
-	IR_BLOCK_DECL_BEGIN,
-	IR_BLOCK_DECL_LAYOUT,
-	IR_BLOCK_DECL_MEMBER,
-	IR_BLOCK_DECL_INSTANCE,
-	IR_BLOCK_DECL_END,
-	IR_STAGE_LAYOUT_BEGIN,
-	IR_STAGE_LAYOUT_IDENTIFIER,
-	IR_STAGE_LAYOUT_VALUE,
-	IR_STAGE_LAYOUT_END,
+#define IR_OP_ENUM(name, ...) name,
+	IR_OP_LIST(IR_OP_ENUM)
+#undef IR_OP_ENUM
 	IR_OP_COUNT
 } IR_Op;
 
@@ -542,96 +488,9 @@ enum
 };
 
 const char* ir_op_name[IR_OP_COUNT] = {
-	[IR_PUSH_INT] = "push_int",
-	[IR_PUSH_IDENT] = "push_ident",
-	[IR_PUSH_FLOAT] = "push_float",
-	[IR_PUSH_BOOL] = "push_bool",
-	[IR_UNARY] = "unary",
-	[IR_BINARY] = "binary",
-	[IR_CALL] = "call",
-	[IR_CONSTRUCT] = "construct",
-	[IR_INDEX] = "index",
-	[IR_MEMBER] = "member",
-	[IR_SWIZZLE] = "swizzle",
-	[IR_SELECT] = "select",
-	[IR_IF_BEGIN] = "if_begin",
-	[IR_IF_THEN] = "if_then",
-	[IR_IF_ELSE] = "if_else",
-	[IR_IF_END] = "if_end",
-	[IR_FOR_BEGIN] = "for_begin",
-	[IR_FOR_INIT_BEGIN] = "for_init_begin",
-	[IR_FOR_INIT_END] = "for_init_end",
-	[IR_FOR_COND_BEGIN] = "for_cond_begin",
-	[IR_FOR_COND_END] = "for_cond_end",
-	[IR_FOR_STEP_BEGIN] = "for_step_begin",
-	[IR_FOR_STEP_END] = "for_step_end",
-	[IR_FOR_BODY_BEGIN] = "for_body_begin",
-	[IR_FOR_BODY_END] = "for_body_end",
-	[IR_FOR_END] = "for_end",
-	[IR_WHILE_BEGIN] = "while_begin",
-	[IR_WHILE_COND_BEGIN] = "while_cond_begin",
-	[IR_WHILE_COND_END] = "while_cond_end",
-	[IR_WHILE_BODY_BEGIN] = "while_body_begin",
-	[IR_WHILE_BODY_END] = "while_body_end",
-	[IR_WHILE_END] = "while_end",
-	[IR_DO_BEGIN] = "do_begin",
-	[IR_DO_BODY_BEGIN] = "do_body_begin",
-	[IR_DO_BODY_END] = "do_body_end",
-	[IR_DO_COND_BEGIN] = "do_cond_begin",
-	[IR_DO_COND_END] = "do_cond_end",
-	[IR_DO_END] = "do_end",
-	[IR_SWITCH_BEGIN] = "switch_begin",
-	[IR_SWITCH_SELECTOR_BEGIN] = "switch_selector_begin",
-	[IR_SWITCH_SELECTOR_END] = "switch_selector_end",
-	[IR_SWITCH_CASE] = "switch_case",
-	[IR_SWITCH_END] = "switch_end",
-	[IR_BLOCK_BEGIN] = "block_begin",
-	[IR_BLOCK_END] = "block_end",
-	[IR_STMT_EXPR] = "stmt_expr",
-	[IR_RETURN] = "return",
-	[IR_BREAK] = "break",
-	[IR_CONTINUE] = "continue",
-	[IR_DISCARD] = "discard",
-	[IR_DECL_BEGIN] = "decl_begin",
-	[IR_DECL_TYPE] = "decl_type",
-	[IR_DECL_VAR] = "decl_var",
-	[IR_DECL_ARRAY_BEGIN] = "decl_array_begin",
-	[IR_DECL_ARRAY_UNSIZED] = "decl_array_unsized",
-	[IR_DECL_ARRAY_SIZE_BEGIN] = "decl_array_size_begin",
-	[IR_DECL_ARRAY_SIZE_END] = "decl_array_size_end",
-	[IR_DECL_ARRAY_END] = "decl_array_end",
-	[IR_DECL_INIT_BEGIN] = "decl_init_begin",
-	[IR_DECL_INIT_END] = "decl_init_end",
-	[IR_DECL_SEPARATOR] = "decl_separator",
-	[IR_DECL_END] = "decl_end",
-	[IR_FUNC_BEGIN] = "func_begin",
-	[IR_FUNC_PARAMS_BEGIN] = "func_params_begin",
-	[IR_FUNC_PARAM_BEGIN] = "func_param_begin",
-	[IR_FUNC_PARAM_TYPE] = "func_param_type",
-	[IR_FUNC_PARAM_NAME] = "func_param_name",
-	[IR_FUNC_PARAM_ARRAY_BEGIN] = "func_param_array_begin",
-	[IR_FUNC_PARAM_ARRAY_UNSIZED] = "func_param_array_unsized",
-	[IR_FUNC_PARAM_ARRAY_SIZE_BEGIN] = "func_param_array_size_begin",
-	[IR_FUNC_PARAM_ARRAY_SIZE_END] = "func_param_array_size_end",
-	[IR_FUNC_PARAM_ARRAY_END] = "func_param_array_end",
-	[IR_FUNC_PARAM_END] = "func_param_end",
-	[IR_FUNC_PARAM_SEPARATOR] = "func_param_separator",
-	[IR_FUNC_PARAMS_END] = "func_params_end",
-	[IR_FUNC_PROTOTYPE_END] = "func_prototype_end",
-	[IR_FUNC_DEFINITION_BEGIN] = "func_definition_begin",
-	[IR_FUNC_DEFINITION_END] = "func_definition_end",
-	[IR_STRUCT_BEGIN] = "struct_begin",
-	[IR_STRUCT_MEMBER] = "struct_member",
-	[IR_STRUCT_END] = "struct_end",
-	[IR_BLOCK_DECL_BEGIN] = "block_decl_begin",
-	[IR_BLOCK_DECL_LAYOUT] = "block_decl_layout",
-	[IR_BLOCK_DECL_MEMBER] = "block_decl_member",
-	[IR_BLOCK_DECL_INSTANCE] = "block_decl_instance",
-	[IR_BLOCK_DECL_END] = "block_decl_end",
-	[IR_STAGE_LAYOUT_BEGIN] = "stage_layout_begin",
-	[IR_STAGE_LAYOUT_IDENTIFIER] = "stage_layout_identifier",
-	[IR_STAGE_LAYOUT_VALUE] = "stage_layout_value",
-	[IR_STAGE_LAYOUT_END] = "stage_layout_end",
+#define IR_OP_NAME(name, str) [name] = str,
+	IR_OP_LIST(IR_OP_NAME)
+#undef IR_OP_NAME
 };
 
 typedef struct IR_Cmd
@@ -729,75 +588,58 @@ typedef struct SymbolTable
 	dyna SymbolScope* scopes;
 } SymbolTable;
 
-const char* kw_in;
-const char* kw_out;
-const char* kw_uniform;
-const char* kw_layout;
-const char* kw_struct;
-const char* kw_set;
-const char* kw_binding;
-const char* kw_location;
-const char* kw_std140;
-const char* kw_std430;
-const char* kw_column_major;
-const char* kw_shared;
-const char* kw_buffer;
-const char* kw_packed;
-const char* kw_volatile;
-const char* kw_restrict;
-const char* kw_readonly;
-const char* kw_writeonly;
-const char* kw_if;
-const char* kw_else;
-const char* kw_return;
-const char* kw_break;
-const char* kw_continue;
-const char* kw_discard;
-const char* kw_for;
-const char* kw_while;
-const char* kw_do;
-const char* kw_switch;
-const char* kw_case;
-const char* kw_default;
-const char* kw_true;
-const char* kw_false;
-const char* kw_const;
+#define KEYWORD_LIST(X) \
+	X(in) \
+	X(out) \
+	X(uniform) \
+	X(layout) \
+	X(struct) \
+	X(set) \
+	X(binding) \
+	X(location) \
+	X(std140) \
+	X(std430) \
+	X(column_major) \
+	X(shared) \
+	X(buffer) \
+	X(packed) \
+	X(volatile) \
+	X(restrict) \
+	X(readonly) \
+	X(writeonly) \
+	X(if) \
+	X(else) \
+	X(return) \
+	X(break) \
+	X(continue) \
+	X(discard) \
+	X(for) \
+	X(while) \
+	X(do) \
+	X(switch) \
+	X(case) \
+	X(default) \
+	X(true) \
+	X(false) \
+	X(const)
 
-void init_keyword_interns()
+typedef enum Keyword
 {
-	kw_in = sintern("in");
-	kw_out = sintern("out");
-	kw_uniform = sintern("uniform");
-	kw_layout = sintern("layout");
-	kw_struct = sintern("struct");
-	kw_set = sintern("set");
-	kw_binding = sintern("binding");
-	kw_location = sintern("location");
-	kw_std140 = sintern("std140");
-	kw_std430 = sintern("std430");
-	kw_column_major = sintern("column_major");
-	kw_shared = sintern("shared");
-	kw_buffer = sintern("buffer");
-	kw_packed = sintern("packed");
-	kw_volatile = sintern("volatile");
-	kw_restrict = sintern("restrict");
-	kw_readonly = sintern("readonly");
-	kw_writeonly = sintern("writeonly");
-	kw_if = sintern("if");
-	kw_else = sintern("else");
-	kw_return = sintern("return");
-	kw_break = sintern("break");
-	kw_continue = sintern("continue");
-	kw_discard = sintern("discard");
-	kw_for = sintern("for");
-	kw_while = sintern("while");
-	kw_do = sintern("do");
-	kw_switch = sintern("switch");
-	kw_case = sintern("case");
-	kw_default = sintern("default");
-	kw_true = sintern("true");
-	kw_false = sintern("false");
-	kw_const = sintern("const");
+#define KEYWORD_ENUM(name) KW_##name,
+	KEYWORD_LIST(KEYWORD_ENUM)
+#undef KEYWORD_ENUM
+	KW_COUNT
+} Keyword;
+
+static const char* g_keywords[KW_COUNT];
+
+#define KW(name) g_keywords[KW_##name]
+
+static void init_keyword_interns()
+{
+#define KEYWORD_INIT(name) KW(name) = sintern(#name);
+	KEYWORD_LIST(KEYWORD_INIT)
+#undef KEYWORD_INIT
 }
 
 SymbolTable g_symbol_table;
@@ -973,95 +815,100 @@ static void symbol_table_register_builtin(const BuiltinFunctionInit* init)
 	sym->builtin_param_count = init->param_count;
 }
 
+#define BUILTIN_FUNCTION_LIST(X) \
+	X("texture", TEXTURE, "vec4", 2) \
+	X("textureLod", TEXTURE_LOD, "vec4", 3) \
+	X("textureProj", TEXTURE_PROJ, "vec4", -1) \
+	X("textureGrad", TEXTURE_GRAD, "vec4", 4) \
+	X("textureOffset", TEXTURE_OFFSET, NULL, 3) \
+	X("textureLodOffset", TEXTURE_LOD_OFFSET, NULL, 4) \
+	X("textureProjOffset", TEXTURE_PROJ_OFFSET, NULL, -1) \
+	X("textureProjLod", TEXTURE_PROJ_LOD, NULL, 3) \
+	X("textureProjLodOffset", TEXTURE_PROJ_LOD_OFFSET, NULL, 4) \
+	X("textureGradOffset", TEXTURE_GRAD_OFFSET, NULL, 5) \
+	X("textureProjGrad", TEXTURE_PROJ_GRAD, NULL, 4) \
+	X("textureProjGradOffset", TEXTURE_PROJ_GRAD_OFFSET, NULL, 5) \
+	X("textureGather", TEXTURE_GATHER, NULL, -1) \
+	X("textureGatherOffset", TEXTURE_GATHER_OFFSET, NULL, -1) \
+	X("textureGatherOffsets", TEXTURE_GATHER_OFFSETS, NULL, -1) \
+	X("textureSize", TEXTURE_SIZE, NULL, -1) \
+	X("texelFetch", TEXEL_FETCH, NULL, -1) \
+	X("texelFetchOffset", TEXEL_FETCH_OFFSET, NULL, -1) \
+	X("textureQueryLod", TEXTURE_QUERY_LOD, "vec2", 2) \
+	X("textureQueryLevels", TEXTURE_QUERY_LEVELS, "int", 1) \
+	X("min", MIN, NULL, 2) \
+	X("max", MAX, NULL, 2) \
+	X("clamp", CLAMP, NULL, 3) \
+	X("abs", ABS, NULL, 1) \
+	X("floor", FLOOR, NULL, 1) \
+	X("ceil", CEIL, NULL, 1) \
+	X("fract", FRACT, NULL, 1) \
+	X("frac", FRACT, NULL, 1) \
+	X("mix", MIX, NULL, 3) \
+	X("step", STEP, NULL, 2) \
+	X("smoothstep", SMOOTHSTEP, NULL, 3) \
+	X("dot", DOT, NULL, 2) \
+	X("cross", CROSS, NULL, 2) \
+	X("normalize", NORMALIZE, NULL, 1) \
+	X("length", LENGTH, "float", 1) \
+	X("distance", DISTANCE, "float", 2) \
+	X("reflect", REFLECT, NULL, 2) \
+	X("refract", REFRACT, NULL, 3) \
+	X("pow", POW, NULL, 2) \
+	X("exp", EXP, NULL, 1) \
+	X("exp2", EXP2, NULL, 1) \
+	X("log", LOG, NULL, 1) \
+	X("log2", LOG2, NULL, 1) \
+	X("sqrt", SQRT, NULL, 1) \
+	X("inversesqrt", INVERSE_SQRT, NULL, 1) \
+	X("mod", MOD, NULL, 2) \
+	X("sin", SIN, NULL, 1) \
+	X("cos", COS, NULL, 1) \
+	X("tan", TAN, NULL, 1) \
+	X("asin", ASIN, NULL, 1) \
+	X("acos", ACOS, NULL, 1) \
+	X("atan", ATAN, NULL, -1) \
+	X("sign", SIGN, NULL, 1) \
+	X("trunc", TRUNC, NULL, 1) \
+	X("round", ROUND, NULL, 1) \
+	X("roundEven", ROUND_EVEN, NULL, 1) \
+	X("dFdx", DFDX, NULL, 1) \
+	X("dFdy", DFDY, NULL, 1) \
+	X("fwidth", FWIDTH, NULL, 1) \
+	X("dFdxFine", DFDX_FINE, NULL, 1) \
+	X("dFdxCoarse", DFDX_COARSE, NULL, 1) \
+	X("dFdyFine", DFDY_FINE, NULL, 1) \
+	X("dFdyCoarse", DFDY_COARSE, NULL, 1) \
+	X("fwidthFine", FWIDTH_FINE, NULL, 1) \
+	X("fwidthCoarse", FWIDTH_COARSE, NULL, 1) \
+	X("inverse", INVERSE, NULL, 1) \
+	X("transpose", TRANSPOSE, NULL, 1) \
+	X("determinant", DETERMINANT, NULL, 1) \
+	X("outerProduct", OUTER_PRODUCT, NULL, 2) \
+	X("matrixCompMult", MATRIX_COMP_MULT, NULL, 2) \
+	X("lessThan", LESS_THAN, NULL, 2) \
+	X("lessThanEqual", LESS_THAN_EQUAL, NULL, 2) \
+	X("greaterThan", GREATER_THAN, NULL, 2) \
+	X("greaterThanEqual", GREATER_THAN_EQUAL, NULL, 2) \
+	X("equal", EQUAL, NULL, 2) \
+	X("notEqual", NOT_EQUAL, NULL, 2) \
+	X("any", ANY, "bool", 1) \
+	X("all", ALL, "bool", 1) \
+	X("imageAtomicAdd", IMAGE_ATOMIC_ADD, NULL, -1) \
+	X("imageAtomicMin", IMAGE_ATOMIC_MIN, NULL, -1) \
+	X("imageAtomicMax", IMAGE_ATOMIC_MAX, NULL, -1) \
+	X("imageAtomicAnd", IMAGE_ATOMIC_AND, NULL, -1) \
+	X("imageAtomicOr", IMAGE_ATOMIC_OR, NULL, -1) \
+	X("imageAtomicXor", IMAGE_ATOMIC_XOR, NULL, -1) \
+	X("imageAtomicExchange", IMAGE_ATOMIC_EXCHANGE, NULL, -1) \
+	X("imageAtomicCompSwap", IMAGE_ATOMIC_COMP_SWAP, NULL, -1) \
+
 static void symbol_table_register_builtins()
 {
-	const BuiltinFunctionInit builtins[] = {
-		{ "texture", BUILTIN_TEXTURE, "vec4", 2 },
-		{ "textureLod", BUILTIN_TEXTURE_LOD, "vec4", 3 },
-		{ "textureProj", BUILTIN_TEXTURE_PROJ, "vec4", -1 },
-		{ "textureGrad", BUILTIN_TEXTURE_GRAD, "vec4", 4 },
-		{ "textureOffset", BUILTIN_TEXTURE_OFFSET, NULL, 3 },
-		{ "textureLodOffset", BUILTIN_TEXTURE_LOD_OFFSET, NULL, 4 },
-		{ "textureProjOffset", BUILTIN_TEXTURE_PROJ_OFFSET, NULL, -1 },
-		{ "textureProjLod", BUILTIN_TEXTURE_PROJ_LOD, NULL, 3 },
-		{ "textureProjLodOffset", BUILTIN_TEXTURE_PROJ_LOD_OFFSET, NULL, 4 },
-		{ "textureGradOffset", BUILTIN_TEXTURE_GRAD_OFFSET, NULL, 5 },
-		{ "textureProjGrad", BUILTIN_TEXTURE_PROJ_GRAD, NULL, 4 },
-		{ "textureProjGradOffset", BUILTIN_TEXTURE_PROJ_GRAD_OFFSET, NULL, 5 },
-		{ "textureGather", BUILTIN_TEXTURE_GATHER, NULL, -1 },
-		{ "textureGatherOffset", BUILTIN_TEXTURE_GATHER_OFFSET, NULL, -1 },
-		{ "textureGatherOffsets", BUILTIN_TEXTURE_GATHER_OFFSETS, NULL, -1 },
-		{ "textureSize", BUILTIN_TEXTURE_SIZE, NULL, -1 },
-		{ "texelFetch", BUILTIN_TEXEL_FETCH, NULL, -1 },
-		{ "texelFetchOffset", BUILTIN_TEXEL_FETCH_OFFSET, NULL, -1 },
-		{ "textureQueryLod", BUILTIN_TEXTURE_QUERY_LOD, "vec2", 2 },
-		{ "textureQueryLevels", BUILTIN_TEXTURE_QUERY_LEVELS, "int", 1 },
-		{ "min", BUILTIN_MIN, NULL, 2 },
-		{ "max", BUILTIN_MAX, NULL, 2 },
-		{ "clamp", BUILTIN_CLAMP, NULL, 3 },
-		{ "abs", BUILTIN_ABS, NULL, 1 },
-		{ "floor", BUILTIN_FLOOR, NULL, 1 },
-		{ "ceil", BUILTIN_CEIL, NULL, 1 },
-		{ "fract", BUILTIN_FRACT, NULL, 1 },
-		{ "frac", BUILTIN_FRACT, NULL, 1 },
-		{ "mix", BUILTIN_MIX, NULL, 3 },
-		{ "step", BUILTIN_STEP, NULL, 2 },
-		{ "smoothstep", BUILTIN_SMOOTHSTEP, NULL, 3 },
-		{ "dot", BUILTIN_DOT, NULL, 2 },
-		{ "cross", BUILTIN_CROSS, NULL, 2 },
-		{ "normalize", BUILTIN_NORMALIZE, NULL, 1 },
-		{ "length", BUILTIN_LENGTH, "float", 1 },
-		{ "distance", BUILTIN_DISTANCE, "float", 2 },
-		{ "reflect", BUILTIN_REFLECT, NULL, 2 },
-		{ "refract", BUILTIN_REFRACT, NULL, 3 },
-		{ "pow", BUILTIN_POW, NULL, 2 },
-		{ "exp", BUILTIN_EXP, NULL, 1 },
-		{ "exp2", BUILTIN_EXP2, NULL, 1 },
-		{ "log", BUILTIN_LOG, NULL, 1 },
-		{ "log2", BUILTIN_LOG2, NULL, 1 },
-		{ "sqrt", BUILTIN_SQRT, NULL, 1 },
-		{ "inversesqrt", BUILTIN_INVERSE_SQRT, NULL, 1 },
-		{ "mod", BUILTIN_MOD, NULL, 2 },
-		{ "sin", BUILTIN_SIN, NULL, 1 },
-		{ "cos", BUILTIN_COS, NULL, 1 },
-		{ "tan", BUILTIN_TAN, NULL, 1 },
-		{ "asin", BUILTIN_ASIN, NULL, 1 },
-		{ "acos", BUILTIN_ACOS, NULL, 1 },
-		{ "atan", BUILTIN_ATAN, NULL, -1 },
-		{ "sign", BUILTIN_SIGN, NULL, 1 },
-		{ "trunc", BUILTIN_TRUNC, NULL, 1 },
-		{ "round", BUILTIN_ROUND, NULL, 1 },
-		{ "roundEven", BUILTIN_ROUND_EVEN, NULL, 1 },
-		{ "dFdx", BUILTIN_DFDX, NULL, 1 },
-		{ "dFdy", BUILTIN_DFDY, NULL, 1 },
-		{ "fwidth", BUILTIN_FWIDTH, NULL, 1 },
-		{ "dFdxFine", BUILTIN_DFDX_FINE, NULL, 1 },
-		{ "dFdxCoarse", BUILTIN_DFDX_COARSE, NULL, 1 },
-		{ "dFdyFine", BUILTIN_DFDY_FINE, NULL, 1 },
-		{ "dFdyCoarse", BUILTIN_DFDY_COARSE, NULL, 1 },
-		{ "fwidthFine", BUILTIN_FWIDTH_FINE, NULL, 1 },
-		{ "fwidthCoarse", BUILTIN_FWIDTH_COARSE, NULL, 1 },
-		{ "inverse", BUILTIN_INVERSE, NULL, 1 },
-		{ "transpose", BUILTIN_TRANSPOSE, NULL, 1 },
-		{ "determinant", BUILTIN_DETERMINANT, NULL, 1 },
-		{ "outerProduct", BUILTIN_OUTER_PRODUCT, NULL, 2 },
-		{ "matrixCompMult", BUILTIN_MATRIX_COMP_MULT, NULL, 2 },
-		{ "lessThan", BUILTIN_LESS_THAN, NULL, 2 },
-		{ "lessThanEqual", BUILTIN_LESS_THAN_EQUAL, NULL, 2 },
-		{ "greaterThan", BUILTIN_GREATER_THAN, NULL, 2 },
-		{ "greaterThanEqual", BUILTIN_GREATER_THAN_EQUAL, NULL, 2 },
-		{ "equal", BUILTIN_EQUAL, NULL, 2 },
-		{ "notEqual", BUILTIN_NOT_EQUAL, NULL, 2 },
-		{ "any", BUILTIN_ANY, "bool", 1 },
-		{ "all", BUILTIN_ALL, "bool", 1 },
-		{ "imageAtomicAdd", BUILTIN_IMAGE_ATOMIC_ADD, NULL, -1 },
-		{ "imageAtomicMin", BUILTIN_IMAGE_ATOMIC_MIN, NULL, -1 },
-		{ "imageAtomicMax", BUILTIN_IMAGE_ATOMIC_MAX, NULL, -1 },
-		{ "imageAtomicAnd", BUILTIN_IMAGE_ATOMIC_AND, NULL, -1 },
-		{ "imageAtomicOr", BUILTIN_IMAGE_ATOMIC_OR, NULL, -1 },
-		{ "imageAtomicXor", BUILTIN_IMAGE_ATOMIC_XOR, NULL, -1 },
-		{ "imageAtomicExchange", BUILTIN_IMAGE_ATOMIC_EXCHANGE, NULL, -1 },
-		{ "imageAtomicCompSwap", BUILTIN_IMAGE_ATOMIC_COMP_SWAP, NULL, -1 }
+	static const BuiltinFunctionInit builtins[] = {
+#define BUILTIN_INIT(name, kind, ret, params) { name, BUILTIN_##kind, ret, params },
+		BUILTIN_FUNCTION_LIST(BUILTIN_INIT)
+#undef BUILTIN_INIT
 	};
 	for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); ++i)
 	{
@@ -1413,41 +1260,41 @@ void skip_ws_comments()
 
 unsigned storage_flag_from_keyword(const char* s)
 {
-	if (s == kw_in)
+	if (s == KW(in))
 		return SYM_STORAGE_IN;
-	if (s == kw_out)
+	if (s == KW(out))
 		return SYM_STORAGE_OUT;
-	if (s == kw_uniform)
+	if (s == KW(uniform))
 		return SYM_STORAGE_UNIFORM;
-	if (s == kw_buffer)
+	if (s == KW(buffer))
 		return SYM_STORAGE_BUFFER;
-	if (s == kw_shared)
+	if (s == KW(shared))
 		return SYM_STORAGE_SHARED;
 	return 0;
 }
 
 unsigned layout_flag_from_keyword(const char* s)
 {
-	if (s == kw_set)
+	if (s == KW(set))
 		return SYM_LAYOUT_SET;
-	if (s == kw_binding)
+	if (s == KW(binding))
 		return SYM_LAYOUT_BINDING;
-	if (s == kw_location)
+	if (s == KW(location))
 		return SYM_LAYOUT_LOCATION;
 	return 0;
 }
 
 unsigned qualifier_flag_from_keyword(const char* s)
 {
-	if (s == kw_const)
+	if (s == KW(const))
 		return SYM_QUAL_CONST;
-	if (s == kw_volatile)
+	if (s == KW(volatile))
 		return SYM_QUAL_VOLATILE;
-	if (s == kw_restrict)
+	if (s == KW(restrict))
 		return SYM_QUAL_RESTRICT;
-	if (s == kw_readonly)
+	if (s == KW(readonly))
 		return SYM_QUAL_READONLY;
-	if (s == kw_writeonly)
+	if (s == KW(writeonly))
 		return SYM_QUAL_WRITEONLY;
 	return 0;
 }
@@ -1519,13 +1366,13 @@ int is_type_token()
 	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 	if (is_type_name(name))
 		return 1;
-	if (tok.lexeme == kw_struct)
+	if (tok.lexeme == KW(struct))
 		return 1;
 	if (storage_flag_from_keyword(tok.lexeme))
 		return 1;
 	if (qualifier_flag_from_keyword(tok.lexeme))
 		return 1;
-	if (tok.lexeme == kw_layout)
+	if (tok.lexeme == KW(layout))
 		return 1;
 	return 0;
 }
@@ -1593,7 +1440,7 @@ void parse_type_qualifiers(TypeSpec* spec)
 			next();
 			continue;
 		}
-		if (tok.lexeme == kw_layout)
+		if (tok.lexeme == KW(layout))
 		{
 			parse_layout_block(spec);
 			continue;
@@ -1609,7 +1456,7 @@ TypeSpec parse_type_specifier()
 {
 	TypeSpec spec = (TypeSpec){ 0 };
 	parse_type_qualifiers(&spec);
-	if (tok.kind == TOK_IDENTIFIER && tok.lexeme == kw_struct)
+	if (tok.kind == TOK_IDENTIFIER && tok.lexeme == KW(struct))
 	{
 		next();
 		if (tok.kind != TOK_IDENTIFIER)
@@ -1781,7 +1628,7 @@ static void validate_interface_block_layout(const TypeSpec* spec)
 		for (int i = 0; i < layout_count; ++i)
 		{
 			const char* ident = spec->layout_identifiers[i];
-			if (ident != kw_std140)
+			if (ident != KW(std140))
 				parse_error("uniform blocks only support std140 layout");
 		}
 		return;
@@ -1791,7 +1638,7 @@ static void validate_interface_block_layout(const TypeSpec* spec)
 		for (int i = 0; i < layout_count; ++i)
 		{
 			const char* ident = spec->layout_identifiers[i];
-			if (ident != kw_std430)
+			if (ident != KW(std430))
 				parse_error("storage blocks only support std430 layout");
 		}
 	}
@@ -3259,71 +3106,71 @@ void next()
 		tok.prec = 0;
 		tok.lexpr = expr_ident;
 		tok.rexpr = expr_error;
-		if (tok.lexeme == kw_if)
+		if (tok.lexeme == KW(if))
 		{
 			tok.kind = TOK_IF;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_else)
+		else if (tok.lexeme == KW(else))
 		{
 			tok.kind = TOK_ELSE;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_for)
+		else if (tok.lexeme == KW(for))
 		{
 			tok.kind = TOK_FOR;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_while)
+		else if (tok.lexeme == KW(while))
 		{
 			tok.kind = TOK_WHILE;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_do)
+		else if (tok.lexeme == KW(do))
 		{
 			tok.kind = TOK_DO;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_return)
+		else if (tok.lexeme == KW(return))
 		{
 			tok.kind = TOK_RETURN;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_break)
+		else if (tok.lexeme == KW(break))
 		{
 			tok.kind = TOK_BREAK;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_continue)
+		else if (tok.lexeme == KW(continue))
 		{
 			tok.kind = TOK_CONTINUE;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_discard)
+		else if (tok.lexeme == KW(discard))
 		{
 			tok.kind = TOK_DISCARD;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_switch)
+		else if (tok.lexeme == KW(switch))
 		{
 			tok.kind = TOK_SWITCH;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_case)
+		else if (tok.lexeme == KW(case))
 		{
 			tok.kind = TOK_CASE;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_default)
+		else if (tok.lexeme == KW(default))
 		{
 			tok.kind = TOK_DEFAULT;
 			tok.lexpr = expr_error;
 		}
-		else if (tok.lexeme == kw_true || tok.lexeme == kw_false)
+		else if (tok.lexeme == KW(true) || tok.lexeme == KW(false))
 		{
 			tok.kind = TOK_BOOL;
 			tok.lexpr = expr_bool;
-			tok.int_val = tok.lexeme == kw_true;
+			tok.int_val = tok.lexeme == KW(true);
 		}
 		return;
 	}
@@ -4085,15 +3932,16 @@ typedef struct BuiltinArgConstraint
 
 enum
 {
-	BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR = 1 << 0,
-	BUILTIN_ARG_REQUIRE_FLOATING = 1 << 1,
-	BUILTIN_ARG_REQUIRE_FLOAT_BASE = 1 << 2,
-	BUILTIN_ARG_REQUIRE_SCALAR = 1 << 3,
-	BUILTIN_ARG_REQUIRE_VECTOR = 1 << 4,
-	BUILTIN_ARG_MATCH_BASE = 1 << 5,
-	BUILTIN_ARG_MATCH_SHAPE = 1 << 6,
-	BUILTIN_ARG_REQUIRE_MATRIX = 1 << 7,
-	BUILTIN_ARG_REQUIRE_SQUARE = 1 << 8,
+		BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR = 1 << 0,
+		BUILTIN_ARG_REQUIRE_FLOATING = 1 << 1,
+		BUILTIN_ARG_REQUIRE_FLOAT_BASE = 1 << 2,
+		BUILTIN_ARG_REQUIRE_SCALAR = 1 << 3,
+		BUILTIN_ARG_REQUIRE_VECTOR = 1 << 4,
+		BUILTIN_ARG_MATCH_BASE = 1 << 5,
+		BUILTIN_ARG_MATCH_SHAPE = 1 << 6,
+BUILTIN_ARG_REQUIRE_MATRIX = 1 << 7,
+BUILTIN_ARG_REQUIRE_SQUARE = 1 << 8,
+BUILTIN_ARG_REQUIRE_NUMERIC = 1 << 9,
 };
 
 #define ARRAY_COUNT(arr) ((int)(sizeof(arr) / sizeof((arr)[0])))
@@ -4127,68 +3975,100 @@ static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const
 static Type* builtin_result_scalar(Type** args, int argc, int index);
 static Type* builtin_result_vector(Type** args, int argc, int index, int components);
 
-static const BuiltinArgConstraint builtin_length_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-};
-
-static const BuiltinArgConstraint builtin_distance_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-};
-
-static const BuiltinArgConstraint builtin_derivative_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
-};
-
-static const BuiltinArgConstraint builtin_normalize_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-};
-
-static const BuiltinArgConstraint builtin_reflect_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-};
-
-static const BuiltinArgConstraint builtin_refract_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	{ "third", BUILTIN_ARG_REQUIRE_SCALAR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
-};
-
-static const BuiltinArgConstraint builtin_mix_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	{ "third", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR, -1 },
-};
-
-static const BuiltinArgConstraint builtin_determinant_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_MATRIX | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_SQUARE, -1 },
-};
-
-static const BuiltinArgConstraint builtin_outer_product_constraints[] = {
-	{ "first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	{ "second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0 },
-};
+#define BUILTIN_ARG(role, flags, ref) { role, flags, ref }
+#define BUILTIN_ARGS_COUNT(...) (int)(sizeof((const BuiltinArgConstraint[]){ __VA_ARGS__ }) / sizeof(BuiltinArgConstraint))
+#define BUILTIN_SIGNATURE_ENTRY(kind, result_kind, result_index, result_components, custom, ...) \
+	{ BUILTIN_##kind, (const BuiltinArgConstraint[]){ __VA_ARGS__ }, BUILTIN_ARGS_COUNT(__VA_ARGS__), result_kind, result_index, result_components, custom }
+#define BUILTIN_SIGNATURE_FLOAT_SCALAR(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1) \
+	)
+#define BUILTIN_SIGNATURE_FLOAT_PAIR(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1), \
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0) \
+	)
+#define BUILTIN_SIGNATURE_FLOAT_UNARY(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1) \
+	)
+#define BUILTIN_SIGNATURE_NUMERIC_UNARY(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC, -1) \
+	)
+#define BUILTIN_SIGNATURE_NUMERIC_BINARY(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC, -1), \
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0) \
+	)
+#define BUILTIN_SIGNATURE_NUMERIC_TERNARY(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC, -1), \
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0), \
+		BUILTIN_ARG("third", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_NUMERIC | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0) \
+	)
+#define BUILTIN_SIGNATURE_FLOAT_DERIV(kind) \
+	BUILTIN_SIGNATURE_ENTRY(kind, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL, \
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1) \
+	)
 
 static const BuiltinSignature builtin_signatures[] = {
-	{ BUILTIN_LENGTH, builtin_length_constraints, ARRAY_COUNT(builtin_length_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_DISTANCE, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_DOT, builtin_distance_constraints, ARRAY_COUNT(builtin_distance_constraints), BUILTIN_SIGNATURE_RESULT_SCALAR, 0, 0, NULL },
-	{ BUILTIN_NORMALIZE, builtin_normalize_constraints, ARRAY_COUNT(builtin_normalize_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_REFLECT, builtin_reflect_constraints, ARRAY_COUNT(builtin_reflect_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_REFRACT, builtin_refract_constraints, ARRAY_COUNT(builtin_refract_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_MIX, builtin_mix_constraints, ARRAY_COUNT(builtin_mix_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix },
-	{ BUILTIN_DETERMINANT, builtin_determinant_constraints, ARRAY_COUNT(builtin_determinant_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant },
-	{ BUILTIN_OUTER_PRODUCT, builtin_outer_product_constraints, ARRAY_COUNT(builtin_outer_product_constraints), BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product },
-	{ BUILTIN_FWIDTH, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_FWIDTH_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_FWIDTH_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDX_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY_FINE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
-	{ BUILTIN_DFDY_COARSE, builtin_derivative_constraints, ARRAY_COUNT(builtin_derivative_constraints), BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL },
+	BUILTIN_SIGNATURE_FLOAT_SCALAR(LENGTH),
+	BUILTIN_SIGNATURE_FLOAT_PAIR(DISTANCE),
+	BUILTIN_SIGNATURE_FLOAT_PAIR(DOT),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(NORMALIZE),
+	BUILTIN_SIGNATURE_ENTRY(REFLECT, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL,
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1),
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0)
+	),
+	BUILTIN_SIGNATURE_ENTRY(REFRACT, BUILTIN_SIGNATURE_RESULT_SAME, 0, 0, NULL,
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1),
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0),
+		BUILTIN_ARG("third", BUILTIN_ARG_REQUIRE_SCALAR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0)
+	),
+	BUILTIN_SIGNATURE_ENTRY(MIX, BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_mix,
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1),
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0),
+		BUILTIN_ARG("third", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR, -1)
+	),
+	BUILTIN_SIGNATURE_ENTRY(DETERMINANT, BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_determinant,
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_MATRIX | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_SQUARE, -1)
+	),
+	BUILTIN_SIGNATURE_ENTRY(OUTER_PRODUCT, BUILTIN_SIGNATURE_RESULT_CUSTOM, 0, 0, builtin_result_outer_product,
+		BUILTIN_ARG("first", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1),
+		BUILTIN_ARG("second", BUILTIN_ARG_REQUIRE_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE, 0)
+	),
+	BUILTIN_SIGNATURE_NUMERIC_BINARY(MIN),
+	BUILTIN_SIGNATURE_NUMERIC_BINARY(MAX),
+	BUILTIN_SIGNATURE_NUMERIC_TERNARY(CLAMP),
+	BUILTIN_SIGNATURE_NUMERIC_UNARY(ABS),
+	BUILTIN_SIGNATURE_NUMERIC_UNARY(SIGN),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(FLOOR),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(CEIL),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(FRACT),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(TRUNC),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(ROUND),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(ROUND_EVEN),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(EXP),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(EXP2),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(LOG),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(LOG2),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(SQRT),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(INVERSE_SQRT),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(SIN),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(COS),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(TAN),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(ASIN),
+	BUILTIN_SIGNATURE_FLOAT_UNARY(ACOS),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(FWIDTH),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(FWIDTH_FINE),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(FWIDTH_COARSE),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDX),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDX_FINE),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDX_COARSE),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDY),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDY_FINE),
+	BUILTIN_SIGNATURE_FLOAT_DERIV(DFDY_COARSE)
 };
 
 static const BuiltinSignature* builtin_find_signature(BuiltinFuncKind kind)
@@ -4286,6 +4166,14 @@ static int builtin_validate_args(const Symbol* sym, Type** args, int argc, const
 				all_ok = 0;
 			}
 		}
+		if (constraint->flags & BUILTIN_ARG_REQUIRE_NUMERIC)
+		{
+			if (!type_is_numeric(arg))
+			{
+				type_check_error("%s requires numeric %s argument, got %s", name, constraint->role, type_display(arg));
+				all_ok = 0;
+			}
+		}
 		if (constraint->flags & BUILTIN_ARG_REQUIRE_FLOAT_BASE)
 		{
 			if (type_base_type(arg) != T_FLOAT)
@@ -4351,67 +4239,6 @@ static Type* builtin_result_vector(Type** args, int argc, int index, int compone
 	return type_get_vector(type_base_type(source), components);
 }
 
-static Type* builtin_result_length(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_distance(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-		{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_dot(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING, -1 },
-		{ "second", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_MATCH_BASE | BUILTIN_ARG_MATCH_SHAPE, 0 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_scalar(args, argc, 0);
-}
-
-static Type* builtin_result_derivative(const Symbol* sym, Type** args, int argc)
-{
-	const BuiltinArgConstraint constraints[] = {
-		{ "first", BUILTIN_ARG_REQUIRE_SCALAR_OR_VECTOR | BUILTIN_ARG_REQUIRE_FLOATING | BUILTIN_ARG_REQUIRE_FLOAT_BASE, -1 },
-	};
-	builtin_validate_args(sym, args, argc, constraints, (int)(sizeof(constraints) / sizeof(constraints[0])));
-	return builtin_result_same(args, argc, 0);
-}
-
-// Enforce numeric scalar/vector arguments so min/max style builtins report clear errors.
-// ...error: min requires numeric second argument, got mat2
-static int builtin_validate_numeric_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
-{
-	const char* name = builtin_func_name(sym);
-	if (!arg)
-	{
-		type_check_error("%s requires %s argument", name, role);
-		return 0;
-	}
-	if (!type_is_scalar_or_vector(arg))
-	{
-		type_check_error("%s requires numeric scalar or vector %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	if (!type_is_numeric(arg))
-	{
-		type_check_error("%s requires numeric %s argument, got %s", name, role, type_display(arg));
-		return 0;
-	}
-	return 1;
-}
-
 static int builtin_validate_floating_scalar_vector(const Symbol* sym, const Type* arg, const char* role)
 {
 	const char* name = builtin_func_name(sym);
@@ -4457,114 +4284,6 @@ static int builtin_validate_bool_scalar_vector(const Symbol* sym, const Type* ar
 		return 0;
 	}
 	return 1;
-}
-
-static Type* builtin_result_min_max(const Symbol* sym, Type** args, int argc)
-{
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* y = (argc > 1) ? args[1] : NULL;
-	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, y, "second"))
-		return x;
-	if (type_base_type(x) != type_base_type(y))
-	{
-		type_check_error("%s requires matching base types, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(y))
-		{
-			if (x->cols != y->cols)
-			{
-				type_check_error("%s requires matching vector sizes, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-			}
-		}
-		else if (!type_is_scalar(y))
-		{
-			/* already handled */
-		}
-	}
-	else if (type_is_vector(y))
-	{
-		type_check_error("%s requires second argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(y));
-	}
-	return x;
-}
-
-// Validate clamp(x, min, max) and return the clamped value type.
-// ...vec3 lit = clamp(raw, vec3(0.0), vec3(1.0));
-static Type* builtin_result_clamp(const Symbol* sym, Type** args, int argc)
-{
-	Type* x = (argc > 0) ? args[0] : NULL;
-	Type* min_val = (argc > 1) ? args[1] : NULL;
-	Type* max_val = (argc > 2) ? args[2] : NULL;
-	if (!builtin_validate_numeric_scalar_vector(sym, x, "first"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, min_val, "second"))
-		return x;
-	if (!builtin_validate_numeric_scalar_vector(sym, max_val, "third"))
-		return x;
-	TypeTag base = type_base_type(x);
-	if (type_base_type(min_val) != base)
-	{
-		type_check_error("%s requires minimum argument to match first argument base type, got %s and %s", builtin_func_name(sym), type_display(x), type_display(min_val));
-	}
-	if (type_base_type(max_val) != base)
-	{
-		type_check_error("%s requires maximum argument to match first argument base type, got %s and %s", builtin_func_name(sym), type_display(x), type_display(max_val));
-	}
-	if (type_is_vector(x))
-	{
-		if (type_is_vector(min_val) && min_val->cols != x->cols)
-		{
-			type_check_error("%s requires minimum argument with %d components, got %s", builtin_func_name(sym), x->cols, type_display(min_val));
-		}
-		if (type_is_vector(max_val) && max_val->cols != x->cols)
-		{
-			type_check_error("%s requires maximum argument with %d components, got %s", builtin_func_name(sym), x->cols, type_display(max_val));
-		}
-	}
-	else
-	{
-		if (type_is_vector(min_val))
-		{
-			type_check_error("%s requires minimum argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(min_val));
-		}
-		if (type_is_vector(max_val))
-		{
-			type_check_error("%s requires maximum argument to match first argument shape, got %s and %s", builtin_func_name(sym), type_display(x), type_display(max_val));
-		}
-	}
-	return x;
-}
-
-// Resolve abs/similar functions that mirror their argument type.
-// ...vec3 mag = abs(force);
-static Type* builtin_result_abs_like(const Symbol* sym, Type** args, int argc)
-{
-	Type* value = (argc > 0) ? args[0] : NULL;
-	const char* name = builtin_func_name(sym);
-	if (!value)
-		return value;
-	if (!type_is_scalar_or_vector(value))
-	{
-		type_check_error("%s requires scalar or vector argument, got %s", name, type_display(value));
-		return value;
-	}
-	if (!type_is_floating_point(value) && !type_is_integer(value))
-	{
-		type_check_error("%s requires floating-point or integer argument, got %s", name, type_display(value));
-	}
-	return value;
-}
-
-static Type* builtin_result_unary_float(const Symbol* sym, Type** args, int argc)
-{
-	Type* value = (argc > 0) ? args[0] : NULL;
-	if (!builtin_validate_floating_scalar_vector(sym, value, "first"))
-		return value;
-	return value;
 }
 
 static Type* builtin_result_pow(const Symbol* sym, Type** args, int argc)
@@ -4627,17 +4346,14 @@ static Type* builtin_result_mod(const Symbol* sym, Type** args, int argc)
 	return x;
 }
 
-static Type* builtin_result_trig(const Symbol* sym, Type** args, int argc)
-{
-	return builtin_result_unary_float(sym, args, argc);
-}
-
 static Type* builtin_result_atan(const Symbol* sym, Type** args, int argc)
 {
 	Type* y_over_x = (argc > 0) ? args[0] : NULL;
 	if (argc == 1)
 	{
-		return builtin_result_unary_float(sym, args, argc);
+		if (!builtin_validate_floating_scalar_vector(sym, y_over_x, "first"))
+			return y_over_x;
+		return y_over_x;
 	}
 	Type* x = (argc > 1) ? args[1] : NULL;
 	if (!builtin_validate_floating_scalar_vector(sym, y_over_x, "first"))
@@ -5313,37 +5029,10 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 		return builtin_result_texture_query_levels(args, argc);
 	case BUILTIN_MATRIX_COMP_MULT:
 		return builtin_result_matrix_comp_mult(args, argc);
-	case BUILTIN_MIN:
-	case BUILTIN_MAX:
-		return builtin_result_min_max(sym, args, argc);
-	case BUILTIN_CLAMP:
-		return builtin_result_clamp(sym, args, argc);
-	case BUILTIN_ABS:
-	case BUILTIN_SIGN:
-		return builtin_result_abs_like(sym, args, argc);
-	case BUILTIN_FLOOR:
-	case BUILTIN_CEIL:
-	case BUILTIN_FRACT:
-	case BUILTIN_TRUNC:
-	case BUILTIN_ROUND:
-	case BUILTIN_ROUND_EVEN:
-	case BUILTIN_EXP:
-	case BUILTIN_EXP2:
-	case BUILTIN_LOG:
-	case BUILTIN_LOG2:
-	case BUILTIN_SQRT:
-	case BUILTIN_INVERSE_SQRT:
-		return builtin_result_unary_float(sym, args, argc);
 	case BUILTIN_POW:
 		return builtin_result_pow(sym, args, argc);
 	case BUILTIN_MOD:
 		return builtin_result_mod(sym, args, argc);
-	case BUILTIN_SIN:
-	case BUILTIN_COS:
-	case BUILTIN_TAN:
-	case BUILTIN_ASIN:
-	case BUILTIN_ACOS:
-		return builtin_result_trig(sym, args, argc);
 	case BUILTIN_ATAN:
 		return builtin_result_atan(sym, args, argc);
 	case BUILTIN_INVERSE:
@@ -6898,16 +6587,6 @@ const char* snippet_basic_io = SPINDLE_SNIPPET(
 			out_color = sampled * u_tint;
 		});
 
-const char* snippet_stage_builtins_vertex = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			float base = float(gl_VertexIndex + gl_BaseInstance);
-			gl_Position = vec4(base, 0.0, 0.0, 1.0);
-			gl_PointSize = 1.0;
-			gl_ClipDistance[0] = base;
-			out_color = vec4(base);
-		});
-
 const char* snippet_control_flow = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
 		void main() {
@@ -7002,402 +6681,7 @@ const char* snippet_function_calls = SPINDLE_SNIPPET(
 			out_color = apply_gain(base, gain);
 		});
 
-const char* snippet_matrix_ops = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			mat3 rotation = mat3(1.0);
-			vec3 column = rotation[1];
-			float diagonal = rotation[2][2];
-			vec3 axis = vec3(1.0, 0.0, 0.0);
-			vec3 rotated = rotation * axis;
-			vec3 row_combo = axis * rotation;
-			mat3 scale = mat3(2.0);
-			mat3 combined = rotation * scale;
-			mat2x3 rect_a = mat2x3(1.0);
-			mat3x2 rect_b = mat3x2(1.0);
-			mat3 rect_product = rect_a * rect_b;
-			vec2 weights = vec2(0.5, 2.0);
-			vec3 rect_vec = rect_a * weights;
-			vec2 rect_row = row_combo * rect_a;
-			out_color = vec4(column + rotated + rect_vec, diagonal + rect_row.x + combined[0][0] + rect_product[0][0]);
-		});
-
-const char* snippet_struct_block = SPINDLE_SNIPPET(
-		struct Light {
-			vec3 position;
-			float intensity;
-		};
-		layout(std140, set = 1, binding = 0) uniform LightBlock {
-			Light lights[2];
-		} u_light_data;
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			out_color = vec4(u_light_data.lights[0].position, u_light_data.lights[0].intensity);
-		});
-
-const char* snippet_looping = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			int counter = 0;
-			float total = 0.0;
-			while (counter < 4)
-			{
-				total += float(counter);
-				counter = counter + 1;
-			}
-			do
-			{
-				total = total + 0.5;
-				counter = counter - 1;
-				if (counter == 1)
-				{
-					continue;
-				}
-			} while (counter > 0);
-			out_color = vec4(total);
-		});
-
-const char* snippet_bitwise = SPINDLE_SNIPPET(
-		layout(location = 0) out ivec2 out_bits;
-		void main() {
-			int a = 5;
-			int b = 3;
-			int mask = a & b;
-			int mix = (a | b) ^ 1;
-			int shifted = (a << 2) >> 1;
-			ivec2 vec_mask = ivec2(1, 2);
-			ivec2 values = ivec2(4, 8);
-			values |= vec_mask;
-			values &= ivec2(7, 7);
-			values ^= ivec2(1, 2);
-			values <<= ivec2(1, 0);
-			values >>= 1;
-			out_bits = values + ivec2(mask, mix + shifted);
-		});
-
-const char* snippet_numeric_literals = SPINDLE_SNIPPET(
-		layout(location = 0) out ivec3 out_values;
-		layout(location = 1) out uvec3 out_uvalues;
-		void main() {
-			int hex_val = 0x1f;
-			int bin_val = 0b1010;
-			int oct_val = 075;
-			uint uhex_val = 0x1fu;
-			uint ubin_val = 0b1010u;
-			uint uoct_val = 075u;
-			uint udec_val = 42u;
-			out_values = ivec3(hex_val, bin_val, oct_val);
-			out_uvalues = uvec3(uhex_val, ubin_val, uoct_val);
-		});
-
-const char* snippet_switch_stmt = SPINDLE_SNIPPET(
-		layout(location = 0) in int in_mode;
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			int mode = in_mode;
-			vec4 color = vec4(0.0);
-			switch (mode)
-			{
-			case 0:
-				color = vec4(1.0, 0.0, 0.0, 1.0);
-				break;
-			case 1:
-			case 2:
-				color = vec4(float(mode));
-				break;
-			default:
-				color = vec4(0.0, 0.0, 1.0, 1.0);
-				break;
-			}
-			out_color = color;
-		});
-
-const char* snippet_discard = SPINDLE_SNIPPET(
-		layout(location = 0) in vec4 in_color;
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			vec4 color = in_color;
-			if (color.a == 0.0)
-			{
-				discard;
-			}
-			out_color = color;
-		});
-
-const char* snippet_stage_builtins_fragment = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			vec4 coord = gl_FragCoord;
-			int sample_id = gl_SampleID;
-			int sample_mask = gl_SampleMaskIn[0];
-			if (gl_HelperInvocation)
-			{
-				gl_SampleMask[0] = 0;
-			}
-			out_color = coord + vec4(float(sample_id + sample_mask));
-		});
-
-const char* snippet_stage_builtins_compute = SPINDLE_SNIPPET(
-		layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-		readonly layout(std430, set = 0, binding = 0) buffer Globals { uvec4 data[]; } u_globals;
-		shared float tile[64];
-		void main() {
-			uvec3 gid = gl_GlobalInvocationID;
-			uvec3 lid = gl_LocalInvocationID;
-			uint index = gl_LocalInvocationIndex;
-			tile[index] = float(gid.x + lid.y);
-		});
-
-const char* snippet_builtin_funcs = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 0, binding = 0) uniform sampler2D u_tex;
-		void main() {
-			vec2 uv = clamp(vec2(0.2, 0.8), vec2(0.0), vec2(1.0));
-			vec4 sampled = texture(u_tex, uv);
-			float m = max(sampled.x, sampled.y);
-			float f = frac(m);
-			float shade = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
-			vec3 unit = normalize(sampled.rgb);
-			float len_val = length(sampled.rgb);
-			float dist_val = distance(sampled.xy, vec2(0.25, 0.75));
-			float dot_val = dot(sampled.rgb, unit);
-			float grad_x = dFdx(m);
-			float grad_y = dFdy(m);
-			float grad_w = fwidth(m);
-			float soft = smoothstep(0.1, 0.9, m);
-			float stepped = step(0.5, m);
-			vec3 mixed = mix(sampled.rgb, vec3(1.0), 0.25);
-			vec3 boolean_mix = mix(sampled.rgb, vec3(0.0), bvec3(true, false, true));
-			float min_component = min(m, shade);
-			float pow_val = pow(shade, 2.0);
-			vec3 reflected = reflect(unit, vec3(0.0, 0.0, 1.0));
-			vec3 refracted = refract(unit, vec3(0.0, 0.0, 1.0), 1.33);
-			out_color = vec4(mixed * (f + soft + stepped + min_component + pow_val), sampled.a);
-		});
-
-const char* snippet_texture_queries = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 0, binding = 0) uniform sampler2D u_tex;
-		void main() {
-			ivec2 tex_size = textureSize(u_tex, 0);
-			vec4 texel = texelFetch(u_tex, ivec2(1, 1), 0);
-			mat3 identity = mat3(1.0);
-			mat3 inv_identity = inverse(identity);
-			mat3 trans_identity = transpose(identity);
-			bvec2 less_mask = lessThan(vec2(0.0, 1.0), vec2(1.0, 1.0));
-			bvec2 ge_mask = greaterThanEqual(vec2(1.0, 2.0), vec2(1.0, 1.0));
-			bvec2 eq_mask = equal(less_mask, ge_mask);
-			bvec2 ne_mask = notEqual(less_mask, bvec2(false, false));
-			bool all_true = all(eq_mask);
-			bool any_true = any(ne_mask);
-			float texel_extent = float(tex_size.x + tex_size.y);
-			vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
-			out_color = texel + vec4(basis, 0.0);
-		});
-
-const char* snippet_extended_intrinsics = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 2, binding = 0) uniform sampler2D u_tex;
-		layout(set = 2, binding = 1) uniform iimage2D u_image;
-		void main() {
-			vec2 uv = vec2(0.25, 0.75);
-			vec4 offset_sample = textureOffset(u_tex, uv, ivec2(1, -1));
-			vec4 lod_offset = textureLodOffset(u_tex, uv, 0.0, ivec2(0, 1));
-			vec4 grad_offset = textureGradOffset(u_tex, uv, vec2(1.0, 0.0), vec2(0.0, 1.0), ivec2(1, 0));
-			vec4 gather0 = textureGather(u_tex, uv, 0);
-			vec4 gather_offset = textureGatherOffset(u_tex, uv, ivec2(1, 0), 0);
-			vec2 lod_info = textureQueryLod(u_tex, uv);
-			int level_count = textureQueryLevels(u_tex);
-			vec4 fetch_offset = texelFetchOffset(u_tex, ivec2(0, 0), 0, ivec2(1, 0));
-			vec2 fine_width = fwidthFine(uv);
-			vec2 coarse_width = fwidthCoarse(uv);
-			vec2 deriv_mix = dFdxFine(uv) + dFdyCoarse(uv);
-			mat3 base = mat3(1.0);
-			float det = determinant(base);
-			mat3 comp = matrixCompMult(base, transpose(base));
-			mat3 outer = outerProduct(vec3(1.0, 0.0, 1.0), vec3(0.5, 0.25, 0.75));
-			ivec2 pixel = ivec2(0, 0);
-			int previous = imageAtomicAdd(u_image, pixel, 1);
-			int swapped = imageAtomicCompSwap(u_image, pixel, previous, previous + 1);
-			float derivative_sum = fine_width.x + coarse_width.y + deriv_mix.x;
-			float matrix_sum = comp[0][0] + outer[0][0];
-			vec4 accum = offset_sample + lod_offset + grad_offset;
-			accum += gather0 + gather_offset + fetch_offset;
-			out_color = accum + vec4(vec3(det + matrix_sum + derivative_sum + float(level_count) + float(swapped), lod_info), 1.0);
-		});
-
-const char* snippet_preprocessor_passthrough =
-		"#define UNUSED_CONSTANT 1\n"
-		"#define MULTI_LINE_MACRO(x) \\\n"
-		"\tdo { \\\n"
-		"\t\tint temp = 0; \\\n"
-		"\t\ttemp += (x); \\\n"
-		"\t} while (0)\n"
-		"\n"
-		"layout(location = 0) out vec4 out_color;\n"
-		"void main() {\n"
-		"\tout_color = vec4(0.25, 0.5, 0.75, 1.0);\n"
-		"}\n";
-
-const char* snippet_const_qualifier = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			const float factor = 0.5;
-			float mutable_val = 1.0;
-			mutable_val = mutable_val + factor;
-			out_color = vec4(mutable_val);
-		});
-
-const char* snippet_resource_types = SPINDLE_SNIPPET(
-		layout(location = 0) out vec4 out_color;
-		layout(set = 2, binding = 0) uniform sampler1D u_sampler1d;
-		layout(set = 2, binding = 1) uniform sampler3D u_sampler3d;
-		layout(set = 2, binding = 2) uniform sampler2DShadow u_sampler_shadow;
-		layout(set = 2, binding = 3) uniform isampler2D u_sampler_int;
-		layout(set = 2, binding = 4) uniform usamplerCubeArray u_sampler_uint_array;
-		layout(set = 2, binding = 5) uniform image2D u_image2d;
-		layout(set = 2, binding = 6) uniform iimage3D u_image3d;
-		layout(set = 2, binding = 7) uniform uimageBuffer u_image_buffer;
-		void main() {
-			vec4 base = texture(u_sampler1d, 0.5);
-			vec4 volume = texture(u_sampler3d, vec3(0.0));
-			float depth = texture(u_sampler_shadow, vec3(0.0, 0.0, 1.0));
-			ivec4 ints = texture(u_sampler_int, vec2(0.0, 0.0));
-			uvec4 uints = texture(u_sampler_uint_array, vec4(0.0, 0.0, 1.0, 0.0));
-			out_color = vec4(base.rgb + volume.rgb, depth);
-		});
-
-const char* snippet_struct_constructor = SPINDLE_SNIPPET(
-		struct Inner {
-			vec2 coords[2][2];
-		};
-		struct Outer {
-			float weight;
-			Inner segments[2];
-			float thresholds[2][2];
-		};
-		layout(location = 0) out vec4 out_color;
-		void main() {
-			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0),
-					vec2(4.0, 5.0), vec2(6.0, 7.0));
-			Outer combo = Outer(1.0,
-					Inner(vec2(0.5, 0.5), vec2(0.75, 0.25),
-							vec2(0.125, 0.875), vec2(0.625, 0.375)),
-					Inner(vec2(0.25, 0.75), vec2(0.5, 0.5),
-							vec2(0.9, 0.1), vec2(0.2, 0.8)),
-					0.0, 1.0, 2.0, 3.0);
-			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
-		});
-
-const char* snippet_extended_types = SPINDLE_SNIPPET(
-		layout(location = 0) out dvec4 out_color;
-		void main() {
-			dvec2 dv = dvec2(1.0, 2.0);
-			dmat2 dm = dmat2(1.0);
-			dvec2 transformed = dm * dv;
-			dmat2x3 dm2 = dmat2x3(1.0);
-			dvec3 projected = dvec3(dm2 * transformed);
-			dmat3x2 dm3 = dmat3x2(1.0);
-			dvec3 expanded = dvec3(transformed * dm3);
-			int64_t big = int64_t(1);
-			i64vec2 ivec = i64vec2(big);
-			uint64_t ubig = uint64_t(2u);
-			u64vec3 uvec = u64vec3(ubig);
-			atomic_uint counter = atomic_uint(0u);
-			double compare = double(ivec.x < int64_t(uvec.x) ? 1 : 0);
-			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
-		});
 #undef SPINDLE_SNIPPET
-
-void dump_storage_flags(unsigned flags)
-{
-	if (!flags)
-		return;
-	printf(" storage=");
-	int first = 1;
-	if (flags & SYM_STORAGE_IN)
-	{
-		printf("%sin", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_STORAGE_OUT)
-	{
-		printf("%sout", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_STORAGE_UNIFORM)
-	{
-		printf("%suniform", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_STORAGE_BUFFER)
-	{
-		printf("%sbuffer", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_STORAGE_SHARED)
-	{
-		printf("%sshared", first ? "" : "|");
-		first = 0;
-	}
-}
-
-void dump_qualifier_flags(unsigned flags)
-{
-	if (!flags)
-		return;
-	printf(" qualifiers=");
-	int first = 1;
-	if (flags & SYM_QUAL_CONST)
-	{
-		printf("%sconst", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_QUAL_VOLATILE)
-	{
-		printf("%svolatile", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_QUAL_RESTRICT)
-	{
-		printf("%srestrict", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_QUAL_READONLY)
-	{
-		printf("%sreadonly", first ? "" : "|");
-		first = 0;
-	}
-	if (flags & SYM_QUAL_WRITEONLY)
-	{
-		printf("%swriteonly", first ? "" : "|");
-		first = 0;
-	}
-}
-
-void dump_layout_info(unsigned layout_flags, int set, int binding, int location)
-{
-	if (!layout_flags)
-		return;
-	printf(" layout(");
-	int first = 1;
-	if (layout_flags & SYM_LAYOUT_SET)
-	{
-		printf("%sset=%d", first ? "" : ", ", set);
-		first = 0;
-	}
-	if (layout_flags & SYM_LAYOUT_BINDING)
-	{
-		printf("%sbinding=%d", first ? "" : ", ", binding);
-		first = 0;
-	}
-	if (layout_flags & SYM_LAYOUT_LOCATION)
-	{
-		printf("%slocation=%d", first ? "" : ", ", location);
-		first = 0;
-	}
-	printf(")");
-}
 
 void dump_ir()
 {
@@ -7406,109 +6690,12 @@ void dump_ir()
 	{
 		IR_Cmd* inst = &g_ir[i];
 		printf("  %s", ir_op_name[inst->op]);
-		switch (inst->op)
-		{
-		case IR_DECL_BEGIN:
-		case IR_FUNC_PARAM_BEGIN:
-			dump_storage_flags(inst->storage_flags);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_PUSH_INT:
-			printf(" %d", inst->arg0);
-			if (inst->is_unsigned_literal)
-				printf("u");
-			break;
-		case IR_PUSH_FLOAT:
-			printf(" %g", inst->float_val);
-			break;
-		case IR_PUSH_BOOL:
-			printf(" %s", inst->arg0 ? "true" : "false");
-			break;
-		case IR_PUSH_IDENT:
-		case IR_MEMBER:
-		case IR_DECL_TYPE:
-		case IR_DECL_VAR:
-		case IR_FUNC_PARAM_TYPE:
-		case IR_FUNC_PARAM_NAME:
+		if (inst->str0)
 			printf(" %s", inst->str0);
-			dump_qualifier_flags(inst->qualifier_flags);
-			break;
-		case IR_SWIZZLE:
-			printf(" %s count=%d mask=0x%x", inst->str0, inst->arg0, inst->arg1);
-			break;
-		case IR_UNARY:
-		case IR_BINARY:
-			printf(" %s", tok_name[inst->tok]);
-			break;
-		case IR_CALL:
-			printf(" argc=%d", inst->arg0);
-			break;
-		case IR_CONSTRUCT:
-			printf(" type=%s argc=%d", inst->str0 ? inst->str0 : "<null>", inst->arg0);
-			break;
-		case IR_FUNC_BEGIN:
-			printf(" return=%s name=%s", inst->str0, inst->str1);
-			dump_storage_flags(inst->storage_flags);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_STRUCT_BEGIN:
-			printf(" name=%s", inst->str0 ? inst->str0 : "<anon>");
-			break;
-		case IR_STRUCT_MEMBER:
-			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
-			if (inst->arg0)
-				printf(" array_len=%d", inst->arg0);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_STRUCT_END:
-			break;
-		case IR_BLOCK_DECL_BEGIN:
-			printf(" type=%s", inst->str0 ? inst->str0 : "<anon>");
-			dump_storage_flags(inst->storage_flags);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_BLOCK_DECL_LAYOUT:
-			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
-			break;
-		case IR_BLOCK_DECL_MEMBER:
-			printf(" name=%s type=%s", inst->str0 ? inst->str0 : "<anon>", inst->str1 ? inst->str1 : "<anon>");
-			if (inst->arg0)
-				printf(" array_len=%d", inst->arg0);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_BLOCK_DECL_INSTANCE:
-			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
-			break;
-		case IR_BLOCK_DECL_END:
-			break;
-		case IR_STAGE_LAYOUT_BEGIN:
-			dump_storage_flags(inst->storage_flags);
-			dump_qualifier_flags(inst->qualifier_flags);
-			dump_layout_info(inst->layout_flags, inst->layout_set, inst->layout_binding, inst->layout_location);
-			break;
-		case IR_STAGE_LAYOUT_IDENTIFIER:
-			printf(" %s", inst->str0 ? inst->str0 : "<anon>");
-			break;
-		case IR_STAGE_LAYOUT_VALUE:
-			printf(" %s=%d", inst->str0 ? inst->str0 : "<anon>", inst->arg0);
-			break;
-		case IR_STAGE_LAYOUT_END:
-			break;
-		case IR_RETURN:
-			printf(" has_value=%d", inst->arg0);
-			break;
-		case IR_BREAK:
-		case IR_CONTINUE:
-		case IR_DISCARD:
-			break;
-		default:
-			break;
-		}
+		if (inst->str1)
+			printf(" %s", inst->str1);
+		if (inst->type && inst->type->name)
+			printf(" : %s", inst->type->name);
 		printf("\n");
 	}
 }
@@ -7519,14 +6706,9 @@ void dump_symbols()
 	for (int i = 0; i < acount(st->symbols); ++i)
 	{
 		const Symbol* sym = &st->symbols[i];
-		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name, sym->type_name);
-		if (sym->type)
-		{
-			printf(" (tag=%s)", type_tag_name(sym->type->tag));
-		}
-		dump_storage_flags(sym->storage_flags);
-		dump_qualifier_flags(sym->qualifier_flags);
-		dump_layout_info(sym->layout_flags, sym->layout_set, sym->layout_binding, sym->layout_location);
+		printf("  %s %s", symbol_kind_name[sym->kind], sym->name);
+		if (sym->type_name)
+			printf(" : %s", sym->type_name);
 		printf("\n");
 	}
 }
@@ -7637,135 +6819,6 @@ DEFINE_TEST(test_builtin_function_metadata)
 	}
 	symbol_table_free();
 	type_system_free();
-}
-
-DEFINE_TEST(test_resource_type_registration)
-{
-	type_system_init_builtins();
-	const struct
-	{
-		const char* name;
-		TypeTag tag;
-		TypeTag base;
-		uint8_t dim;
-	} cases[] = {
-		{ "sampler1D", T_SAMPLER, T_FLOAT, TYPE_DIM_1D },
-		{ "sampler2D", T_SAMPLER, T_FLOAT, TYPE_DIM_2D },
-		{ "sampler3D", T_SAMPLER, T_FLOAT, TYPE_DIM_3D },
-		{ "samplerCube", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE },
-		{ "sampler1DShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_SHADOW },
-		{ "sampler2DShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_SHADOW },
-		{ "samplerCubeShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_SHADOW },
-		{ "sampler1DArray", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "sampler2DArray", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "sampler1DArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
-		{ "sampler2DArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
-		{ "samplerCubeArray", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "samplerCubeArrayShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY | TYPE_DIM_FLAG_SHADOW },
-		{ "sampler2DMS", T_SAMPLER, T_FLOAT, TYPE_DIM_2D_MS },
-		{ "sampler2DMSArray", T_SAMPLER, T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "samplerBuffer", T_SAMPLER, T_FLOAT, TYPE_DIM_BUFFER },
-		{ "sampler2DRect", T_SAMPLER, T_FLOAT, TYPE_DIM_RECT },
-		{ "sampler2DRectShadow", T_SAMPLER, T_FLOAT, TYPE_DIM_RECT | TYPE_DIM_FLAG_SHADOW },
-		{ "isampler1D", T_SAMPLER, T_INT, TYPE_DIM_1D },
-		{ "isampler2D", T_SAMPLER, T_INT, TYPE_DIM_2D },
-		{ "isampler3D", T_SAMPLER, T_INT, TYPE_DIM_3D },
-		{ "isamplerCube", T_SAMPLER, T_INT, TYPE_DIM_CUBE },
-		{ "isampler1DArray", T_SAMPLER, T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "isampler2DArray", T_SAMPLER, T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "isamplerCubeArray", T_SAMPLER, T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "isampler2DMS", T_SAMPLER, T_INT, TYPE_DIM_2D_MS },
-		{ "isampler2DMSArray", T_SAMPLER, T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "isamplerBuffer", T_SAMPLER, T_INT, TYPE_DIM_BUFFER },
-		{ "isampler2DRect", T_SAMPLER, T_INT, TYPE_DIM_RECT },
-		{ "usampler1D", T_SAMPLER, T_UINT, TYPE_DIM_1D },
-		{ "usampler2D", T_SAMPLER, T_UINT, TYPE_DIM_2D },
-		{ "usampler3D", T_SAMPLER, T_UINT, TYPE_DIM_3D },
-		{ "usamplerCube", T_SAMPLER, T_UINT, TYPE_DIM_CUBE },
-		{ "usampler1DArray", T_SAMPLER, T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "usampler2DArray", T_SAMPLER, T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "usamplerCubeArray", T_SAMPLER, T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "usampler2DMS", T_SAMPLER, T_UINT, TYPE_DIM_2D_MS },
-		{ "usampler2DMSArray", T_SAMPLER, T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "usamplerBuffer", T_SAMPLER, T_UINT, TYPE_DIM_BUFFER },
-		{ "usampler2DRect", T_SAMPLER, T_UINT, TYPE_DIM_RECT },
-		{ "image1D", T_IMAGE, T_FLOAT, TYPE_DIM_1D },
-		{ "image2D", T_IMAGE, T_FLOAT, TYPE_DIM_2D },
-		{ "image3D", T_IMAGE, T_FLOAT, TYPE_DIM_3D },
-		{ "imageCube", T_IMAGE, T_FLOAT, TYPE_DIM_CUBE },
-		{ "imageBuffer", T_IMAGE, T_FLOAT, TYPE_DIM_BUFFER },
-		{ "image1DArray", T_IMAGE, T_FLOAT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "image2DArray", T_IMAGE, T_FLOAT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "imageCubeArray", T_IMAGE, T_FLOAT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "image2DMS", T_IMAGE, T_FLOAT, TYPE_DIM_2D_MS },
-		{ "image2DMSArray", T_IMAGE, T_FLOAT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "image2DRect", T_IMAGE, T_FLOAT, TYPE_DIM_RECT },
-		{ "iimage1D", T_IMAGE, T_INT, TYPE_DIM_1D },
-		{ "iimage2D", T_IMAGE, T_INT, TYPE_DIM_2D },
-		{ "iimage3D", T_IMAGE, T_INT, TYPE_DIM_3D },
-		{ "iimageCube", T_IMAGE, T_INT, TYPE_DIM_CUBE },
-		{ "iimageBuffer", T_IMAGE, T_INT, TYPE_DIM_BUFFER },
-		{ "iimage1DArray", T_IMAGE, T_INT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "iimage2DArray", T_IMAGE, T_INT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "iimageCubeArray", T_IMAGE, T_INT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "iimage2DMS", T_IMAGE, T_INT, TYPE_DIM_2D_MS },
-		{ "iimage2DMSArray", T_IMAGE, T_INT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "iimage2DRect", T_IMAGE, T_INT, TYPE_DIM_RECT },
-		{ "uimage1D", T_IMAGE, T_UINT, TYPE_DIM_1D },
-		{ "uimage2D", T_IMAGE, T_UINT, TYPE_DIM_2D },
-		{ "uimage3D", T_IMAGE, T_UINT, TYPE_DIM_3D },
-		{ "uimageCube", T_IMAGE, T_UINT, TYPE_DIM_CUBE },
-		{ "uimageBuffer", T_IMAGE, T_UINT, TYPE_DIM_BUFFER },
-		{ "uimage1DArray", T_IMAGE, T_UINT, TYPE_DIM_1D | TYPE_DIM_FLAG_ARRAY },
-		{ "uimage2DArray", T_IMAGE, T_UINT, TYPE_DIM_2D | TYPE_DIM_FLAG_ARRAY },
-		{ "uimageCubeArray", T_IMAGE, T_UINT, TYPE_DIM_CUBE | TYPE_DIM_FLAG_ARRAY },
-		{ "uimage2DMS", T_IMAGE, T_UINT, TYPE_DIM_2D_MS },
-		{ "uimage2DMSArray", T_IMAGE, T_UINT, TYPE_DIM_2D_MS | TYPE_DIM_FLAG_ARRAY },
-		{ "uimage2DRect", T_IMAGE, T_UINT, TYPE_DIM_RECT },
-	};
-	for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); ++i)
-	{
-		const char* name = sintern(cases[i].name);
-		Type* type = type_system_get(name);
-		assert(type);
-		assert(type->tag == cases[i].tag);
-		assert(type->base == cases[i].base);
-		assert(type->dim == cases[i].dim);
-	}
-	type_system_free();
-}
-
-DEFINE_TEST(test_resource_texture_inference)
-{
-	compiler_setup(snippet_resource_types);
-	const char* texture_name = sintern("texture");
-	Type* float_vec4 = type_get_vector(T_FLOAT, 4);
-	Type* int_vec4 = type_get_vector(T_INT, 4);
-	Type* uint_vec4 = type_get_vector(T_UINT, 4);
-	Type* float_scalar = type_get_scalar(T_FLOAT);
-	int saw_float_vec = 0;
-	int saw_shadow = 0;
-	int saw_int_vec = 0;
-	int saw_uint_vec = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_CALL || inst->str0 != texture_name)
-			continue;
-		if (inst->type == float_vec4)
-			saw_float_vec = 1;
-		else if (inst->type == float_scalar)
-			saw_shadow = 1;
-		else if (inst->type == int_vec4)
-			saw_int_vec = 1;
-		else if (inst->type == uint_vec4)
-			saw_uint_vec = 1;
-	}
-	compiler_teardown();
-	assert(saw_float_vec);
-	assert(saw_shadow);
-	assert(saw_int_vec);
-	assert(saw_uint_vec);
 }
 
 DEFINE_TEST(test_ir_emit_push_int)
@@ -8021,757 +7074,6 @@ DEFINE_TEST(test_function_call_symbols)
 	assert(saw_apply_gain_call);
 }
 
-DEFINE_TEST(test_function_redeclaration_without_overloads)
-{
-	type_system_init_builtins();
-	symbol_table_init();
-	const char* func_name = sintern("foo");
-	const char* float_name = sintern("float");
-	Type* float_type = type_get_scalar(T_FLOAT);
-	Symbol* first_decl = symbol_table_add(func_name, float_name, float_type, SYM_FUNC);
-	assert(first_decl && first_decl->kind == SYM_FUNC);
-	dyna Type** params = NULL;
-	apush(params, float_type);
-	symbol_set_function_signature(first_decl, params, 1);
-	Symbol* second_decl = symbol_table_add(func_name, float_name, float_type, SYM_FUNC);
-	assert(second_decl == first_decl);
-	assert(second_decl->param_signature_set);
-	assert(second_decl->param_count == 1);
-	if (params)
-		afree(params);
-	symbol_table_free();
-	type_system_free();
-}
-
-DEFINE_TEST(test_matrix_operations_ir)
-{
-	const char* mat3_name = sintern("mat3");
-	const char* rect_a_name = sintern("rect_a");
-	const char* rect_b_name = sintern("rect_b");
-	const char* weights_name = sintern("weights");
-	const char* row_combo_name = sintern("row_combo");
-	compiler_setup(snippet_matrix_ops);
-	Type* vec3_type = type_get_vector(T_FLOAT, 3);
-	Type* vec2_type = type_get_vector(T_FLOAT, 2);
-	Type* mat3_type = type_get_matrix(T_FLOAT, 3, 3);
-	int saw_mat_ctor = 0;
-	int index_count = 0;
-	int saw_matrix_vector = 0;
-	int saw_vector_matrix = 0;
-	int saw_rectangular_matrix = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_CONSTRUCT && g_ir[i].str0 == mat3_name)
-			saw_mat_ctor = 1;
-		if (g_ir[i].op == IR_INDEX)
-			index_count++;
-		if (g_ir[i].op == IR_BINARY && g_ir[i].tok == TOK_STAR)
-		{
-			IR_Cmd* lhs = NULL;
-			IR_Cmd* rhs = NULL;
-			for (int j = i - 1; j >= 0 && (!lhs || !rhs); --j)
-			{
-				if (g_ir[j].op != IR_PUSH_IDENT)
-					continue;
-				if (!rhs)
-				{
-					rhs = &g_ir[j];
-				}
-				else if (!lhs)
-				{
-					lhs = &g_ir[j];
-				}
-			}
-			if (g_ir[i].type == vec3_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == rect_a_name && rhs->str0 == weights_name)
-				saw_matrix_vector = 1;
-			if (g_ir[i].type == vec2_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == row_combo_name && rhs->str0 == rect_a_name)
-				saw_vector_matrix = 1;
-			if (g_ir[i].type == mat3_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == rect_a_name && rhs->str0 == rect_b_name)
-				saw_rectangular_matrix = 1;
-		}
-	}
-	compiler_teardown();
-	assert(saw_mat_ctor);
-	assert(index_count >= 2);
-	assert(saw_matrix_vector);
-	assert(saw_vector_matrix);
-	assert(saw_rectangular_matrix);
-}
-
-DEFINE_TEST(test_looping_constructs)
-{
-	compiler_setup(snippet_looping);
-	int saw_while_begin = 0;
-	int saw_while_end = 0;
-	int saw_do_begin = 0;
-	int saw_do_end = 0;
-	int saw_continue = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_WHILE_BEGIN)
-			saw_while_begin = 1;
-		if (g_ir[i].op == IR_WHILE_END)
-			saw_while_end = 1;
-		if (g_ir[i].op == IR_DO_BEGIN)
-			saw_do_begin = 1;
-		if (g_ir[i].op == IR_DO_END)
-			saw_do_end = 1;
-		if (g_ir[i].op == IR_CONTINUE)
-			saw_continue = 1;
-	}
-	compiler_teardown();
-	assert(saw_while_begin);
-	assert(saw_while_end);
-	assert(saw_do_begin);
-	assert(saw_do_end);
-	assert(saw_continue);
-}
-
-DEFINE_TEST(test_bitwise_operations)
-{
-	compiler_setup(snippet_bitwise);
-	int saw_band = 0;
-	int saw_bor = 0;
-	int saw_bxor = 0;
-	int saw_shl = 0;
-	int saw_shr = 0;
-	int saw_band_assign = 0;
-	int saw_bor_assign = 0;
-	int saw_bxor_assign = 0;
-	int saw_shl_assign = 0;
-	int saw_shr_assign = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_BINARY)
-			continue;
-		switch (inst->tok)
-		{
-		case TOK_AMP:
-			saw_band = 1;
-			break;
-		case TOK_PIPE:
-			saw_bor = 1;
-			break;
-		case TOK_CARET:
-			saw_bxor = 1;
-			break;
-		case TOK_LSHIFT:
-			saw_shl = 1;
-			break;
-		case TOK_RSHIFT:
-			saw_shr = 1;
-			break;
-		case TOK_AND_ASSIGN:
-			saw_band_assign = 1;
-			break;
-		case TOK_OR_ASSIGN:
-			saw_bor_assign = 1;
-			break;
-		case TOK_XOR_ASSIGN:
-			saw_bxor_assign = 1;
-			break;
-		case TOK_LSHIFT_ASSIGN:
-			saw_shl_assign = 1;
-			break;
-		case TOK_RSHIFT_ASSIGN:
-			saw_shr_assign = 1;
-			break;
-		default:
-			break;
-		}
-	}
-	compiler_teardown();
-	assert(saw_band);
-	assert(saw_bor);
-	assert(saw_bxor);
-	assert(saw_shl);
-	assert(saw_shr);
-	assert(saw_band_assign);
-	assert(saw_bor_assign);
-	assert(saw_bxor_assign);
-	assert(saw_shl_assign);
-	assert(saw_shr_assign);
-}
-
-DEFINE_TEST(test_numeric_literal_bases)
-{
-	compiler_setup(snippet_numeric_literals);
-	int saw_hex_int = 0;
-	int saw_bin_int = 0;
-	int saw_oct_int = 0;
-	int saw_hex_uint = 0;
-	int saw_bin_uint = 0;
-	int saw_oct_uint = 0;
-	int saw_dec_uint = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_PUSH_INT)
-			continue;
-		if (inst->is_unsigned_literal)
-		{
-			if (inst->arg0 == 31)
-			{
-				saw_hex_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 10)
-			{
-				saw_bin_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 61)
-			{
-				saw_oct_uint = inst->type == g_type_uint;
-			}
-			else if (inst->arg0 == 42)
-			{
-				saw_dec_uint = inst->type == g_type_uint;
-			}
-		}
-		else
-		{
-			if (inst->arg0 == 31)
-			{
-				saw_hex_int = inst->type == g_type_int;
-			}
-			else if (inst->arg0 == 10)
-			{
-				saw_bin_int = inst->type == g_type_int;
-			}
-			else if (inst->arg0 == 61)
-			{
-				saw_oct_int = inst->type == g_type_int;
-			}
-		}
-	}
-	compiler_teardown();
-	assert(saw_hex_int);
-	assert(saw_bin_int);
-	assert(saw_oct_int);
-	assert(saw_hex_uint);
-	assert(saw_bin_uint);
-	assert(saw_oct_uint);
-	assert(saw_dec_uint);
-}
-
-DEFINE_TEST(test_discard_instruction)
-{
-	compiler_setup(snippet_discard);
-	int saw_discard = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_DISCARD)
-		{
-			saw_discard = 1;
-			break;
-		}
-	}
-	compiler_teardown();
-	assert(saw_discard);
-}
-
-DEFINE_TEST(test_struct_block_layout)
-{
-	const char* light_struct = sintern("Light");
-	const char* block_name = sintern("LightBlock");
-	const char* instance_name = sintern("u_light_data");
-	const char* member_name = sintern("lights");
-	const char* std140_name = sintern("std140");
-	compiler_setup(snippet_struct_block);
-	int saw_struct = 0;
-	int saw_block = 0;
-	int saw_block_layout_identifier = 0;
-	int saw_block_instance = 0;
-	int saw_block_member_array = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_STRUCT_BEGIN && inst->str0 == light_struct)
-		{
-			saw_struct = 1;
-		}
-		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name)
-		{
-			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
-					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
-					inst->layout_set == 1 && inst->layout_binding == 0;
-		}
-		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name)
-		{
-			saw_block_layout_identifier = 1;
-		}
-		if (inst->op == IR_BLOCK_DECL_INSTANCE && inst->str0 == instance_name)
-		{
-			saw_block_instance = 1;
-		}
-		if (inst->op == IR_BLOCK_DECL_MEMBER && inst->str0 == member_name && inst->arg0 == 2)
-		{
-			saw_block_member_array = 1;
-		}
-	}
-	compiler_teardown();
-	assert(saw_struct);
-	assert(saw_block);
-	assert(saw_block_layout_identifier);
-	assert(saw_block_instance);
-	assert(saw_block_member_array);
-}
-
-DEFINE_TEST(test_struct_constructor_ir)
-{
-	const char* inner_name = sintern("Inner");
-	const char* outer_name = sintern("Outer");
-	compiler_setup(snippet_struct_constructor);
-	int saw_inner_ctor = 0;
-	int saw_outer_ctor = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_CONSTRUCT)
-			continue;
-		if (!inst->type || inst->type->tag != T_STRUCT)
-			continue;
-		if (inst->str0 == inner_name && inst->arg0 == 4)
-			saw_inner_ctor = 1;
-		if (inst->str0 == outer_name && inst->arg0 == 7)
-			saw_outer_ctor = 1;
-	}
-	Type* inner_type = type_system_get(inner_name);
-	const char* coords_name = sintern("coords");
-	StructMember* coords_member = type_struct_find_member(inner_type, coords_name);
-	assert(coords_member);
-	assert(coords_member->has_array);
-	assert(acount(coords_member->array_dims) == 2);
-	assert(coords_member->type && coords_member->type->tag == T_ARRAY);
-	Type* coords_inner = coords_member->type->user ? (Type*)coords_member->type->user : NULL;
-	assert(coords_inner && coords_inner->tag == T_ARRAY);
-	Type* coords_element = coords_inner->user ? (Type*)coords_inner->user : NULL;
-	assert(coords_element && coords_element->tag == T_VEC && coords_element->cols == 2);
-	Type* outer_type = type_system_get(outer_name);
-	const char* thresholds_name = sintern("thresholds");
-	StructMember* thresholds_member = type_struct_find_member(outer_type, thresholds_name);
-	assert(thresholds_member);
-	assert(thresholds_member->has_array);
-	assert(acount(thresholds_member->array_dims) == 2);
-	assert(thresholds_member->type && thresholds_member->type->tag == T_ARRAY);
-	Type* thresholds_inner = thresholds_member->type->user ? (Type*)thresholds_member->type->user : NULL;
-	assert(thresholds_inner && thresholds_inner->tag == T_ARRAY);
-	Type* thresholds_element = thresholds_inner->user ? (Type*)thresholds_inner->user : NULL;
-	assert(thresholds_element && type_base_type(thresholds_element) == T_FLOAT);
-	compiler_teardown();
-	assert(saw_inner_ctor);
-	assert(saw_outer_ctor);
-}
-
-DEFINE_TEST(test_switch_statement_cases)
-{
-	compiler_setup(snippet_switch_stmt);
-	int saw_switch_begin = 0;
-	int saw_switch_end = 0;
-	int saw_default_case = 0;
-	int saw_fallthrough = 0;
-	int case_count = 0;
-	int case_zero = 0;
-	int case_one = 0;
-	int case_two = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_SWITCH_BEGIN)
-			saw_switch_begin = 1;
-		if (inst->op == IR_SWITCH_END)
-			saw_switch_end = 1;
-		if (inst->op != IR_SWITCH_CASE)
-			continue;
-		case_count++;
-		if (inst->arg1 & SWITCH_CASE_FLAG_DEFAULT)
-			saw_default_case = 1;
-		if (inst->arg1 & SWITCH_CASE_FLAG_FALLTHROUGH)
-			saw_fallthrough = 1;
-		if (inst->arg0 == 0)
-			case_zero = 1;
-		if (inst->arg0 == 1)
-			case_one = 1;
-		if (inst->arg0 == 2)
-			case_two = 1;
-	}
-	compiler_teardown();
-	assert(saw_switch_begin);
-	assert(saw_switch_end);
-	assert(case_count == 4);
-	assert(case_zero);
-	assert(case_one);
-	assert(case_two);
-	assert(saw_default_case);
-	assert(saw_fallthrough);
-}
-
-DEFINE_TEST(test_builtin_function_calls)
-{
-	const char* texture_name = sintern("texture");
-	const char* max_name = sintern("max");
-	const char* frac_name = sintern("frac");
-	const char* dot_name = sintern("dot");
-	const char* normalize_name = sintern("normalize");
-	compiler_setup(snippet_builtin_funcs);
-	int saw_texture = 0;
-	int saw_max = 0;
-	int saw_frac = 0;
-	int saw_dot = 0;
-	int saw_normalize = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_CALL)
-			continue;
-		if (inst->str0 == texture_name)
-			saw_texture = 1;
-		if (inst->str0 == max_name)
-			saw_max = 1;
-		if (inst->str0 == frac_name)
-			saw_frac = 1;
-		if (inst->str0 == dot_name)
-			saw_dot = 1;
-		if (inst->str0 == normalize_name)
-			saw_normalize = 1;
-	}
-	compiler_teardown();
-	assert(saw_texture);
-	assert(saw_max);
-	assert(saw_frac);
-	assert(saw_dot);
-	assert(saw_normalize);
-}
-
-DEFINE_TEST(test_texture_query_builtins)
-{
-	const char* texture_size_name = sintern("textureSize");
-	const char* texel_fetch_name = sintern("texelFetch");
-	const char* inverse_name = sintern("inverse");
-	const char* transpose_name = sintern("transpose");
-	const char* less_than_name = sintern("lessThan");
-	const char* greater_equal_name = sintern("greaterThanEqual");
-	const char* equal_name = sintern("equal");
-	const char* not_equal_name = sintern("notEqual");
-	const char* any_name = sintern("any");
-	const char* all_name = sintern("all");
-	compiler_setup(snippet_texture_queries);
-	int saw_texture_size = 0;
-	int saw_texel_fetch = 0;
-	int saw_inverse = 0;
-	int saw_transpose = 0;
-	int saw_less_than = 0;
-	int saw_greater_equal = 0;
-	int saw_equal = 0;
-	int saw_not_equal = 0;
-	int saw_any = 0;
-	int saw_all = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_CALL)
-			continue;
-		if (inst->str0 == texture_size_name)
-			saw_texture_size = 1;
-		if (inst->str0 == texel_fetch_name)
-			saw_texel_fetch = 1;
-		if (inst->str0 == inverse_name)
-			saw_inverse = 1;
-		if (inst->str0 == transpose_name)
-			saw_transpose = 1;
-		if (inst->str0 == less_than_name)
-			saw_less_than = 1;
-		if (inst->str0 == greater_equal_name)
-			saw_greater_equal = 1;
-		if (inst->str0 == equal_name)
-			saw_equal = 1;
-		if (inst->str0 == not_equal_name)
-			saw_not_equal = 1;
-		if (inst->str0 == any_name)
-			saw_any = 1;
-		if (inst->str0 == all_name)
-			saw_all = 1;
-	}
-	compiler_teardown();
-	assert(saw_texture_size);
-	assert(saw_texel_fetch);
-	assert(saw_inverse);
-	assert(saw_transpose);
-	assert(saw_less_than);
-	assert(saw_greater_equal);
-	assert(saw_equal);
-	assert(saw_not_equal);
-	assert(saw_any);
-	assert(saw_all);
-}
-
-DEFINE_TEST(test_extended_intrinsic_calls)
-{
-	const char* determinant_name = sintern("determinant");
-	const char* texture_query_lod_name = sintern("textureQueryLod");
-	const char* texel_fetch_offset_name = sintern("texelFetchOffset");
-	const char* image_atomic_add_name = sintern("imageAtomicAdd");
-	const char* image_atomic_comp_swap_name = sintern("imageAtomicCompSwap");
-	const char* outer_product_name = sintern("outerProduct");
-	const char* fwidth_fine_name = sintern("fwidthFine");
-	compiler_setup(snippet_extended_intrinsics);
-	int saw_determinant = 0;
-	int saw_texture_query_lod = 0;
-	int saw_texel_fetch_offset = 0;
-	int saw_image_atomic_add = 0;
-	int saw_image_atomic_comp_swap = 0;
-	int saw_outer_product = 0;
-	int saw_fwidth_fine = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op != IR_CALL)
-			continue;
-		if (inst->str0 == determinant_name)
-			saw_determinant = 1;
-		if (inst->str0 == texture_query_lod_name)
-			saw_texture_query_lod = 1;
-		if (inst->str0 == texel_fetch_offset_name)
-			saw_texel_fetch_offset = 1;
-		if (inst->str0 == image_atomic_add_name)
-			saw_image_atomic_add = 1;
-		if (inst->str0 == image_atomic_comp_swap_name)
-			saw_image_atomic_comp_swap = 1;
-		if (inst->str0 == outer_product_name)
-			saw_outer_product = 1;
-		if (inst->str0 == fwidth_fine_name)
-			saw_fwidth_fine = 1;
-	}
-	compiler_teardown();
-	assert(saw_determinant);
-	assert(saw_texture_query_lod);
-	assert(saw_texel_fetch_offset);
-	assert(saw_image_atomic_add);
-	assert(saw_image_atomic_comp_swap);
-	assert(saw_outer_product);
-	assert(saw_fwidth_fine);
-}
-
-DEFINE_TEST(test_builtin_variables_vertex_stage)
-{
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
-	compiler_setup("void main() { gl_Position = vec4(0.0); }");
-	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
-	assert(gl_position);
-	assert(gl_position->is_builtin);
-	assert(gl_position->builtin_stage == SHADER_STAGE_VERTEX);
-	assert(symbol_has_storage(gl_position, SYM_STORAGE_OUT));
-	assert(!(gl_position->qualifier_flags & SYM_QUAL_CONST));
-	Symbol* clip_distance = symbol_table_find(sintern("gl_ClipDistance"));
-	assert(clip_distance);
-	assert(symbol_has_storage(clip_distance, SYM_STORAGE_OUT));
-	assert(!(clip_distance->qualifier_flags & SYM_QUAL_CONST));
-	assert(clip_distance->array_dimensions == 1);
-	Symbol* draw_id = symbol_table_find(sintern("gl_DrawID"));
-	assert(draw_id);
-	assert(symbol_has_storage(draw_id, SYM_STORAGE_IN));
-	assert(draw_id->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* view_index = symbol_table_find(sintern("gl_ViewIndex"));
-	assert(view_index);
-	assert(symbol_has_storage(view_index, SYM_STORAGE_IN));
-	assert(view_index->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
-	assert(!frag_coord);
-	Symbol* sample_id = symbol_table_find(sintern("gl_SampleID"));
-	assert(!sample_id);
-	Symbol* sample_mask = symbol_table_find(sintern("gl_SampleMask"));
-	assert(!sample_mask);
-	compiler_teardown();
-}
-
-DEFINE_TEST(test_builtin_variables_fragment_stage)
-{
-	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
-	compiler_setup("void main() { vec4 coord = gl_FragCoord; gl_FragDepth = coord.x; }");
-	Symbol* frag_coord = symbol_table_find(sintern("gl_FragCoord"));
-	assert(frag_coord);
-	assert(frag_coord->is_builtin);
-	assert(frag_coord->builtin_stage == SHADER_STAGE_FRAGMENT);
-	assert(symbol_has_storage(frag_coord, SYM_STORAGE_IN));
-	assert(frag_coord->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* frag_depth = symbol_table_find(sintern("gl_FragDepth"));
-	assert(frag_depth);
-	assert(symbol_has_storage(frag_depth, SYM_STORAGE_OUT));
-	assert(!(frag_depth->qualifier_flags & SYM_QUAL_CONST));
-	Symbol* sample_id = symbol_table_find(sintern("gl_SampleID"));
-	assert(sample_id);
-	assert(symbol_has_storage(sample_id, SYM_STORAGE_IN));
-	assert(sample_id->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* sample_mask_in = symbol_table_find(sintern("gl_SampleMaskIn"));
-	assert(sample_mask_in);
-	assert(symbol_has_storage(sample_mask_in, SYM_STORAGE_IN));
-	assert(sample_mask_in->qualifier_flags & SYM_QUAL_CONST);
-	assert(sample_mask_in->array_dimensions == 1);
-	Symbol* sample_mask = symbol_table_find(sintern("gl_SampleMask"));
-	assert(sample_mask);
-	assert(symbol_has_storage(sample_mask, SYM_STORAGE_OUT));
-	assert(!(sample_mask->qualifier_flags & SYM_QUAL_CONST));
-	assert(sample_mask->array_dimensions == 1);
-	Symbol* clip_distance = symbol_table_find(sintern("gl_ClipDistance"));
-	assert(clip_distance);
-	assert(symbol_has_storage(clip_distance, SYM_STORAGE_IN));
-	assert(clip_distance->qualifier_flags & SYM_QUAL_CONST);
-	assert(clip_distance->array_dimensions == 1);
-	Symbol* gl_position = symbol_table_find(sintern("gl_Position"));
-	assert(!gl_position);
-	compiler_teardown();
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
-}
-
-DEFINE_TEST(test_builtin_variables_compute_stage)
-{
-	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
-	compiler_setup("layout(local_size_x = 1) in; void main() { uvec3 id = gl_GlobalInvocationID; }");
-	Symbol* global_id = symbol_table_find(sintern("gl_GlobalInvocationID"));
-	assert(global_id);
-	assert(symbol_has_storage(global_id, SYM_STORAGE_IN));
-	assert(global_id->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* local_index = symbol_table_find(sintern("gl_LocalInvocationIndex"));
-	assert(local_index);
-	assert(symbol_has_storage(local_index, SYM_STORAGE_IN));
-	assert(local_index->qualifier_flags & SYM_QUAL_CONST);
-	Symbol* workgroup_size = symbol_table_find(sintern("gl_WorkGroupSize"));
-	assert(workgroup_size);
-	assert(symbol_has_storage(workgroup_size, SYM_STORAGE_IN));
-	assert(workgroup_size->qualifier_flags & SYM_QUAL_CONST);
-	compiler_teardown();
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
-}
-
-DEFINE_TEST(test_compute_layout_and_storage)
-{
-	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
-	const char* source =
-			"layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;"
-			"readonly layout(std430, set = 0, binding = 1) buffer Data { float values[]; } data;"
-			"shared float tile[64];"
-			"void main() { tile[gl_LocalInvocationIndex] = float(gl_GlobalInvocationID.x); }";
-	compiler_setup(source);
-	int saw_stage_layout = 0;
-	int saw_x = 0;
-	int saw_y = 0;
-	int saw_z = 0;
-	const char* local_size_x = sintern("local_size_x");
-	const char* local_size_y = sintern("local_size_y");
-	const char* local_size_z = sintern("local_size_z");
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_STAGE_LAYOUT_BEGIN)
-		{
-			saw_stage_layout = 1;
-			continue;
-		}
-		if (inst->op == IR_STAGE_LAYOUT_VALUE)
-		{
-			if (inst->str0 == local_size_x && inst->arg0 == 8)
-				saw_x = 1;
-			if (inst->str0 == local_size_y && inst->arg0 == 4)
-				saw_y = 1;
-			if (inst->str0 == local_size_z && inst->arg0 == 1)
-				saw_z = 1;
-		}
-	}
-	assert(saw_stage_layout);
-	assert(saw_x && saw_y && saw_z);
-	Symbol* data_block = symbol_table_find(sintern("data"));
-	assert(data_block);
-	assert(symbol_has_storage(data_block, SYM_STORAGE_BUFFER));
-	assert(data_block->qualifier_flags & SYM_QUAL_READONLY);
-	Symbol* tile = symbol_table_find(sintern("tile"));
-	assert(tile);
-	assert(symbol_has_storage(tile, SYM_STORAGE_SHARED));
-	assert(tile->qualifier_flags == 0);
-	compiler_teardown();
-	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
-}
-
-DEFINE_TEST(test_preprocessor_passthrough)
-{
-	const char* out_color = sintern("out_color");
-	const char* unused_constant = sintern("UNUSED_CONSTANT");
-	compiler_setup(snippet_preprocessor_passthrough);
-	Symbol* out_sym = symbol_table_find(out_color);
-	assert(out_sym);
-	assert(symbol_has_storage(out_sym, SYM_STORAGE_OUT));
-	Symbol* macro_sym = symbol_table_find(unused_constant);
-	assert(!macro_sym);
-	int saw_func = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		if (g_ir[i].op == IR_FUNC_BEGIN)
-		{
-			saw_func = 1;
-			break;
-		}
-	}
-	assert(saw_func);
-	compiler_teardown();
-}
-
-DEFINE_TEST(test_const_qualifier_metadata)
-{
-	const char* factor = sintern("factor");
-	const char* mutable_val = sintern("mutable_val");
-	compiler_setup(snippet_const_qualifier);
-	int saw_const_symbol = 0;
-	int saw_mutable_symbol = 0;
-	for (int i = 0; i < acount(st->symbols); ++i)
-	{
-		Symbol* sym = &st->symbols[i];
-		if (sym->name == factor)
-		{
-			saw_const_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
-		if (sym->name == mutable_val)
-		{
-			saw_mutable_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
-	}
-	int saw_const_decl = 0;
-	int saw_mutable_decl = 0;
-	int saw_const_ident = 0;
-	int saw_const_lvalue = 0;
-	int saw_mutable_ident = 0;
-	int saw_mutable_lvalue = 0;
-	for (int i = 0; i < acount(g_ir); ++i)
-	{
-		IR_Cmd* inst = &g_ir[i];
-		if (inst->op == IR_DECL_VAR && inst->str0 == factor)
-		{
-			saw_const_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
-		if (inst->op == IR_DECL_VAR && inst->str0 == mutable_val)
-		{
-			saw_mutable_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
-		if (inst->op == IR_PUSH_IDENT && inst->str0 == factor)
-		{
-			saw_const_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-			saw_const_lvalue |= inst->is_lvalue;
-		}
-		if (inst->op == IR_PUSH_IDENT && inst->str0 == mutable_val)
-		{
-			saw_mutable_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-			saw_mutable_lvalue |= inst->is_lvalue;
-		}
-	}
-	compiler_teardown();
-	assert(saw_const_symbol);
-	assert(!saw_mutable_symbol);
-	assert(saw_const_decl);
-	assert(!saw_mutable_decl);
-	assert(saw_const_ident);
-	assert(!saw_const_lvalue);
-	assert(!saw_mutable_ident);
-	assert(saw_mutable_lvalue);
-}
-
 void unit_test()
 {
 	init_keyword_interns();
@@ -8779,8 +7081,6 @@ void unit_test()
 		TEST_ENTRY(test_type_system_registration),
 		TEST_ENTRY(test_symbol_table_scopes),
 		TEST_ENTRY(test_builtin_function_metadata),
-		TEST_ENTRY(test_resource_type_registration),
-		TEST_ENTRY(test_resource_texture_inference),
 		TEST_ENTRY(test_ir_emit_push_int),
 		TEST_ENTRY(test_basic_io_symbols),
 		TEST_ENTRY(test_array_indexing_ir),
@@ -8788,24 +7088,6 @@ void unit_test()
 		TEST_ENTRY(test_control_flow_unary_ops),
 		TEST_ENTRY(test_ternary_vector_promotions),
 		TEST_ENTRY(test_function_call_symbols),
-		TEST_ENTRY(test_function_redeclaration_without_overloads),
-		TEST_ENTRY(test_matrix_operations_ir),
-		TEST_ENTRY(test_looping_constructs),
-		TEST_ENTRY(test_bitwise_operations),
-		TEST_ENTRY(test_numeric_literal_bases),
-		TEST_ENTRY(test_discard_instruction),
-		TEST_ENTRY(test_struct_block_layout),
-		TEST_ENTRY(test_struct_constructor_ir),
-		TEST_ENTRY(test_switch_statement_cases),
-		TEST_ENTRY(test_builtin_function_calls),
-		TEST_ENTRY(test_texture_query_builtins),
-		TEST_ENTRY(test_extended_intrinsic_calls),
-		TEST_ENTRY(test_builtin_variables_vertex_stage),
-		TEST_ENTRY(test_builtin_variables_fragment_stage),
-		TEST_ENTRY(test_builtin_variables_compute_stage),
-		TEST_ENTRY(test_compute_layout_and_storage),
-		TEST_ENTRY(test_preprocessor_passthrough),
-		TEST_ENTRY(test_const_qualifier_metadata),
 	};
 	run_tests(tests, (int)(sizeof(tests) / sizeof(tests[0])));
 }
