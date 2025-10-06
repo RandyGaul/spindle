@@ -5282,366 +5282,260 @@ static TypeTag type_shared_numeric_base(TypeTag a, TypeTag b)
 }
 void type_check_error(const char* fmt, ...);
 
-Type* type_check_unary(const IR_Cmd* inst, Type* operand)
+typedef enum UBaseRule
 {
-	if (!inst)
-		return operand;
-	Tok tok = inst->tok;
-	switch (tok)
+	U_NUMERIC,
+	U_INTEGER,
+	U_BOOL,
+	U_NUMERIC_OR_MATRIX
+} UBaseRule;
+
+typedef enum UResultRule
+{
+	UR_SAME,
+	UR_BOOL_SAME_SHAPE
+} UResultRule;
+
+typedef struct UnaryRule
+{
+	Tok tok;
+	int needs_lvalue;
+	UBaseRule base_rule;
+	UResultRule result_rule;
+} UnaryRule;
+
+static const UnaryRule u_rules[] = {
+	{ TOK_PLUS,        0, U_NUMERIC_OR_MATRIX, UR_SAME },
+	{ TOK_MINUS,       0, U_NUMERIC_OR_MATRIX, UR_SAME },
+	{ TOK_NOT,         0, U_BOOL,              UR_BOOL_SAME_SHAPE },
+	{ TOK_TILDE,       0, U_INTEGER,           UR_SAME },
+	{ TOK_PLUS_PLUS,   1, U_NUMERIC,           UR_SAME },
+	{ TOK_MINUS_MINUS, 1, U_NUMERIC,           UR_SAME },
+};
+
+static const UnaryRule* find_unary_rule(Tok tok)
+{
+	for (size_t i = 0; i < sizeof(u_rules) / sizeof(u_rules[0]); ++i)
 	{
-	case TOK_PLUS_PLUS:
-	case TOK_MINUS_MINUS:
-	{
-		if (!operand)
-			return NULL;
-		int idx = inst->arg0;
-		if (idx < 0 || idx >= acount(g_ir) || !g_ir[idx].is_lvalue)
-		{
-			type_check_error("operator %s requires l-value operand", tok_name[tok]);
-		}
-		if (!type_is_scalar(operand) && !type_is_vector(operand))
-		{
-			type_check_error("operator %s requires scalar or vector operand, got %s", tok_name[tok], type_display(operand));
-		}
-		TypeTag base = type_base_type(operand);
-		if (!type_base_is_numeric(base))
-		{
-			type_check_error("operator %s requires integer or float operand, got %s", tok_name[tok], type_display(operand));
-		}
-		return operand;
+		if (u_rules[i].tok == tok)
+			return &u_rules[i];
 	}
-	case TOK_MINUS:
-	case TOK_PLUS:
-		if (!type_is_numeric(operand) && !type_is_matrix(operand))
-		{
-			type_check_error("operator %s requires numeric operand, got %s", tok_name[tok], type_display(operand));
-		}
-		return operand;
-	case TOK_NOT:
-		if (!type_is_bool_like(operand))
-		{
-			type_check_error("operator ! requires boolean operand, got %s", type_display(operand));
-		}
-		if (type_is_vector(operand))
-		{
-			return type_get_vector(T_BOOL, operand->cols);
-		}
-		return type_get_scalar(T_BOOL);
-	case TOK_TILDE:
-		if (!type_is_integer(operand))
-		{
-			type_check_error("operator %s requires integer operand, got %s", tok_name[tok], type_display(operand));
-		}
-		return operand;
-	default:
-		type_check_error("unsupported unary operator %s", tok_name[tok]);
-	}
-	return operand;
+	return NULL;
 }
 
-Type* type_binary_add_sub(Tok tok, Type* lhs, Type* rhs)
+static void require_numeric_operand(Tok tok, Type* operand)
+{
+	if (!operand || type_is_numeric(operand) || type_is_matrix(operand))
+		return;
+	type_check_error("operator %s requires numeric operand, got %s", tok_name[tok], type_display(operand));
+}
+
+static void require_integer_operand(Tok tok, Type* operand)
+{
+	if (!operand || type_is_integer(operand))
+		return;
+	type_check_error("operator %s requires integer operand, got %s", tok_name[tok], type_display(operand));
+}
+
+static void require_bool_operand(Tok tok, Type* operand)
+{
+	if (!operand || type_is_bool_like(operand))
+		return;
+	type_check_error("operator %s requires boolean operand, got %s", tok_name[tok], type_display(operand));
+}
+
+Type* type_check_unary(const IR_Cmd* inst, Type* operand)
+{
+	if (!inst || !operand)
+		return operand;
+	const UnaryRule* ur = find_unary_rule(inst->tok);
+	if (!ur)
+		type_check_error("unsupported unary operator %s", tok_name[inst->tok]);
+	if (ur->needs_lvalue)
+	{
+		int idx = inst->arg0;
+		if (idx < 0 || idx >= acount(g_ir) || !g_ir[idx].is_lvalue)
+			type_check_error("operator %s requires l-value operand", tok_name[inst->tok]);
+	}
+	switch (ur->base_rule)
+	{
+	case U_NUMERIC:
+		require_numeric_operand(inst->tok, operand);
+		if (!type_is_scalar(operand) && !type_is_vector(operand))
+			type_check_error("operator %s requires scalar or vector operand, got %s", tok_name[inst->tok], type_display(operand));
+		break;
+	case U_INTEGER:
+		require_integer_operand(inst->tok, operand);
+		break;
+	case U_BOOL:
+		require_bool_operand(inst->tok, operand);
+		break;
+	case U_NUMERIC_OR_MATRIX:
+		require_numeric_operand(inst->tok, operand);
+		break;
+	}
+	if (ur->result_rule == UR_SAME)
+		return operand;
+	if (type_is_vector(operand))
+		return type_get_vector(T_BOOL, operand->cols);
+	return type_get_scalar(T_BOOL);
+}
+
+static void require_numeric(Tok tok, Type* value, const char* side)
+{
+	if (!value || type_is_numeric(value))
+		return;
+	type_check_error("operator %s requires numeric %s operand, got %s", tok_name[tok], side, type_display(value));
+}
+
+static void require_integer(Tok tok, Type* value, const char* side)
+{
+	if (!value || type_is_integer(value))
+		return;
+	type_check_error("operator %s requires integer %s operand, got %s", tok_name[tok], side, type_display(value));
+}
+
+static void require_bool_scalar(Tok tok, Type* value, const char* side)
+{
+	if (!value)
+		return;
+	if (!type_is_bool_like(value) || !type_is_scalar(value))
+		type_check_error("operator %s requires boolean scalar %s operand, got %s", tok_name[tok], side, type_display(value));
+}
+
+static void require_same_base(Tok tok, Type* lhs, Type* rhs)
+{
+	if (!lhs || !rhs)
+		return;
+	if (type_base_type(lhs) != type_base_type(rhs))
+		type_check_error("operator %s requires matching base types, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+}
+
+static int same_vec_len_or_error(Tok tok, const Type* lhs, const Type* rhs)
+{
+	if (lhs && rhs && lhs->cols != rhs->cols)
+	{
+		type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
+		return 0;
+	}
+	return 1;
+}
+
+static Type* result_componentwise_num(Tok tok, Type* lhs, Type* rhs, int allow_matrix, int want_bool)
 {
 	if (!lhs || !rhs)
 		return lhs ? lhs : rhs;
-	if (!type_is_numeric(lhs) || !type_is_numeric(rhs))
-	{
-		type_check_error("operator %s requires numeric operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	}
-	if (type_base_type(lhs) != type_base_type(rhs))
-	{
-		type_check_error("operator %s requires matching base types, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	}
 	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		return lhs;
+		return want_bool ? type_get_scalar(T_BOOL) : lhs;
 	if (type_is_scalar(lhs) && type_is_vector(rhs))
-		return rhs;
+		return want_bool ? type_get_vector(T_BOOL, rhs->cols) : rhs;
 	if (type_is_vector(lhs) && type_is_scalar(rhs))
-		return lhs;
+		return want_bool ? type_get_vector(T_BOOL, lhs->cols) : lhs;
 	if (type_is_vector(lhs) && type_is_vector(rhs))
 	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
-		}
-		return lhs;
+		same_vec_len_or_error(tok, lhs, rhs);
+		return want_bool ? type_get_vector(T_BOOL, lhs->cols) : lhs;
 	}
-	if (type_is_matrix(lhs) && type_is_matrix(rhs))
+	const int allow_matrix_scalar = allow_matrix & 1;
+	const int allow_matrix_matrix = allow_matrix & 2;
+	if (allow_matrix_matrix && type_is_matrix(lhs) && type_is_matrix(rhs))
 	{
 		if (lhs->cols != rhs->cols || lhs->rows != rhs->rows)
-		{
 			type_check_error("operator %s requires matching matrix sizes", tok_name[tok]);
-		}
 		return lhs;
 	}
-	if (type_is_matrix(lhs) && type_is_scalar(rhs))
+	if (allow_matrix_scalar && type_is_matrix(lhs) && type_is_scalar(rhs))
 		return lhs;
-	if (type_is_scalar(lhs) && type_is_matrix(rhs))
+	if (allow_matrix_scalar && type_is_scalar(lhs) && type_is_matrix(rhs))
 		return rhs;
 	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
 	return NULL;
 }
 
-Type* type_binary_mul(Type* lhs, Type* rhs)
+static Type* type_mul_with_mat_rules(Tok tok, Type* lhs, Type* rhs)
 {
 	if (!lhs || !rhs)
-		return lhs ? lhs : rhs;
-	if (!type_is_numeric(lhs) || !type_is_numeric(rhs))
-	{
-		type_check_error("operator * requires numeric operands, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_base_type(lhs) != type_base_type(rhs))
-	{
-		type_check_error("operator * requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_scalar(lhs) && (type_is_vector(rhs) || type_is_matrix(rhs)))
-		return rhs;
-	if (type_is_scalar(rhs) && (type_is_vector(lhs) || type_is_matrix(lhs)))
-		return lhs;
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("operator * requires matching vector sizes, got %d and %d", lhs->cols, rhs->cols);
-		}
-		return lhs;
-	}
+	return lhs ? lhs : rhs;
 	if (type_is_matrix(lhs) && type_is_vector(rhs))
 	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("matrix-vector multiplication requires matrix columns to match vector size, got %d and %d", lhs->cols, rhs->cols);
-		}
+		same_vec_len_or_error(tok, lhs, rhs);
 		Type* result = type_get_vector(type_base_type(lhs), lhs->rows);
 		if (!result)
-		{
 			type_check_error("unsupported matrix-vector multiplication result size %dx1", lhs->rows);
-		}
 		return result;
 	}
 	if (type_is_vector(lhs) && type_is_matrix(rhs))
 	{
 		if (lhs->cols != rhs->rows)
-		{
-			type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
-		}
+		type_check_error("vector-matrix multiplication requires vector size to match matrix rows, got %d and %d", lhs->cols, rhs->rows);
 		Type* result = type_get_vector(type_base_type(lhs), rhs->cols);
 		if (!result)
-		{
 			type_check_error("unsupported vector-matrix multiplication result size %dx1", rhs->cols);
-		}
 		return result;
 	}
 	if (type_is_matrix(lhs) && type_is_matrix(rhs))
 	{
 		if (lhs->cols != rhs->rows)
-		{
-			type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
-		}
+		type_check_error("matrix multiplication requires the left matrix columns to match the right matrix rows, got %dx%d and %dx%d", lhs->cols, lhs->rows, rhs->cols, rhs->rows);
 		Type* result = type_get_matrix(type_base_type(lhs), rhs->cols, lhs->rows);
 		if (!result)
-		{
 			type_check_error("unsupported matrix multiplication result size %dx%d", rhs->cols, lhs->rows);
-		}
 		return result;
 	}
-	type_check_error("operator * unsupported for %s and %s", type_display(lhs), type_display(rhs));
-	return NULL;
+	return result_componentwise_num(tok, lhs, rhs, 1, 0);
 }
 
-Type* type_binary_div(Type* lhs, Type* rhs)
+typedef enum BinRuleKind
 {
-	if (!lhs || !rhs)
-		return lhs ? lhs : rhs;
-	if (!type_is_numeric(lhs) || !type_is_numeric(rhs))
-	{
-		type_check_error("operator / requires numeric operands, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_base_type(lhs) != type_base_type(rhs))
-	{
-		type_check_error("operator / requires matching base types, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_vector(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_scalar(lhs) && type_is_vector(rhs))
-		return rhs;
-	if (type_is_matrix(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_scalar(lhs) && type_is_matrix(rhs))
-		return rhs;
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("operator / requires matching vector sizes, got %d and %d", lhs->cols, rhs->cols);
-		}
-		return lhs;
-	}
-	type_check_error("operator / unsupported for %s and %s", type_display(lhs), type_display(rhs));
-	return NULL;
-}
+	BR_ARITH,
+	BR_MOD,
+	BR_BITWISE,
+	BR_SHIFT,
+	BR_REL,
+	BR_EQ,
+	BR_LOGICAL,
+	BR_ASSIGN,
+	BR_COMPOUND
+} BinRuleKind;
 
-Type* type_binary_mod(Type* lhs, Type* rhs)
+typedef struct BinRule
 {
-	if (!lhs || !rhs)
-		return lhs ? lhs : rhs;
-	if (!type_is_integer(lhs) || !type_is_integer(rhs))
-	{
-		type_check_error("operator % requires integer operands, got %s and %s", type_display(lhs), type_display(rhs));
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("operator % requires matching vector sizes, got %d and %d", lhs->cols, rhs->cols);
-		}
-		return lhs;
-	}
-	if (type_is_vector(lhs) && type_is_scalar(rhs))
-		return lhs;
-	if (type_is_scalar(lhs) && type_is_vector(rhs))
-		return rhs;
-	type_check_error("operator % unsupported for %s and %s", type_display(lhs), type_display(rhs));
-	return NULL;
-}
+	Tok tok;
+	BinRuleKind kind;
+	Tok underlying;
+} BinRule;
 
-Type* type_binary_bitwise(Tok tok, Type* lhs, Type* rhs)
-{
-	if (!lhs || !rhs)
-		return lhs ? lhs : rhs;
-	if (!type_is_integer(lhs) || !type_is_integer(rhs))
-	{
-		type_check_error("operator %s requires integer operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	}
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-		if (lhs->cols != rhs->cols)
-		{
-			type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
-		}
-		if (type_base_type(lhs) != type_base_type(rhs))
-		{
-			type_check_error("operator %s requires matching integer vector types", tok_name[tok]);
-		}
-		return lhs;
-	}
-	if (type_is_vector(lhs) && type_is_scalar(rhs))
-	{
-		if (type_base_type(lhs) != type_base_type(rhs))
-		{
-			type_check_error("operator %s requires matching integer types", tok_name[tok]);
-		}
-		return lhs;
-	}
-	if (type_is_scalar(lhs) && type_is_vector(rhs))
-	{
-		if (type_base_type(lhs) != type_base_type(rhs))
-		{
-			type_check_error("operator %s requires matching integer types", tok_name[tok]);
-		}
-		return rhs;
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-		return lhs;
-	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	return NULL;
-}
-
-Type* type_binary_shift(Tok tok, Type* lhs, Type* rhs)
-{
-	if (!lhs || !rhs)
-		return lhs ? lhs : rhs;
-	if (!type_is_integer(lhs) || !type_is_integer(rhs))
-	{
-		type_check_error("operator %s requires integer operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	}
-	if (type_is_scalar(lhs))
-	{
-		if (!type_is_scalar(rhs))
-		{
-			type_check_error("operator %s requires integer scalar shift amounts", tok_name[tok]);
-		}
-		return lhs;
-	}
-	if (type_is_vector(lhs))
-	{
-		if (type_is_scalar(rhs))
-			return lhs;
-		if (type_is_vector(rhs))
-		{
-			if (lhs->cols != rhs->cols)
-			{
-				type_check_error("operator %s requires matching vector sizes, got %d and %d", tok_name[tok], lhs->cols, rhs->cols);
-			}
-			if (type_base_type(lhs) != type_base_type(rhs))
-			{
-				type_check_error("operator %s requires matching integer vector types", tok_name[tok]);
-			}
-			return lhs;
-		}
-	}
-	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	return NULL;
-}
-
-Type* type_binary_rel(Tok tok, Type* lhs, Type* rhs)
-{
-	if (!lhs || !rhs)
-		return type_get_scalar(T_BOOL);
-	if (!type_is_numeric(lhs) || !type_is_numeric(rhs))
-	{
-		type_check_error("operator %s requires numeric operands, got %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	}
-	if (!type_is_scalar(lhs) || !type_is_scalar(rhs))
-	{
-		type_check_error("operator %s currently supports scalar operands only", tok_name[tok]);
-	}
-	if (type_base_type(lhs) != type_base_type(rhs))
-	{
-		type_check_error("operator %s requires matching base types", tok_name[tok]);
-	}
-	return type_get_scalar(T_BOOL);
-}
-
-Type* type_binary_eq(Tok tok, Type* lhs, Type* rhs)
-{
-	if (!lhs || !rhs)
-		return type_get_scalar(T_BOOL);
-	if (type_is_vector(lhs) && type_is_vector(rhs))
-	{
-		if (lhs->cols != rhs->cols || type_base_type(lhs) != type_base_type(rhs))
-		{
-			type_check_error("operator %s requires matching vector types", tok_name[tok]);
-		}
-		return type_get_vector(T_BOOL, lhs->cols);
-	}
-	if (type_is_scalar(lhs) && type_is_scalar(rhs))
-	{
-		if (type_base_type(lhs) != type_base_type(rhs))
-		{
-			type_check_error("operator %s requires matching scalar types", tok_name[tok]);
-		}
-		return type_get_scalar(T_BOOL);
-	}
-	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
-	return type_get_scalar(T_BOOL);
-}
-
-Type* type_binary_logical(Tok tok, Type* lhs, Type* rhs)
-{
-	if (!lhs || !rhs)
-		return type_get_scalar(T_BOOL);
-	if (!type_is_bool_like(lhs) || !type_is_bool_like(rhs) || !type_is_scalar(lhs) || !type_is_scalar(rhs))
-	{
-		type_check_error("operator %s requires boolean scalars", tok_name[tok]);
-	}
-	return type_get_scalar(T_BOOL);
-}
+static const BinRule bin_rules[] = {
+	{ TOK_PLUS,           BR_ARITH,    TOK_EOF },
+	{ TOK_MINUS,          BR_ARITH,    TOK_EOF },
+	{ TOK_SLASH,          BR_ARITH,    TOK_EOF },
+	{ TOK_PERCENT,        BR_MOD,      TOK_EOF },
+	{ TOK_STAR,           BR_ARITH,    TOK_EOF },
+	{ TOK_AMP,            BR_BITWISE,  TOK_EOF },
+	{ TOK_PIPE,           BR_BITWISE,  TOK_EOF },
+	{ TOK_CARET,          BR_BITWISE,  TOK_EOF },
+	{ TOK_LSHIFT,         BR_SHIFT,    TOK_EOF },
+	{ TOK_RSHIFT,         BR_SHIFT,    TOK_EOF },
+	{ TOK_LT,             BR_REL,      TOK_EOF },
+	{ TOK_LE,             BR_REL,      TOK_EOF },
+	{ TOK_GT,             BR_REL,      TOK_EOF },
+	{ TOK_GE,             BR_REL,      TOK_EOF },
+	{ TOK_EQ,             BR_EQ,       TOK_EOF },
+	{ TOK_NE,             BR_EQ,       TOK_EOF },
+	{ TOK_AND_AND,        BR_LOGICAL,  TOK_EOF },
+	{ TOK_OR_OR,          BR_LOGICAL,  TOK_EOF },
+	{ TOK_ASSIGN,         BR_ASSIGN,   TOK_EOF },
+	{ TOK_PLUS_ASSIGN,    BR_COMPOUND, TOK_PLUS },
+	{ TOK_MINUS_ASSIGN,   BR_COMPOUND, TOK_MINUS },
+	{ TOK_STAR_ASSIGN,    BR_COMPOUND, TOK_STAR },
+	{ TOK_SLASH_ASSIGN,   BR_COMPOUND, TOK_SLASH },
+	{ TOK_PERCENT_ASSIGN, BR_COMPOUND, TOK_PERCENT },
+	{ TOK_AND_ASSIGN,     BR_COMPOUND, TOK_AMP },
+	{ TOK_OR_ASSIGN,      BR_COMPOUND, TOK_PIPE },
+	{ TOK_XOR_ASSIGN,     BR_COMPOUND, TOK_CARET },
+	{ TOK_LSHIFT_ASSIGN,  BR_COMPOUND, TOK_LSHIFT },
+	{ TOK_RSHIFT_ASSIGN,  BR_COMPOUND, TOK_RSHIFT },
+};
 
 Type* type_binary_assign(Type* lhs, Type* rhs)
 {
@@ -5650,101 +5544,117 @@ Type* type_binary_assign(Type* lhs, Type* rhs)
 	if (!rhs)
 		return lhs;
 	if (!type_can_assign(lhs, rhs))
-	{
 		type_check_error("cannot assign value of type %s to %s", type_display(rhs), type_display(lhs));
-	}
 	return lhs;
 }
 
-Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
+static const BinRule* find_bin_rule(Tok tok)
 {
-	switch (tok)
+	for (size_t i = 0; i < sizeof(bin_rules) / sizeof(bin_rules[0]); ++i)
 	{
-	case TOK_PLUS:
-	case TOK_MINUS:
-		return type_binary_add_sub(tok, lhs, rhs);
-	case TOK_STAR:
-		return type_binary_mul(lhs, rhs);
-	case TOK_SLASH:
-		return type_binary_div(lhs, rhs);
-	case TOK_PERCENT:
-		return type_binary_mod(lhs, rhs);
-	case TOK_AMP:
-	case TOK_PIPE:
-	case TOK_CARET:
-		return type_binary_bitwise(tok, lhs, rhs);
-	case TOK_LSHIFT:
-	case TOK_RSHIFT:
-		return type_binary_shift(tok, lhs, rhs);
-	case TOK_LT:
-	case TOK_LE:
-	case TOK_GT:
-	case TOK_GE:
-		return type_binary_rel(tok, lhs, rhs);
-	case TOK_EQ:
-	case TOK_NE:
-		return type_binary_eq(tok, lhs, rhs);
-	case TOK_AND_AND:
-	case TOK_OR_OR:
-		return type_binary_logical(tok, lhs, rhs);
-	case TOK_ASSIGN:
-		return type_binary_assign(lhs, rhs);
-	case TOK_PLUS_ASSIGN:
-	{
-		Type* sum = type_binary_add_sub(TOK_PLUS, lhs, rhs);
-		return type_binary_assign(lhs, sum);
-	}
-	case TOK_MINUS_ASSIGN:
-	{
-		Type* diff = type_binary_add_sub(TOK_MINUS, lhs, rhs);
-		return type_binary_assign(lhs, diff);
-	}
-	case TOK_STAR_ASSIGN:
-	{
-		Type* value = type_binary_mul(lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_SLASH_ASSIGN:
-	{
-		Type* value = type_binary_div(lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_PERCENT_ASSIGN:
-	{
-		Type* value = type_binary_mod(lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_AND_ASSIGN:
-	{
-		Type* value = type_binary_bitwise(TOK_AMP, lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_OR_ASSIGN:
-	{
-		Type* value = type_binary_bitwise(TOK_PIPE, lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_XOR_ASSIGN:
-	{
-		Type* value = type_binary_bitwise(TOK_CARET, lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_LSHIFT_ASSIGN:
-	{
-		Type* value = type_binary_shift(TOK_LSHIFT, lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	case TOK_RSHIFT_ASSIGN:
-	{
-		Type* value = type_binary_shift(TOK_RSHIFT, lhs, rhs);
-		return type_binary_assign(lhs, value);
-	}
-	default:
-		type_check_error("unsupported binary operator %s", tok_name[tok]);
+		if (bin_rules[i].tok == tok)
+			return &bin_rules[i];
 	}
 	return NULL;
 }
 
+Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
+{
+	const BinRule* br = find_bin_rule(tok);
+	if (!br)
+		type_check_error("unsupported binary operator %s", tok_name[tok]);
+	if (!lhs || !rhs)
+	{
+		switch (br->kind)
+		{
+		case BR_REL:
+		case BR_EQ:
+		case BR_LOGICAL:
+			return type_get_scalar(T_BOOL);
+		default:
+			return lhs ? lhs : rhs;
+		}
+	}
+	switch (br->kind)
+	{
+	case BR_ASSIGN:
+	return type_binary_assign(lhs, rhs);
+	case BR_COMPOUND:
+	{
+	Type* value = type_check_binary(br->underlying, lhs, rhs);
+	return type_binary_assign(lhs, value);
+	}
+	case BR_ARITH:
+	require_numeric(tok, lhs, "left");
+	require_numeric(tok, rhs, "right");
+	require_same_base(tok, lhs, rhs);
+	if (tok == TOK_STAR)
+		return type_mul_with_mat_rules(tok, lhs, rhs);
+	int matrix_mask = 0;
+	if (tok == TOK_PLUS || tok == TOK_MINUS)
+		matrix_mask = 3;
+	else if (tok == TOK_SLASH)
+		matrix_mask = 1;
+	return result_componentwise_num(tok, lhs, rhs, matrix_mask, 0);
+	case BR_MOD:
+	require_integer(tok, lhs, "left");
+	require_integer(tok, rhs, "right");
+	require_same_base(tok, lhs, rhs);
+	return result_componentwise_num(tok, lhs, rhs, 0, 0);
+	case BR_BITWISE:
+	require_integer(tok, lhs, "left");
+	require_integer(tok, rhs, "right");
+	require_same_base(tok, lhs, rhs);
+	return result_componentwise_num(tok, lhs, rhs, 0, 0);
+	case BR_SHIFT:
+	require_integer(tok, lhs, "left");
+	require_integer(tok, rhs, "right");
+	if (type_is_vector(lhs))
+	{
+	if (type_is_scalar(rhs))
+	return lhs;
+	if (type_is_vector(rhs))
+	{
+	same_vec_len_or_error(tok, lhs, rhs);
+	require_same_base(tok, lhs, rhs);
+	return lhs;
+	}
+	}
+	else if (type_is_scalar(lhs))
+	{
+	if (!type_is_scalar(rhs))
+	type_check_error("operator %s requires scalar shift amount", tok_name[tok]);
+	return lhs;
+	}
+	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	return lhs ? lhs : rhs;
+	case BR_REL:
+	require_numeric(tok, lhs, "left");
+	require_numeric(tok, rhs, "right");
+	require_same_base(tok, lhs, rhs);
+	if (!type_is_scalar(lhs) || !type_is_scalar(rhs))
+	type_check_error("operator %s requires scalar operands", tok_name[tok]);
+	return type_get_scalar(T_BOOL);
+	case BR_EQ:
+	if (type_is_vector(lhs) && type_is_vector(rhs))
+	{
+	same_vec_len_or_error(tok, lhs, rhs);
+	require_same_base(tok, lhs, rhs);
+	return type_get_vector(T_BOOL, lhs->cols);
+	}
+	if (type_is_scalar(lhs) && type_is_scalar(rhs))
+	{
+	require_same_base(tok, lhs, rhs);
+	return type_get_scalar(T_BOOL);
+	}
+	type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
+	case BR_LOGICAL:
+	require_bool_scalar(tok, lhs, "left");
+	require_bool_scalar(tok, rhs, "right");
+	return type_get_scalar(T_BOOL);
+	}
+	return NULL;
+}
 Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 {
 	if (cond && (!type_is_bool_like(cond) || !type_is_scalar(cond)))
