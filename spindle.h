@@ -1836,6 +1836,7 @@ void func_param()
 	apush(current_function_params, spec.type);
 	IR_Cmd* inst = ir_emit(IR_FUNC_PARAM_TYPE);
 	inst->str0 = spec.type_name;
+	inst->type = spec.type;
 	if (tok.kind != TOK_IDENTIFIER)
 		parse_error("expected identifier in parameter");
 	const char* name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
@@ -1919,6 +1920,7 @@ void func_decl_or_def(TypeSpec spec, const char* name)
 	IR_Cmd* func = ir_emit(IR_FUNC_BEGIN);
 	func->str0 = spec.type_name;
 	func->str1 = name;
+	func->type = spec.type;
 	ir_apply_type_spec(func, &spec);
 	if (current_function_params)
 		aclear(current_function_params);
@@ -6551,7 +6553,12 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 		{
 			SpirvFunctionInfo info = (SpirvFunctionInfo){ 0 };
 			info.name = inst->str1 ? inst->str1 : "";
-			info.return_type = inst->type ? inst->type : g_type_void;
+			Type* return_type = inst->type;
+			if (!return_type && inst->str0)
+				return_type = type_system_get(inst->str0);
+			if (!return_type)
+				return_type = g_type_void;
+			info.return_type = return_type;
 			info.ir_begin = -1;
 			info.ir_end = -1;
 			apush(funcs, info);
@@ -6592,11 +6599,11 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 			if (acount(stack))
 			{
 				int idx = stack[acount(stack) - 1];
-				Type* param_type = type_system_get(inst->str0);
+				Type* param_type = inst->type;
+				if (!param_type && inst->str0)
+					param_type = type_system_get(inst->str0);
 				if (!param_type)
-				{
 					param_type = g_type_void;
-				}
 				apush(funcs[idx].param_types, param_type);
 			}
 			break;
@@ -8990,6 +8997,80 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 }
 
 
+DEFINE_TEST(test_spirv_emit_function_parameters)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("float saturate(float value) { return value; } void main() { float gain = saturate(0.5); }");
+	dyna uint32_t* words = emit_spirv();
+	const uint32_t expected[] = {
+		0x07230203u,
+		0x00010500u,
+		0x00010001u,
+		0x0000000bu,
+		0x00000000u,
+		0x00020011u,
+		0x00000001u,
+		0x0004000eu,
+		0x00000000u,
+		0x00000001u,
+		0x00000000u,
+		0x00030016u,
+		0x00000001u,
+		0x00000020u,
+		0x00040021u,
+		0x00000002u,
+		0x00000001u,
+		0x00000001u,
+		0x00050036u,
+		0x00000001u,
+		0x00000003u,
+		0x00000000u,
+		0x00000002u,
+		0x00030037u,
+		0x00000001u,
+		0x00000004u,
+		0x000200f8u,
+		0x00000005u,
+		0x00030001u,
+		0x00000001u,
+		0x00000006u,
+		0x000200feu,
+		0x00000006u,
+		0x00020038u,
+		0x00000000u,
+		0x00020013u,
+		0x00000007u,
+		0x00030021u,
+		0x00000008u,
+		0x00000007u,
+		0x00050036u,
+		0x00000007u,
+		0x00000009u,
+		0x00000000u,
+		0x00000008u,
+		0x000200f8u,
+		0x0000000au,
+		0x000200fdu,
+		0x00000000u,
+		0x00020038u,
+		0x00000000u,
+		0x0005000fu,
+		0x00000004u,
+		0x00000009u,
+		0x6e69616du,
+		0x00000000u,
+	};
+	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
+	assert(acount(words) == expected_count);
+	for (int i = 0; i < expected_count; ++i)
+	{
+		assert(words[i] == expected[i]);
+	}
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_spirv_emit_stage_interface)
 {
 	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
@@ -9194,6 +9275,8 @@ void unit_test()
 		TEST_ENTRY(test_compute_layout_and_storage),
 		TEST_ENTRY(test_spirv_emit_minimal_vertex_main),
 		TEST_ENTRY(test_spirv_emit_non_void_return_helper),
+		TEST_ENTRY(test_spirv_emit_function_parameters),
+		TEST_ENTRY(test_spirv_emit_stage_interface),
 		TEST_ENTRY(test_spirv_emit_control_flow_structures),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_const_qualifier_metadata),
