@@ -361,6 +361,9 @@ typedef struct Symbol
 	int builtin_param_count;
 	int is_builtin;
 	ShaderStage builtin_stage;
+	uint32_t spirv_result_id;
+	uint32_t spirv_type_id;
+	uint32_t spirv_pointer_type_id;
 } Symbol;
 
 typedef struct TypeLayoutAssignment
@@ -7485,25 +7488,25 @@ dyna uint32_t* emit_spirv()
 	SpirvTypeCache cache = (SpirvTypeCache){ 0 };
 	cache.builder = &builder;
 	cache.const_cache = &const_cache;
-dyna SpirvFunctionEmit* emit_funcs = NULL;
-dyna uint32_t* entry_ids = NULL;
-dyna Symbol** interface_symbols = NULL;
-dyna Symbol** resource_symbols = NULL;
-spirv_collect_interface_symbols(&interface_symbols);
-spirv_collect_resource_symbols(&resource_symbols);
-SpirvStageLayout stage_layout = (SpirvStageLayout){ { 1, 1, 1 }, 0 };
-spirv_collect_stage_layout(&stage_layout);
-if (g_shader_stage == SHADER_STAGE_COMPUTE && !stage_layout.has_local_size)
-{
-stage_layout.has_local_size = 1;
-}
-dyna uint32_t* block_type_ids = NULL;
-dyna uint32_t* interface_ids = NULL;
-static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
-SpvExecutionModelVertex,
-SpvExecutionModelFragment,
-SpvExecutionModelGLCompute,
-};
+	dyna SpirvFunctionEmit* emit_funcs = NULL;
+	dyna uint32_t* entry_ids = NULL;
+	dyna Symbol** interface_symbols = NULL;
+	dyna Symbol** resource_symbols = NULL;
+	spirv_collect_interface_symbols(&interface_symbols);
+	spirv_collect_resource_symbols(&resource_symbols);
+	SpirvStageLayout stage_layout = (SpirvStageLayout){ { 1, 1, 1 }, 0 };
+	spirv_collect_stage_layout(&stage_layout);
+	if (g_shader_stage == SHADER_STAGE_COMPUTE && !stage_layout.has_local_size)
+	{
+		stage_layout.has_local_size = 1;
+	}
+	dyna uint32_t* block_type_ids = NULL;
+	dyna uint32_t* interface_ids = NULL;
+	static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
+		SpvExecutionModelVertex,
+		SpvExecutionModelFragment,
+		SpvExecutionModelGLCompute,
+	};
 	for (int i = 0; i < acount(resource_symbols); ++i)
 	{
 		Symbol* sym = resource_symbols[i];
@@ -7529,6 +7532,9 @@ SpvExecutionModelGLCompute,
 		spirv_inst_append(&builder, var_id);
 		spirv_inst_append(&builder, storage_class);
 		spirv_inst_finalize(&builder, var_inst);
+		sym->spirv_result_id = var_id;
+		sym->spirv_type_id = value_type_id;
+		sym->spirv_pointer_type_id = pointer_type_id;
 		if ((sym->layout_flags & SYM_LAYOUT_BINDING) && sym->layout_binding >= 0)
 		{
 			int decorate = spirv_inst_start(&builder, SpvOpDecorate);
@@ -7580,13 +7586,16 @@ SpvExecutionModelGLCompute,
 		spirv_inst_append(&builder, var_id);
 		spirv_inst_append(&builder, storage_class);
 		spirv_inst_finalize(&builder, var_inst);
+		sym->spirv_result_id = var_id;
+		sym->spirv_type_id = value_type_id;
+		sym->spirv_pointer_type_id = pointer_type_id;
 		if (sym->layout_flags & SYM_LAYOUT_LOCATION)
 		{
 			int decorate = spirv_inst_start(&builder, SpvOpDecorate);
-		spirv_inst_append(&builder, var_id);
-		spirv_inst_append(&builder, SpvDecorationLocation);
-		spirv_inst_append(&builder, (uint32_t)sym->layout_location);
-		spirv_inst_finalize(&builder, decorate);
+			spirv_inst_append(&builder, var_id);
+			spirv_inst_append(&builder, SpvDecorationLocation);
+			spirv_inst_append(&builder, (uint32_t)sym->layout_location);
+			spirv_inst_finalize(&builder, decorate);
 		}
 		apush(interface_ids, var_id);
 	}
@@ -7648,6 +7657,13 @@ SpvExecutionModelGLCompute,
 		SPIRV_EMIT1(&builder, SpvOpFunctionEnd, 0);
 		if (info->name && info->name[0])
 		{
+			Symbol* func_sym = symbol_table_find(info->name);
+			if (func_sym && func_sym->kind == SYM_FUNC)
+			{
+				func_sym->spirv_result_id = func_id;
+				func_sym->spirv_type_id = func_type;
+			}
+
 			SpirvFunctionEmit emit = (SpirvFunctionEmit){ 0 };
 			emit.info = info;
 			emit.type_id = func_type;
@@ -10153,6 +10169,40 @@ DEFINE_TEST(test_spirv_emit_uniform_resources)
 	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
 }
 
+DEFINE_TEST(test_spirv_symbol_handles)
+{
+	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
+	compiler_setup("layout(location = 0) out vec4 out_color; layout(set = 2, binding = 0) uniform sampler2D u_texture; float helper() { return 0.0; } void main() { helper(); }");
+	const char* out_name = sintern("out_color");
+	const char* tex_name = sintern("u_texture");
+	const char* main_name = sintern("main");
+	const char* helper_name = sintern("helper");
+	Symbol* out_sym = symbol_table_find(out_name);
+	Symbol* tex_sym = symbol_table_find(tex_name);
+	Symbol* main_sym = symbol_table_find(main_name);
+	Symbol* helper_sym = symbol_table_find(helper_name);
+	assert(out_sym && tex_sym && main_sym && helper_sym);
+	assert(out_sym->spirv_result_id == 0u);
+	assert(tex_sym->spirv_result_id == 0u);
+	assert(main_sym->spirv_result_id == 0u);
+	assert(helper_sym->spirv_result_id == 0u);
+	dyna uint32_t* words = emit_spirv();
+	assert(out_sym->spirv_result_id != 0u);
+	assert(out_sym->spirv_type_id != 0u);
+	assert(out_sym->spirv_pointer_type_id != 0u);
+	assert(tex_sym->spirv_result_id != 0u);
+	assert(tex_sym->spirv_type_id != 0u);
+	assert(tex_sym->spirv_pointer_type_id != 0u);
+	assert(main_sym->spirv_result_id != 0u);
+	assert(main_sym->spirv_type_id != 0u);
+	assert(helper_sym->spirv_result_id != 0u);
+	assert(helper_sym->spirv_type_id != 0u);
+	assert(helper_sym->spirv_pointer_type_id == 0u);
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_spirv_emit_compute_local_size)
 {
 	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
@@ -10348,6 +10398,7 @@ void unit_test()
 		TEST_ENTRY(test_spirv_emit_function_parameters),
 		TEST_ENTRY(test_spirv_emit_stage_interface),
 		TEST_ENTRY(test_spirv_emit_uniform_resources),
+		TEST_ENTRY(test_spirv_symbol_handles),
 		TEST_ENTRY(test_spirv_emit_compute_local_size),
 		TEST_ENTRY(test_spirv_emit_control_flow_structures),
 		TEST_ENTRY(test_preprocessor_passthrough),
