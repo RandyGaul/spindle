@@ -6357,6 +6357,51 @@ static uint32_t spirv_const_uint32(SpirvTypeCache* cache, SpirvConstantCache* co
 	return spirv_constant_uint(const_cache, uint_type, value);
 }
 
+static uint32_t spirv_const_float32(SpirvTypeCache* cache, SpirvConstantCache* const_cache, float value)
+{
+	union
+	{
+		float f;
+		uint32_t u;
+	} bits = { 0 };
+	bits.f = value;
+	uint32_t float_type = spirv_type_cache_get(cache, g_type_float);
+	return spirv_constant_uint(const_cache, float_type, bits.u);
+}
+
+static uint32_t spirv_return_literal_constant(SpirvTypeCache* cache, SpirvConstantCache* const_cache, const Type* expected_type, const IR_Cmd* inst)
+{
+	if (!cache || !const_cache || !expected_type || !inst)
+		return 0u;
+	switch (inst->op)
+	{
+	case IR_PUSH_BOOL:
+	{
+		if (expected_type->tag != T_BOOL)
+			return 0u;
+		return spirv_const_bool(cache, const_cache, inst->arg0 != 0);
+	}
+	case IR_PUSH_INT:
+	{
+		if (expected_type->tag == T_INT || expected_type->tag == T_UINT)
+		{
+			uint32_t type_id = spirv_type_cache_get(cache, (Type*)expected_type);
+			return spirv_constant_uint(const_cache, type_id, (uint32_t)inst->arg0);
+		}
+		return 0u;
+	}
+	case IR_PUSH_FLOAT:
+	{
+		if (expected_type->tag != T_FLOAT)
+			return 0u;
+		if (!inst->type || inst->type->tag != T_FLOAT)
+			return 0u;
+		return spirv_const_float32(cache, const_cache, (float)inst->float_val);
+	}
+	default:
+		return 0u;
+	}
+}
 typedef enum SpirvControlKind
 {
 	SPIRV_CONTROL_IF,
@@ -6887,11 +6932,19 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 		case IR_RETURN:
 		{
 			uint32_t value_id = 0u;
-			if (ctx.return_type && ctx.return_type != g_type_void)
+			int has_value = inst->arg0;
+			if (has_value && ctx.return_type && ctx.return_type != g_type_void)
+			{
+				const IR_Cmd* value_inst = (i > info->ir_begin) ? &g_ir[i - 1] : NULL;
+				value_id = spirv_return_literal_constant(cache, const_cache, ctx.return_type, value_inst);
+				if (!value_id)
+					value_id = spirv_stub_return_placeholder(&ctx);
+			}
+			else if (ctx.return_type && ctx.return_type != g_type_void)
 			{
 				value_id = spirv_stub_return_placeholder(&ctx);
 			}
-			if (value_id)
+			if (value_id && ctx.return_type && ctx.return_type != g_type_void)
 			{
 				int inst_return = spirv_inst_start(ctx.builder, SpvOpReturnValue);
 				spirv_inst_append(ctx.builder, value_id);
@@ -9889,9 +9942,10 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 		0x00000002u,
 		0x000200f8u,
 		0x00000004u,
-		0x00030001u,
+		0x0004002bu,
 		0x00000001u,
 		0x00000005u,
+		0x3f800000u,
 		0x000200feu,
 		0x00000005u,
 		0x00020038u,
