@@ -6380,14 +6380,41 @@ typedef struct SpirvControlState
 } SpirvControlState;
 
 typedef struct SpirvEmitContext
-	{
+{
 	SpirvBuilder* builder;
 	SpirvTypeCache* type_cache;
 	SpirvConstantCache* const_cache;
 	uint32_t current_label;
 	int current_terminated;
 	dyna SpirvControlState* stack;
+	Type* return_type;
+	uint32_t return_type_id;
+	uint32_t return_placeholder_id;
+	int has_return;
 } SpirvEmitContext;
+
+typedef struct SpirvControlFlowResult
+{
+	int terminated;
+	int has_return;
+} SpirvControlFlowResult;
+
+static uint32_t spirv_stub_return_placeholder(SpirvEmitContext* ctx)
+{
+	if (!ctx)
+		return 0u;
+	if (!ctx->return_type || ctx->return_type == g_type_void)
+		return 0u;
+	if (!ctx->return_placeholder_id)
+	{
+		ctx->return_placeholder_id = spirv_alloc_id(ctx->builder);
+		int inst = spirv_inst_start(ctx->builder, SpvOpUndef);
+		spirv_inst_append(ctx->builder, ctx->return_type_id);
+		spirv_inst_append(ctx->builder, ctx->return_placeholder_id);
+		spirv_inst_finalize(ctx->builder, inst);
+	}
+	return ctx->return_placeholder_id;
+}
 
 static void spirv_stub_start_block(SpirvEmitContext* ctx, uint32_t label)
 {
@@ -6492,20 +6519,22 @@ static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int s
 	sw->default_label = sw->merge_label;
 }
 
-static void spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label)
+static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label, Type* return_type, uint32_t return_type_id)
 {
-	if (!info)
-	return;
-	if (info->ir_begin < 0 || info->ir_end < 0)
-	return;
-	SpirvEmitContext ctx = { 0 };
-	ctx.builder = builder;
-	ctx.type_cache = cache;
-	ctx.const_cache = const_cache;
-	ctx.current_label = entry_label;
-	ctx.current_terminated = 0;
-	for (int i = info->ir_begin; i < info->ir_end; ++i)
-	{
+if (!info)
+return (SpirvControlFlowResult){ 0 };
+if (info->ir_begin < 0 || info->ir_end < 0)
+return (SpirvControlFlowResult){ 0 };
+SpirvEmitContext ctx = { 0 };
+ctx.builder = builder;
+ctx.type_cache = cache;
+ctx.const_cache = const_cache;
+ctx.current_label = entry_label;
+ctx.current_terminated = 0;
+ctx.return_type = return_type ? return_type : g_type_void;
+ctx.return_type_id = return_type_id;
+for (int i = info->ir_begin; i < info->ir_end; ++i)
+{
 		IR_Cmd* inst = &g_ir[i];
 		switch (inst->op)
 		{
@@ -6818,12 +6847,85 @@ static void spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* 
 				afree(sw->cases);
 				apop(ctx.stack);
 				break;
+		}
+		case IR_RETURN:
+		{
+			uint32_t value_id = 0u;
+			if (ctx.return_type && ctx.return_type != g_type_void)
+			{
+				value_id = spirv_stub_return_placeholder(&ctx);
 			}
+			if (value_id)
+			{
+				int inst_return = spirv_inst_start(ctx.builder, SpvOpReturnValue);
+				spirv_inst_append(ctx.builder, value_id);
+				spirv_inst_finalize(ctx.builder, inst_return);
+			}
+			else
+			{
+				int inst_return = spirv_inst_start(ctx.builder, SpvOpReturn);
+				spirv_inst_finalize(ctx.builder, inst_return);
+			}
+			ctx.current_terminated = 1;
+			ctx.has_return = 1;
+			break;
+		}
+		case IR_BREAK:
+		{
+			uint32_t target = 0u;
+			for (int idx = acount(ctx.stack) - 1; idx >= 0 && !target; --idx)
+			{
+				SpirvControlState* state = &ctx.stack[idx];
+				if (state->kind == SPIRV_CONTROL_LOOP)
+				{
+					target = state->u.loop_state.merge_label;
+					break;
+				}
+				if (state->kind == SPIRV_CONTROL_SWITCH)
+				{
+					target = state->u.switch_state.merge_label;
+					break;
+				}
+			}
+			if (target)
+				spirv_stub_branch(&ctx, target);
+			break;
+		}
+		case IR_CONTINUE:
+		{
+			uint32_t target = 0u;
+			for (int idx = acount(ctx.stack) - 1; idx >= 0; --idx)
+			{
+				SpirvControlState* state = &ctx.stack[idx];
+				if (state->kind == SPIRV_CONTROL_LOOP)
+				{
+					target = state->u.loop_state.continue_label;
+					break;
+				}
+			}
+			if (target)
+				spirv_stub_branch(&ctx, target);
+			break;
+		}
+		case IR_DISCARD:
+		{
+			if (!ctx.current_terminated)
+			{
+				int inst_kill = spirv_inst_start(ctx.builder, SpvOpKill);
+				spirv_inst_finalize(ctx.builder, inst_kill);
+				ctx.current_terminated = 1;
+			}
+			break;
+		}
 		default:
 			break;
 		}
 	}
+	SpirvControlFlowResult result = (SpirvControlFlowResult){ 0 };
+	result.terminated = ctx.current_terminated;
+	result.has_return = ctx.has_return;
 	afree(ctx.stack);
+	return result;
 }
 
 static uint32_t spirv_type_pointer(SpirvTypeCache* cache, uint32_t value_type_id, uint32_t storage_class)
@@ -7202,11 +7304,12 @@ dyna uint32_t* emit_spirv()
 		SpirvFunctionInfo* info = &funcs[i];
 		if (!info->has_definition)
 			continue;
-		uint32_t return_type = spirv_type_cache_get(&cache, info->return_type);
+		Type* return_type = info->return_type ? info->return_type : g_type_void;
+		uint32_t return_type_id = spirv_type_cache_get(&cache, return_type);
 		uint32_t func_type = spirv_alloc_id(&builder);
 		int type_inst = spirv_inst_start(&builder, SpvOpTypeFunction);
 		spirv_inst_append(&builder, func_type);
-		spirv_inst_append(&builder, return_type);
+		spirv_inst_append(&builder, return_type_id);
 		int param_count = acount(info->param_types);
 		dyna uint32_t* param_type_ids = NULL;
 		for (int p = 0; p < param_count; ++p)
@@ -7218,7 +7321,7 @@ dyna uint32_t* emit_spirv()
 		spirv_inst_finalize(&builder, type_inst);
 		uint32_t func_id = spirv_alloc_id(&builder);
 		int func_inst = spirv_inst_start(&builder, SpvOpFunction);
-		spirv_inst_append(&builder, return_type);
+		spirv_inst_append(&builder, return_type_id);
 		spirv_inst_append(&builder, func_id);
 		spirv_inst_append(&builder, SpvFunctionControlMaskNone);
 		spirv_inst_append(&builder, func_type);
@@ -7230,19 +7333,25 @@ dyna uint32_t* emit_spirv()
 		}
 		uint32_t label_id = spirv_alloc_id(&builder);
 		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
-		spirv_emit_control_flow_stub(&builder, &cache, &const_cache, info, label_id);
-		if (info->return_type && info->return_type != g_type_void)
+		SpirvControlFlowResult flow = spirv_emit_control_flow_stub(&builder, &cache, &const_cache, info, label_id, return_type, return_type_id);
+		if (!flow.terminated)
 		{
-			uint32_t undef_id = spirv_alloc_id(&builder);
-			int undef_inst = spirv_inst_start(&builder, SpvOpUndef);
-			spirv_inst_append(&builder, return_type);
-			spirv_inst_append(&builder, undef_id);
-			spirv_inst_finalize(&builder, undef_inst);
-			SPIRV_EMIT1(&builder, SpvOpReturnValue, undef_id);
-		}
-		else
-		{
-			SPIRV_EMIT1(&builder, SpvOpReturn, 0);
+			if (return_type && return_type != g_type_void)
+			{
+				uint32_t undef_id = spirv_alloc_id(&builder);
+				int undef_inst = spirv_inst_start(&builder, SpvOpUndef);
+				spirv_inst_append(&builder, return_type_id);
+				spirv_inst_append(&builder, undef_id);
+				spirv_inst_finalize(&builder, undef_inst);
+				int inst_return = spirv_inst_start(&builder, SpvOpReturnValue);
+				spirv_inst_append(&builder, undef_id);
+				spirv_inst_finalize(&builder, inst_return);
+			}
+			else
+			{
+				int inst_return = spirv_inst_start(&builder, SpvOpReturn);
+				spirv_inst_finalize(&builder, inst_return);
+			}
 		}
 		SPIRV_EMIT1(&builder, SpvOpFunctionEnd, 0);
 		if (info->name && info->name[0])
@@ -9420,8 +9529,7 @@ DEFINE_TEST(test_spirv_emit_minimal_vertex_main)
 		0x00000002u,
 		0x000200f8u,
 		0x00000004u,
-		0x000200fdu,
-		0x00000000u,
+		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0005000fu,
@@ -9489,8 +9597,7 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 		0x00000007u,
 		0x000200f8u,
 		0x00000009u,
-		0x000200fdu,
-		0x00000000u,
+		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0005000fu,
@@ -9564,8 +9671,7 @@ DEFINE_TEST(test_spirv_emit_function_parameters)
 		0x00000008u,
 		0x000200f8u,
 		0x0000000au,
-		0x000200fdu,
-		0x00000000u,
+		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0005000fu,
@@ -9633,8 +9739,7 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 		0x00000006u,
 		0x000200f8u,
 		0x00000008u,
-		0x000200fdu,
-		0x00000000u,
+		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0006000fu,
