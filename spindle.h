@@ -6055,6 +6055,12 @@ typedef struct SpirvFunctionEmit
 	uint32_t func_id;
 } SpirvFunctionEmit;
 
+typedef struct SpirvStageLayout
+{
+	uint32_t local_size[3];
+	int has_local_size;
+} SpirvStageLayout;
+
 enum
 {
 	SPIRV_MAGIC = 0x07230203u,
@@ -6107,6 +6113,11 @@ enum SpirvSelectionControl
 enum SpirvLoopControl
 {
 	SpvLoopControlMaskNone = 0,
+};
+
+enum SpirvExecutionMode
+{
+	SpvExecutionModeLocalSize = 17,
 };
 
 enum SpirvExecutionModel
@@ -7087,6 +7098,43 @@ static void spirv_collect_interface_symbols(Symbol*** out_symbols)
 	*out_symbols = symbols;
 }
 
+static void spirv_collect_stage_layout(SpirvStageLayout* layout)
+{
+	if (!layout)
+		return;
+	const char* local_size_x = sintern("local_size_x");
+	const char* local_size_y = sintern("local_size_y");
+	const char* local_size_z = sintern("local_size_z");
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		IR_Cmd* inst = &g_ir[i];
+		if (inst->op != IR_STAGE_LAYOUT_VALUE)
+			continue;
+		if (!inst->str0)
+			continue;
+		if (inst->str0 == local_size_x)
+		{
+			uint32_t value = inst->arg0 > 0 ? (uint32_t)inst->arg0 : 1u;
+			layout->local_size[0] = value;
+			layout->has_local_size = 1;
+			continue;
+		}
+		if (inst->str0 == local_size_y)
+		{
+			uint32_t value = inst->arg0 > 0 ? (uint32_t)inst->arg0 : 1u;
+			layout->local_size[1] = value;
+			layout->has_local_size = 1;
+			continue;
+		}
+		if (inst->str0 == local_size_z)
+		{
+			uint32_t value = inst->arg0 > 0 ? (uint32_t)inst->arg0 : 1u;
+			layout->local_size[2] = value;
+			layout->has_local_size = 1;
+		}
+	}
+}
+
 // Emit a SPIR-V module for the parsed shader entry points.
 // ...void main() { out_color = vec4(1.0); }
 dyna uint32_t* emit_spirv()
@@ -7113,6 +7161,12 @@ dyna uint32_t* emit_spirv()
 	dyna uint32_t* entry_ids = NULL;
 	dyna Symbol** interface_symbols = NULL;
 	spirv_collect_interface_symbols(&interface_symbols);
+	SpirvStageLayout stage_layout = (SpirvStageLayout){ { 1, 1, 1 }, 0 };
+	spirv_collect_stage_layout(&stage_layout);
+	if (g_shader_stage == SHADER_STAGE_COMPUTE && !stage_layout.has_local_size)
+	{
+		stage_layout.has_local_size = 1;
+	}
 	dyna uint32_t* interface_ids = NULL;
 	static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
 		SpvExecutionModelVertex,
@@ -7212,6 +7266,16 @@ dyna uint32_t* emit_spirv()
 		for (int j = 0; j < acount(interface_ids); ++j)
 			spirv_inst_append(&builder, interface_ids[j]);
 		spirv_inst_finalize(&builder, inst);
+		if (g_shader_stage == SHADER_STAGE_COMPUTE && stage_layout.has_local_size)
+		{
+			int exec_inst = spirv_inst_start(&builder, SpvOpExecutionMode);
+			spirv_inst_append(&builder, entry_ids[i]);
+			spirv_inst_append(&builder, SpvExecutionModeLocalSize);
+			spirv_inst_append(&builder, stage_layout.local_size[0]);
+			spirv_inst_append(&builder, stage_layout.local_size[1]);
+			spirv_inst_append(&builder, stage_layout.local_size[2]);
+			spirv_inst_finalize(&builder, exec_inst);
+		}
 	}
 	if (acount(builder.words) > 3)
 		builder.words[header_index] = builder.bound;
@@ -9592,6 +9656,65 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 }
 
 
+DEFINE_TEST(test_spirv_emit_compute_local_size)
+{
+	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
+	compiler_setup("layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in; void main() {}");
+	dyna uint32_t* words = emit_spirv();
+	int found = 0;
+	for (int offset = 5; offset < acount(words);)
+	{
+		uint32_t inst_word = words[offset];
+		uint16_t inst_word_count = (uint16_t)(inst_word >> 16);
+		uint16_t opcode = (uint16_t)(inst_word & 0xFFFFu);
+		if (opcode == SpvOpExecutionMode && inst_word_count >= 6)
+		{
+			uint32_t mode = words[offset + 2];
+			if (mode == SpvExecutionModeLocalSize)
+			{
+				uint32_t x = words[offset + 3];
+				uint32_t y = words[offset + 4];
+				uint32_t z = words[offset + 5];
+				assert(x == 8u && y == 4u && z == 1u);
+				found = 1;
+				break;
+			}
+		}
+		offset += inst_word_count;
+	}
+	assert(found);
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_COMPUTE);
+	compiler_setup("void main() {}");
+	words = emit_spirv();
+	found = 0;
+	for (int offset = 5; offset < acount(words);)
+	{
+		uint32_t inst_word = words[offset];
+		uint16_t inst_word_count = (uint16_t)(inst_word >> 16);
+		uint16_t opcode = (uint16_t)(inst_word & 0xFFFFu);
+		if (opcode == SpvOpExecutionMode && inst_word_count >= 6)
+		{
+			uint32_t mode = words[offset + 2];
+			if (mode == SpvExecutionModeLocalSize)
+			{
+				uint32_t x = words[offset + 3];
+				uint32_t y = words[offset + 4];
+				uint32_t z = words[offset + 5];
+				assert(x == 1u && y == 1u && z == 1u);
+				found = 1;
+				break;
+			}
+		}
+		offset += inst_word_count;
+	}
+	assert(found);
+	afree(words);
+	compiler_teardown();
+	compiler_set_shader_stage(SHADER_STAGE_VERTEX);
+}
+
 DEFINE_TEST(test_spirv_emit_control_flow_structures)
 {
 	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
@@ -9727,6 +9850,7 @@ void unit_test()
 		TEST_ENTRY(test_spirv_emit_non_void_return_helper),
 		TEST_ENTRY(test_spirv_emit_function_parameters),
 		TEST_ENTRY(test_spirv_emit_stage_interface),
+		TEST_ENTRY(test_spirv_emit_compute_local_size),
 		TEST_ENTRY(test_spirv_emit_control_flow_structures),
 		TEST_ENTRY(test_preprocessor_passthrough),
 		TEST_ENTRY(test_const_qualifier_metadata),
