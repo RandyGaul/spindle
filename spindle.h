@@ -6310,59 +6310,509 @@ static uint32_t spirv_const_uint32(SpirvTypeCache* cache, SpirvConstantCache* co
 	return spirv_constant_uint(const_cache, uint_type, value);
 }
 
-static void spirv_emit_control_flow_stub(const SpirvFunctionInfo* info)
+typedef enum SpirvControlKind
+{
+	SPIRV_CONTROL_IF,
+	SPIRV_CONTROL_LOOP,
+	SPIRV_CONTROL_SWITCH,
+} SpirvControlKind;
+
+typedef struct SpirvStubIf
+	{
+	uint32_t then_label;
+	uint32_t else_label;
+	uint32_t merge_label;
+	int has_else;
+	int selection_emitted;
+} SpirvStubIf;
+
+typedef enum SpirvLoopKind
+	{
+	SPIRV_LOOP_WHILE,
+	SPIRV_LOOP_DO,
+	SPIRV_LOOP_FOR,
+} SpirvLoopKind;
+
+typedef struct SpirvStubLoop
+	{
+	SpirvLoopKind kind;
+	uint32_t header_label;
+	uint32_t body_label;
+	uint32_t continue_label;
+	uint32_t merge_label;
+} SpirvStubLoop;
+
+typedef struct SpirvStubSwitchCase
+	{
+	int value;
+	uint32_t label;
+	unsigned flags;
+} SpirvStubSwitchCase;
+
+typedef struct SpirvStubSwitch
+	{
+	uint32_t merge_label;
+	uint32_t default_label;
+	dyna SpirvStubSwitchCase* cases;
+	int case_index;
+} SpirvStubSwitch;
+
+typedef struct SpirvControlState
+	{
+	SpirvControlKind kind;
+	union
+	{
+	SpirvStubIf if_state;
+	SpirvStubLoop loop_state;
+	SpirvStubSwitch switch_state;
+	} u;
+} SpirvControlState;
+
+typedef struct SpirvEmitContext
+	{
+	SpirvBuilder* builder;
+	SpirvTypeCache* type_cache;
+	SpirvConstantCache* const_cache;
+	uint32_t current_label;
+	int current_terminated;
+	dyna SpirvControlState* stack;
+} SpirvEmitContext;
+
+static void spirv_stub_start_block(SpirvEmitContext* ctx, uint32_t label)
+{
+	if (!ctx)
+	return;
+	if (ctx->current_label == label)
+	{
+		ctx->current_terminated = 0;
+		return;
+	}
+	SPIRV_EMIT1(ctx->builder, SpvOpLabel, label);
+	ctx->current_label = label;
+	ctx->current_terminated = 0;
+}
+
+static void spirv_stub_branch(SpirvEmitContext* ctx, uint32_t target)
+{
+	if (!ctx || ctx->current_terminated)
+	return;
+	SPIRV_EMIT1(ctx->builder, SpvOpBranch, target);
+	ctx->current_terminated = 1;
+}
+
+static void spirv_stub_branch_conditional(SpirvEmitContext* ctx, uint32_t cond_id, uint32_t true_target, uint32_t false_target)
+{
+	if (!ctx || ctx->current_terminated)
+	return;
+	int inst = spirv_inst_start(ctx->builder, SpvOpBranchConditional);
+	spirv_inst_append(ctx->builder, cond_id);
+	spirv_inst_append(ctx->builder, true_target);
+	spirv_inst_append(ctx->builder, false_target);
+	spirv_inst_finalize(ctx->builder, inst);
+	ctx->current_terminated = 1;
+}
+
+static int spirv_stub_if_has_else(const SpirvFunctionInfo* info, int start_index)
 {
 	if (!info)
-		return;
+	return 0;
+	int depth = 0;
+	for (int idx = start_index + 1; idx < info->ir_end; ++idx)
+	{
+		IR_Cmd* probe = &g_ir[idx];
+		switch (probe->op)
+		{
+		case IR_IF_BEGIN:
+			depth++;
+			break;
+		case IR_IF_END:
+			if (!depth)
+			return 0;
+			depth--;
+			break;
+		case IR_IF_ELSE:
+			if (!depth)
+			return 1;
+			break;
+		default:
+			break;
+		}
+	}
+	return 0;
+}
+
+static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int start_index, SpirvBuilder* builder, SpirvStubSwitch* sw)
+{
+	if (!info || !sw)
+	return;
+	int depth = 0;
+	for (int idx = start_index + 1; idx < info->ir_end; ++idx)
+	{
+		IR_Cmd* inst = &g_ir[idx];
+		switch (inst->op)
+		{
+		case IR_SWITCH_BEGIN:
+			depth++;
+			break;
+		case IR_SWITCH_END:
+			if (!depth)
+			idx = info->ir_end;
+			else
+			depth--;
+			break;
+		case IR_SWITCH_CASE:
+			if (depth)
+			break;
+			{
+				SpirvStubSwitchCase entry = { 0 };
+				entry.value = inst->arg0;
+				entry.flags = (unsigned)inst->arg1;
+				entry.label = spirv_alloc_id(builder);
+				apush(sw->cases, entry);
+				if (entry.flags & SWITCH_CASE_FLAG_DEFAULT)
+				sw->default_label = entry.label;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	if (!sw->default_label)
+	sw->default_label = sw->merge_label;
+}
+
+static void spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label)
+{
+	if (!info)
+	return;
 	if (info->ir_begin < 0 || info->ir_end < 0)
-		return;
+	return;
+	SpirvEmitContext ctx = { 0 };
+	ctx.builder = builder;
+	ctx.type_cache = cache;
+	ctx.const_cache = const_cache;
+	ctx.current_label = entry_label;
+	ctx.current_terminated = 0;
 	for (int i = info->ir_begin; i < info->ir_end; ++i)
 	{
 		IR_Cmd* inst = &g_ir[i];
 		switch (inst->op)
 		{
 		case IR_IF_BEGIN:
+			{
+				SpirvControlState state = { 0 };
+				state.kind = SPIRV_CONTROL_IF;
+				state.u.if_state.then_label = spirv_alloc_id(builder);
+				state.u.if_state.merge_label = spirv_alloc_id(builder);
+				state.u.if_state.else_label = 0;
+				state.u.if_state.has_else = 0;
+				state.u.if_state.selection_emitted = 0;
+				apush(ctx.stack, state);
+				break;
+			}
 		case IR_IF_THEN:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_IF)
+				break;
+				SpirvStubIf* stub = &state->u.if_state;
+				if (!stub->selection_emitted)
+				{
+					int has_else = spirv_stub_if_has_else(info, i);
+					stub->has_else = has_else;
+					stub->else_label = has_else ? spirv_alloc_id(builder) : stub->merge_label;
+					SPIRV_EMIT2(builder, SpvOpSelectionMerge, stub->merge_label, SpvSelectionControlMaskNone);
+					uint32_t cond_id = spirv_const_bool(cache, const_cache, 1);
+					spirv_stub_branch_conditional(&ctx, cond_id, stub->then_label, stub->else_label);
+					spirv_stub_start_block(&ctx, stub->then_label);
+					stub->selection_emitted = 1;
+				}
+				break;
+			}
 		case IR_IF_ELSE:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_IF)
+				break;
+				SpirvStubIf* stub = &state->u.if_state;
+				if (!stub->selection_emitted)
+				break;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, stub->merge_label);
+				spirv_stub_start_block(&ctx, stub->else_label);
+				break;
+			}
 		case IR_IF_END:
-		case IR_FOR_BEGIN:
-		case IR_FOR_INIT_BEGIN:
-		case IR_FOR_INIT_END:
-		case IR_FOR_COND_BEGIN:
-		case IR_FOR_COND_END:
-		case IR_FOR_STEP_BEGIN:
-		case IR_FOR_STEP_END:
-		case IR_FOR_BODY_BEGIN:
-		case IR_FOR_BODY_END:
-		case IR_FOR_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState state = ctx.stack[acount(ctx.stack) - 1];
+				if (state.kind != SPIRV_CONTROL_IF)
+				break;
+				SpirvStubIf* stub = &state.u.if_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, stub->merge_label);
+				spirv_stub_start_block(&ctx, stub->merge_label);
+				apop(ctx.stack);
+				break;
+			}
 		case IR_WHILE_BEGIN:
-		case IR_WHILE_COND_BEGIN:
+			{
+				SpirvControlState state = { 0 };
+				state.kind = SPIRV_CONTROL_LOOP;
+				state.u.loop_state.kind = SPIRV_LOOP_WHILE;
+				state.u.loop_state.header_label = spirv_alloc_id(builder);
+				state.u.loop_state.body_label = spirv_alloc_id(builder);
+				state.u.loop_state.merge_label = spirv_alloc_id(builder);
+				state.u.loop_state.continue_label = state.u.loop_state.header_label;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, state.u.loop_state.header_label);
+				spirv_stub_start_block(&ctx, state.u.loop_state.header_label);
+				apush(ctx.stack, state);
+				break;
+			}
 		case IR_WHILE_COND_END:
-		case IR_WHILE_BODY_BEGIN:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				SPIRV_EMIT3(builder, SpvOpLoopMerge, loop->merge_label, loop->continue_label, SpvLoopControlMaskNone);
+				uint32_t cond_id = spirv_const_bool(cache, const_cache, 1);
+				spirv_stub_branch_conditional(&ctx, cond_id, loop->body_label, loop->merge_label);
+				spirv_stub_start_block(&ctx, loop->body_label);
+				break;
+			}
 		case IR_WHILE_BODY_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, loop->continue_label);
+				break;
+			}
 		case IR_WHILE_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState state = ctx.stack[acount(ctx.stack) - 1];
+				if (state.kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state.u.loop_state;
+				spirv_stub_start_block(&ctx, loop->merge_label);
+				apop(ctx.stack);
+				break;
+			}
 		case IR_DO_BEGIN:
-		case IR_DO_BODY_BEGIN:
+			{
+				SpirvControlState state = { 0 };
+				state.kind = SPIRV_CONTROL_LOOP;
+				state.u.loop_state.kind = SPIRV_LOOP_DO;
+				state.u.loop_state.body_label = spirv_alloc_id(builder);
+				state.u.loop_state.header_label = spirv_alloc_id(builder);
+				state.u.loop_state.merge_label = spirv_alloc_id(builder);
+				state.u.loop_state.continue_label = state.u.loop_state.header_label;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, state.u.loop_state.body_label);
+				spirv_stub_start_block(&ctx, state.u.loop_state.body_label);
+				apush(ctx.stack, state);
+				break;
+			}
 		case IR_DO_BODY_END:
-		case IR_DO_COND_BEGIN:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, loop->continue_label);
+				spirv_stub_start_block(&ctx, loop->continue_label);
+				break;
+			}
 		case IR_DO_COND_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				SPIRV_EMIT3(builder, SpvOpLoopMerge, loop->merge_label, loop->continue_label, SpvLoopControlMaskNone);
+				uint32_t cond_id = spirv_const_bool(cache, const_cache, 1);
+				spirv_stub_branch_conditional(&ctx, cond_id, loop->body_label, loop->merge_label);
+				break;
+			}
 		case IR_DO_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState state = ctx.stack[acount(ctx.stack) - 1];
+				if (state.kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state.u.loop_state;
+				spirv_stub_start_block(&ctx, loop->merge_label);
+				apop(ctx.stack);
+				break;
+			}
+		case IR_FOR_BEGIN:
+			{
+				SpirvControlState state = { 0 };
+				state.kind = SPIRV_CONTROL_LOOP;
+				state.u.loop_state.kind = SPIRV_LOOP_FOR;
+				state.u.loop_state.header_label = spirv_alloc_id(builder);
+				state.u.loop_state.body_label = spirv_alloc_id(builder);
+				state.u.loop_state.merge_label = spirv_alloc_id(builder);
+				state.u.loop_state.continue_label = state.u.loop_state.header_label;
+				apush(ctx.stack, state);
+				break;
+			}
+		case IR_FOR_INIT_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, loop->header_label);
+				spirv_stub_start_block(&ctx, loop->header_label);
+				break;
+			}
+		case IR_FOR_COND_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				SPIRV_EMIT3(builder, SpvOpLoopMerge, loop->merge_label, loop->continue_label, SpvLoopControlMaskNone);
+				uint32_t cond_id = spirv_const_bool(cache, const_cache, 1);
+				spirv_stub_branch_conditional(&ctx, cond_id, loop->body_label, loop->merge_label);
+				spirv_stub_start_block(&ctx, loop->body_label);
+				break;
+			}
+		case IR_FOR_BODY_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state->u.loop_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, loop->continue_label);
+				break;
+			}
+		case IR_FOR_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState state = ctx.stack[acount(ctx.stack) - 1];
+				if (state.kind != SPIRV_CONTROL_LOOP)
+				break;
+				SpirvStubLoop* loop = &state.u.loop_state;
+				spirv_stub_start_block(&ctx, loop->merge_label);
+				apop(ctx.stack);
+				break;
+			}
 		case IR_SWITCH_BEGIN:
-		case IR_SWITCH_SELECTOR_BEGIN:
+			{
+				SpirvControlState state = { 0 };
+				state.kind = SPIRV_CONTROL_SWITCH;
+				state.u.switch_state.merge_label = spirv_alloc_id(builder);
+				state.u.switch_state.default_label = 0;
+				state.u.switch_state.cases = NULL;
+				state.u.switch_state.case_index = 0;
+				spirv_stub_collect_switch_cases(info, i, builder, &state.u.switch_state);
+				apush(ctx.stack, state);
+				break;
+			}
 		case IR_SWITCH_SELECTOR_END:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_SWITCH)
+				break;
+				SpirvStubSwitch* sw = &state->u.switch_state;
+				SPIRV_EMIT2(builder, SpvOpSelectionMerge, sw->merge_label, SpvSelectionControlMaskNone);
+				uint32_t selector_id = spirv_const_uint32(cache, const_cache, 0);
+				int inst_switch = spirv_inst_start(builder, SpvOpSwitch);
+				spirv_inst_append(builder, selector_id);
+				spirv_inst_append(builder, sw->default_label);
+				for (int c = 0; c < acount(sw->cases); ++c)
+				{
+					SpirvStubSwitchCase* entry = &sw->cases[c];
+					if (entry->flags & SWITCH_CASE_FLAG_DEFAULT)
+					continue;
+					spirv_inst_append(builder, (uint32_t)entry->value);
+					spirv_inst_append(builder, entry->label);
+				}
+				spirv_inst_finalize(builder, inst_switch);
+				ctx.current_terminated = 1;
+				break;
+			}
 		case IR_SWITCH_CASE:
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState* state = &ctx.stack[acount(ctx.stack) - 1];
+				if (state->kind != SPIRV_CONTROL_SWITCH)
+				break;
+				SpirvStubSwitch* sw = &state->u.switch_state;
+				if (sw->case_index >= acount(sw->cases))
+				break;
+				SpirvStubSwitchCase* entry = &sw->cases[sw->case_index];
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, sw->merge_label);
+				spirv_stub_start_block(&ctx, entry->label);
+				if (!(entry->flags & SWITCH_CASE_FLAG_HAS_BODY))
+				{
+					uint32_t target = sw->merge_label;
+					if ((entry->flags & SWITCH_CASE_FLAG_FALLTHROUGH) && (sw->case_index + 1) < acount(sw->cases))
+					{
+						SpirvStubSwitchCase* next_case = &sw->cases[sw->case_index + 1];
+						target = next_case->label;
+					}
+					spirv_stub_branch(&ctx, target);
+				}
+				sw->case_index++;
+				break;
+			}
 		case IR_SWITCH_END:
-		case IR_BLOCK_BEGIN:
-		case IR_BLOCK_END:
-		case IR_RETURN:
-		case IR_BREAK:
-		case IR_CONTINUE:
-		case IR_DISCARD:
-			break;
+			{
+				if (!acount(ctx.stack))
+				break;
+				SpirvControlState state = ctx.stack[acount(ctx.stack) - 1];
+				if (state.kind != SPIRV_CONTROL_SWITCH)
+				break;
+				SpirvStubSwitch* sw = &state.u.switch_state;
+				if (!ctx.current_terminated)
+				spirv_stub_branch(&ctx, sw->merge_label);
+				spirv_stub_start_block(&ctx, sw->merge_label);
+				afree(sw->cases);
+				apop(ctx.stack);
+				break;
+			}
 		default:
 			break;
 		}
 	}
+	afree(ctx.stack);
 }
 
 static uint32_t spirv_type_pointer(SpirvTypeCache* cache, uint32_t value_type_id, uint32_t storage_class)
@@ -6726,7 +7176,7 @@ dyna uint32_t* emit_spirv()
 		}
 		uint32_t label_id = spirv_alloc_id(&builder);
 		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
-		spirv_emit_control_flow_stub(info);
+		spirv_emit_control_flow_stub(&builder, &cache, &const_cache, info, label_id);
 		if (info->return_type && info->return_type != g_type_void)
 		{
 			uint32_t undef_id = spirv_alloc_id(&builder);
