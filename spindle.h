@@ -1045,7 +1045,7 @@ static void symbol_table_register_builtin_variables()
 			if (sym->type && init->array_length >= 0)
 				sym->type->array_len = init->array_length;
 			element_type = sym->type;
-		}
+			}
 	}
 }
 
@@ -1111,7 +1111,7 @@ void symbol_set_layout(Symbol* sym, unsigned layout_flag, int value)
 	case SYM_LAYOUT_LOCATION:
 		sym->layout_location = value;
 		break;
-	default:
+		default:
 		break;
 	}
 }
@@ -1132,7 +1132,7 @@ int symbol_get_layout(const Symbol* sym, unsigned layout_flag)
 		return sym->layout_binding;
 	case SYM_LAYOUT_LOCATION:
 		return sym->layout_location;
-	default:
+		default:
 		break;
 	}
 	return -1;
@@ -1174,7 +1174,7 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 	if (sym->param_signature_set) {
 		if (sym->param_count != param_count) {
 			type_check_error("function %s redeclared with %d parameters but previously had %d", sym->name, param_count, sym->param_count);
-		}
+			}
 		for (int i = 0; i < param_count; ++i) {
 			Type* existing = (sym->params && i < acount(sym->params)) ? sym->params[i] : NULL;
 			Type* incoming = (params && i < acount(params)) ? params[i] : NULL;
@@ -1185,7 +1185,7 @@ void symbol_set_function_signature(Symbol* sym, Type** params, int param_count)
 			} else if (existing != incoming) {
 				type_check_error("function %s parameter %d type mismatch", sym->name, i + 1);
 			}
-		}
+			}
 		return;
 	}
 	aclear(sym->params);
@@ -1203,7 +1203,7 @@ void symbol_table_free()
 		symbol_table_leave_scope();
 	}
 	for (int i = 0; i < acount(st->symbols); ++i) {
-		Symbol* sym = &st->symbols[i];
+			Symbol* sym = &st->symbols[i];
 		afree(sym->params);
 	}
 	afree(st->symbols);
@@ -1255,7 +1255,7 @@ void parse_error(const char* msg)
 		fprintf(stderr, " (token %s", tok_name[tok.kind]);
 		if (tok.len) {
 			fprintf(stderr, " '%.*s'", tok.len, tok.lexeme);
-		}
+			}
 		fprintf(stderr, ")");
 	}
 	fprintf(stderr, "\n");
@@ -1318,13 +1318,13 @@ void skip_ws_comments()
 				break;
 			}
 			continue;
-		}
+			}
 		if (ch == '/' && at[0] == '/') {
 			while (ch && ch != '\n') {
 				next_ch();
 			}
 			continue;
-		}
+			}
 		if (ch == '/' && at[0] == '*') {
 			next_ch();
 			next_ch();
@@ -1335,7 +1335,7 @@ void skip_ws_comments()
 				next_ch();
 			}
 			continue;
-		}
+			}
 		break;
 	}
 }
@@ -1421,7 +1421,7 @@ void type_spec_set_layout(TypeSpec* spec, unsigned layout_flag, int value)
 	case SYM_LAYOUT_LOCATION:
 		spec->layout_location = value;
 		break;
-	default:
+		default:
 		break;
 	}
 }
@@ -1481,13 +1481,13 @@ void parse_layout_block(TypeSpec* spec)
 			} else {
 				type_spec_add_layout_assignment(spec, ident, value);
 			}
-		} else {
+			} else {
 			type_spec_add_layout_identifier(spec, ident);
-		}
+			}
 		if (tok.kind == TOK_COMMA) {
 			next();
 			continue;
-		}
+			}
 		break;
 	}
 	expect(TOK_RPAREN);
@@ -1503,17 +1503,17 @@ void parse_type_qualifiers(TypeSpec* spec)
 			type_spec_add_storage(spec, storage_flag);
 			next();
 			continue;
-		}
+			}
 		unsigned qualifier_flag = qualifier_flag_from_keyword(tok.lexeme);
 		if (qualifier_flag) {
 			type_spec_add_qualifier(spec, qualifier_flag);
 			next();
 			continue;
-		}
+			}
 		if (tok.lexeme == kw_layout) {
 			parse_layout_block(spec);
 			continue;
-		}
+			}
 		break;
 	}
 }
@@ -1546,7 +1546,7 @@ TypeSpec parse_type_specifier()
 			spec.has_struct_definition = 1;
 			emit_struct_ir(type, info);
 			return spec;
-		}
+			}
 		Type* type = type_system_get(struct_name);
 		if (!type)
 			parse_error("unknown struct type");
@@ -1560,7 +1560,7 @@ TypeSpec parse_type_specifier()
 		if (tok.kind == TOK_SEMI && (spec.storage_flags || has_layout)) {
 			spec.is_stage_layout = 1;
 			return spec;
-		}
+			}
 		parse_error("expected type");
 	}
 	const char* type_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
@@ -1581,7 +1581,7 @@ TypeSpec parse_type_specifier()
 			spec.has_struct_definition = 1;
 			spec.is_interface_block = 1;
 			return spec;
-		}
+			}
 	}
 	if (!is_type_name(type_name))
 		parse_error("expected type");
@@ -1603,12 +1603,12 @@ void parse_struct_member_array_suffix(StructMember* member)
 		int size = -1;
 		if (tok.kind == TOK_RBRACK) {
 			unsized = 1;
-		} else {
+			} else {
 			if (tok.kind != TOK_INT)
 				parse_error("expected integer array size");
 			size = tok.int_val;
 			next();
-		}
+			}
 		expect(TOK_RBRACK);
 		if (member)
 			type_struct_member_mark_array(member, size, unsized);
@@ -1633,7 +1633,7 @@ StructInfo* parse_struct_body(Type* type, TypeSpec* spec)
 				continue;
 			}
 			break;
-		}
+			}
 		expect(TOK_SEMI);
 	}
 	expect(TOK_RBRACE);
@@ -1683,7 +1683,7 @@ static void validate_interface_block_layout(const TypeSpec* spec)
 			const char* ident = spec->layout_identifiers[i];
 			if (ident != kw_std140)
 				parse_error("uniform blocks only support std140 layout");
-		}
+			}
 		return;
 	}
 	if (is_buffer) {
@@ -1691,7 +1691,7 @@ static void validate_interface_block_layout(const TypeSpec* spec)
 			const char* ident = spec->layout_identifiers[i];
 			if (ident != kw_std430)
 				parse_error("storage blocks only support std430 layout");
-		}
+			}
 	}
 }
 
@@ -1723,7 +1723,7 @@ void interface_block_decl(const TypeSpec* spec, const char* instance_name)
 			inst->layout_location = member->layout_location;
 			if (member->has_array)
 				inst->arg0 = member->array_unsized ? -1 : member->array_len;
-		}
+			}
 	}
 	if (instance_name) {
 		IR_Cmd* inst = ir_emit(IR_BLOCK_DECL_INSTANCE);
@@ -1790,15 +1790,15 @@ void decl_array_suffix()
 		if (sym) {
 			symbol_mark_array(sym, element_type);
 			element_type = sym->type;
-		}
+			}
 
 		if (tok.kind == TOK_RBRACK) {
 			ir_emit(IR_DECL_ARRAY_UNSIZED);
-		} else {
+			} else {
 			ir_emit(IR_DECL_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_DECL_ARRAY_SIZE_END);
-		}
+			}
 		expect(TOK_RBRACK);
 		ir_emit(IR_DECL_ARRAY_END);
 	}
@@ -1814,14 +1814,14 @@ void func_param_array_suffix()
 		if (sym) {
 			symbol_mark_array(sym, element_type);
 			element_type = sym->type;
-		}
+			}
 		if (tok.kind == TOK_RBRACK) {
 			ir_emit(IR_FUNC_PARAM_ARRAY_UNSIZED);
-		} else {
+			} else {
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_BEGIN);
 			expr();
 			ir_emit(IR_FUNC_PARAM_ARRAY_SIZE_END);
-		}
+			}
 		expect(TOK_RBRACK);
 		ir_emit(IR_FUNC_PARAM_ARRAY_END);
 	}
@@ -1866,7 +1866,7 @@ void func_param_list()
 				continue;
 			}
 			break;
-		}
+			}
 	}
 	expect(TOK_RPAREN);
 	ir_emit(IR_FUNC_PARAMS_END);
@@ -1910,7 +1910,7 @@ void global_var_decl(TypeSpec spec, const char* first_name)
 			ir_emit(IR_DECL_INIT_BEGIN);
 			expr();
 			ir_emit(IR_DECL_INIT_END);
-		}
+			}
 	}
 	expect(TOK_SEMI);
 	ir_emit(IR_DECL_END);
@@ -1981,14 +1981,14 @@ void stmt_decl()
 		for (int i = 0; i < layout_count; ++i) {
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
 			layout->str0 = spec.layout_identifiers[i];
-		}
+			}
 		int assignment_count = spec.layout_assignments ? acount(spec.layout_assignments) : 0;
 		for (int i = 0; i < assignment_count; ++i) {
 			TypeLayoutAssignment* entry = &spec.layout_assignments[i];
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
 			layout->str0 = entry->identifier;
 			layout->arg0 = entry->value;
-		}
+			}
 		expect(TOK_SEMI);
 		ir_emit(IR_STAGE_LAYOUT_END);
 		return;
@@ -1998,7 +1998,7 @@ void stmt_decl()
 		if (tok.kind == TOK_IDENTIFIER) {
 			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 			next();
-		}
+			}
 		expect(TOK_SEMI);
 		interface_block_decl(&spec, instance_name);
 		return;
@@ -2027,12 +2027,12 @@ void stmt_decl()
 			ir_emit(IR_DECL_INIT_BEGIN);
 			expr();
 			ir_emit(IR_DECL_INIT_END);
-		}
+			}
 		if (tok.kind == TOK_COMMA) {
 			next();
 			ir_emit(IR_DECL_SEPARATOR);
 			continue;
-		}
+			}
 		break;
 	}
 	expect(TOK_SEMI);
@@ -2094,7 +2094,7 @@ void expr_call()
 			next();
 			expr();
 			argc++;
-		}
+			}
 		expect(TOK_RPAREN);
 	} else {
 		next(); // consume ')'
@@ -2113,7 +2113,7 @@ void expr_call()
 				ctor_type = type;
 				ctor_name = callee->str0;
 			}
-		}
+			}
 	}
 	IR_Cmd* inst = ir_emit(ctor_type ? IR_CONSTRUCT : IR_CALL);
 	inst->arg0 = argc;
@@ -2155,7 +2155,7 @@ int swizzle_set_from_char(char c)
 	case 'p':
 	case 'q':
 		return 2;
-	default:
+		default:
 		break;
 	}
 	return -1;
@@ -2534,20 +2534,20 @@ void stmt_switch()
 			expect(TOK_COLON);
 			last_case_index = acount(g_ir) - 1;
 			continue;
-		}
+			}
 		if (last_case_index < 0) {
 			parse_error("case label expected before statements in switch");
-		}
+			}
 		stmt();
 		if (last_case_index >= 0) {
 			g_ir[last_case_index].arg1 |= SWITCH_CASE_FLAG_HAS_BODY;
-		}
+			}
 	}
 	if (last_case_index >= 0) {
 		IR_Cmd* last_case = &g_ir[last_case_index];
 		if (!(last_case->arg1 & SWITCH_CASE_FLAG_HAS_BODY)) {
 			last_case->arg1 |= SWITCH_CASE_FLAG_FALLTHROUGH;
-		}
+			}
 	}
 	expect(TOK_RBRACE);
 	symbol_table_leave_scope();
@@ -2631,7 +2631,7 @@ void stmt()
 		break;
 	case TOK_EOF:
 		break;
-	default:
+		default:
 		stmt_expr();
 		break;
 	}
@@ -2649,14 +2649,14 @@ void top_level()
 		for (int i = 0; i < layout_count; ++i) {
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_IDENTIFIER);
 			layout->str0 = type_spec.layout_identifiers[i];
-		}
+			}
 		int assignment_count = type_spec.layout_assignments ? acount(type_spec.layout_assignments) : 0;
 		for (int i = 0; i < assignment_count; ++i) {
 			TypeLayoutAssignment* entry = &type_spec.layout_assignments[i];
 			IR_Cmd* layout = ir_emit(IR_STAGE_LAYOUT_VALUE);
 			layout->str0 = entry->identifier;
 			layout->arg0 = entry->value;
-		}
+			}
 		expect(TOK_SEMI);
 		ir_emit(IR_STAGE_LAYOUT_END);
 		return;
@@ -2666,7 +2666,7 @@ void top_level()
 		if (tok.kind == TOK_IDENTIFIER) {
 			instance_name = sintern_range(tok.lexeme, tok.lexeme + tok.len);
 			next();
-		}
+			}
 		expect(TOK_SEMI);
 		interface_block_decl(&type_spec, instance_name);
 		return;
@@ -2725,7 +2725,7 @@ void parse()
 		do { \
 			body \
 					TOK_SET(tok1, prec1, lexpr1, rexpr1); \
-		} while (0); \
+			} while (0); \
 		break;
 
 static int digit_value_for_base(char c, int base)
@@ -2758,15 +2758,15 @@ void lex_number()
 			base = 16;
 			use_manual_base = 1;
 			digits_start = start + 2;
-		} else if (next == 'b' || next == 'B') {
+			} else if (next == 'b' || next == 'B') {
 			base = 2;
 			use_manual_base = 1;
 			digits_start = start + 2;
-		} else if (next && next != '.' && next != 'e' && next != 'E') {
+			} else if (next && next != '.' && next != 'e' && next != 'E') {
 			base = 8;
 			use_manual_base = 1;
 			digits_start = start + 1;
-		}
+			}
 	}
 	if (use_manual_base) {
 		const char* p = digits_start;
@@ -2776,13 +2776,13 @@ void lex_number()
 				break;
 			int_val = int_val * (unsigned)base + (unsigned)digit;
 			++p;
-		}
+			}
 		number_end = p;
 		float_val = (double)int_val;
 		if (base == 8 && digits_start == start + 1 && number_end == digits_start) {
 			// Account for a standalone zero literal.
 			number_end = digits_start;
-		}
+			}
 	} else {
 		char* endptr = NULL;
 		float_val = strtod(start, &endptr);
@@ -2792,7 +2792,7 @@ void lex_number()
 				is_float = 1;
 				break;
 			}
-		}
+			}
 	}
 	suffix = number_end;
 	if (*suffix == 'f' || *suffix == 'F') {
@@ -2809,7 +2809,7 @@ void lex_number()
 				has_unsigned_suffix = 1;
 			}
 			++suffix;
-		}
+			}
 	}
 	tok.is_unsigned = !is_float && has_unsigned_suffix;
 	tok.lexeme = start;
@@ -2825,14 +2825,14 @@ void lex_number()
 		tok.lexpr = expr_int;
 		if (use_manual_base) {
 			tok.int_val = (int)int_val;
-		} else {
+			} else {
 			tok.int_val = 0;
 			for (const char* p = start; p < number_end; ++p) {
 				if (*p >= '0' && *p <= '9') {
 					tok.int_val = tok.int_val * 10 + (*p - '0');
 				}
 			}
-		}
+			}
 	}
 	if (*suffix) {
 		ch = (unsigned char)*suffix;
@@ -2902,7 +2902,7 @@ void next()
 		// two-char combos
 		TOK_CASE('<', LT, REL, error, lt, if (match_ch('<')) {
 				if (match_ch('='))
-				{
+					{
 					TOK_SET(LSHIFT_ASSIGN, ASSIGN, error, shl_assign);
 					break;
 				}
@@ -2912,7 +2912,7 @@ void next()
 				break; })
 		TOK_CASE('>', GT, REL, error, gt, if (match_ch('>')) {
 				if (match_ch('='))
-				{
+					{
 					TOK_SET(RSHIFT_ASSIGN, ASSIGN, error, shr_assign);
 					break;
 				}
@@ -2939,7 +2939,7 @@ void next()
 		TOK_CASE('^', CARET, BIT_XOR, error, bxor, if (match_ch('=')) {
 				TOK_SET(XOR_ASSIGN, ASSIGN, error, xor_assign);
 				break; })
-	default:
+		default:
 		break;
 	}
 
@@ -2964,7 +2964,7 @@ void next()
 			Tok kind;
 			void (*lexpr)();
 			int bool_value;
-		};
+			};
 		const struct KeywordEntry keywords[] = {
 			{ kw_if, TOK_IF, expr_error, -1 },
 			{ kw_else, TOK_ELSE, expr_error, -1 },
@@ -2980,7 +2980,7 @@ void next()
 			{ kw_default, TOK_DEFAULT, expr_error, -1 },
 			{ kw_true, TOK_BOOL, expr_bool, 1 },
 			{ kw_false, TOK_BOOL, expr_bool, 0 },
-		};
+			};
 		for (int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); ++i) {
 			if (tok.lexeme == keywords[i].lexeme) {
 				tok.kind = keywords[i].kind;
@@ -2990,7 +2990,7 @@ void next()
 				}
 				return;
 			}
-		}
+			}
 		return;
 	}
 
@@ -3166,7 +3166,7 @@ Type* type_system_declare_struct(const char* name)
 		if (existing->tag == T_STRUCT) {
 			type_struct_clear(existing);
 			return existing;
-		}
+			}
 		return existing;
 	}
 	Type type = { 0 };
@@ -3195,7 +3195,7 @@ void type_struct_clear(Type* type)
 				afree(member->array_dims);
 				member->array_dims = NULL;
 			}
-		}
+			}
 		aclear(info->members);
 	}
 	if (info->layout_identifiers)
@@ -3320,12 +3320,12 @@ void type_system_init_builtins()
 #define SAMPLER(name, base_tag, dim_value) \
 	{ \
 		name, \
-				{ .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+					{ .tag = T_SAMPLER, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
 	}
 #define IMAGE(name, base_tag, dim_value) \
 	{ \
 		name, \
-				{ .tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
+					{ .tag = T_IMAGE, .cols = 1, .rows = 1, .base = base_tag, .dim = dim_value, .array_len = 0 } \
 	}
 	const TypeInit builtins[] = {
 		{ "void", { .tag = T_VOID, .cols = 1, .rows = 1, .base = T_VOID, .array_len = 0 } },
@@ -3486,7 +3486,7 @@ void type_system_free()
 				free(info);
 			}
 			type->user = NULL;
-		}
+			}
 	}
 	map_free(ts->map);
 	ts->map = (Map){ 0 };
@@ -3511,7 +3511,7 @@ TypeTag type_base_type(const Type* type)
 	case T_MAT:
 	case T_ARRAY:
 		return (TypeTag)type->base;
-	default:
+		default:
 		return type->tag;
 	}
 }
@@ -3545,7 +3545,7 @@ int type_base_is_numeric(TypeTag tag)
 	case T_FLOAT:
 	case T_DOUBLE:
 		return 1;
-	default:
+		default:
 		return 0;
 	}
 }
@@ -3626,7 +3626,7 @@ const char* type_vector_name(TypeTag base, int cols)
 	case T_BOOL:
 		prefix = "bvec";
 		break;
-	default:
+		default:
 		return NULL;
 	}
 	char buf[16];
@@ -3669,7 +3669,7 @@ Type* type_get_scalar(TypeTag base)
 		return g_type_float;
 	case T_DOUBLE:
 		return g_type_double;
-	default:
+		default:
 		return NULL;
 	}
 }
@@ -3883,7 +3883,7 @@ static Type* builtin_apply_signature(const BuiltinSignature* signature, const Sy
 		if (signature->custom_result)
 			return signature->custom_result(sym, args, argc);
 		return NULL;
-	default:
+		default:
 		return NULL;
 	}
 }
@@ -3907,7 +3907,7 @@ static int builtin_arg_in_base_set(const Type* type, BuiltinBaseSet base, const 
 		return ref && type_base_type(type) == type_base_type(ref);
 	case BUILTIN_BASE_FLOAT_OR_BOOL:
 		return type_is_floating_point(type) || type_is_bool_like(type);
-	default:
+		default:
 		return 0;
 	}
 }
@@ -3949,7 +3949,7 @@ static int builtin_shape_matches(const Type* type, BuiltinShapeRule rule, const 
 		if (type_is_matrix(ref))
 			return type_is_matrix(type) && type->cols == ref->cols && type->rows == ref->rows;
 		return 0;
-	default:
+		default:
 		return 0;
 	}
 }
@@ -3975,14 +3975,14 @@ static void builtin_require_base(const Symbol* sym, const Type* arg, const Built
 	case BUILTIN_BASE_SAME_AS_REF:
 		if (ref) {
 			type_check_error("%s requires %s argument to match %s argument base type, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		} else {
+			} else {
 			type_check_error("%s requires %s argument to match %s argument base type", name, sig->role, ref_role);
-		}
+			}
 		break;
 	case BUILTIN_BASE_FLOAT_OR_BOOL:
 		type_check_error("%s requires floating-point or boolean %s argument, got %s", name, sig->role, type_display(arg));
 		break;
-	default:
+		default:
 		break;
 	}
 }
@@ -4008,31 +4008,31 @@ static void builtin_require_shape(const Symbol* sym, const Type* arg, const Buil
 	case BUILTIN_SHAPE_SQUARE_MATRIX:
 		if (arg && type_is_matrix(arg)) {
 			type_check_error("%s requires square matrix %s argument, got %s", name, sig->role, type_display(arg));
-		} else {
+			} else {
 			type_check_error("%s requires matrix %s argument, got %s", name, sig->role, type_display(arg));
-		}
+			}
 		break;
 	case BUILTIN_SHAPE_MATCH_REF:
 		if (ref && type_is_vector(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		} else if (ref && type_is_scalar(ref)) {
+			} else if (ref && type_is_scalar(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		} else if (ref && type_is_matrix(ref)) {
+			} else if (ref && type_is_matrix(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		} else {
+			} else {
 			type_check_error("%s requires %s argument to match %s argument shape", name, sig->role, ref_role);
-		}
+			}
 		break;
 	case BUILTIN_SHAPE_SCALAR_OR_MATCH:
 		if (ref && type_is_vector(ref)) {
 			type_check_error("%s requires %s argument scalar or %d components, got %s", name, sig->role, ref->cols, type_display(arg));
-		} else if (ref && type_is_matrix(ref)) {
+			} else if (ref && type_is_matrix(ref)) {
 			type_check_error("%s requires %s argument to match %s argument shape, got %s and %s", name, sig->role, ref_role, type_display(arg), type_display(ref));
-		} else {
+			} else {
 			type_check_error("%s requires scalar %s argument, got %s", name, sig->role, type_display(arg));
-		}
+			}
 		break;
-	default:
+		default:
 		break;
 	}
 }
@@ -4051,21 +4051,21 @@ static int builtin_check_args(const Symbol* sym, Type** args, int argc, const Bu
 			type_check_error("%s requires %s argument", name, sig->role);
 			all_ok = 0;
 			continue;
-		}
+			}
 		const Type* ref = NULL;
 		const char* ref_role = "referenced";
 		if (sig->ref_index >= 0 && sig->ref_index < argc) {
 			ref = args[sig->ref_index];
-		}
+			}
 		if (sig->ref_index >= 0 && sig->ref_index < sig_count) {
 			ref_role = sigs[sig->ref_index].role;
-		}
+			}
 		if (sig->base != BUILTIN_BASE_ANY) {
 			builtin_require_base(sym, arg, sig, ref, ref_role);
-		}
+			}
 		if (sig->shape != BUILTIN_SHAPE_ANY) {
 			builtin_require_shape(sym, arg, sig, ref, ref_role);
-		}
+			}
 	}
 	return all_ok;
 }
@@ -4253,7 +4253,7 @@ static int sampler_coord_components(const Type* sampler)
 	case TYPE_DIM_BUFFER:
 		components = 1;
 		break;
-	default:
+		default:
 		return 0;
 	}
 	if (sampler->dim & TYPE_DIM_FLAG_ARRAY)
@@ -4281,7 +4281,7 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 	case TYPE_DIM_UNKNOWN:
 		type_check_error("textureSize unsupported sampler type %s", type_display(sampler));
 		break;
-	default:
+		default:
 		expected_args = 2;
 		break;
 	}
@@ -4292,7 +4292,7 @@ static Type* builtin_result_texture_size(Type** args, int argc)
 		Type* lod = (argc > 1) ? args[1] : NULL;
 		if (!lod || !type_is_scalar(lod) || !type_is_integer(lod)) {
 			type_check_error("textureSize LOD must be integer scalar, got %s", lod ? type_display(lod) : "<null>");
-		}
+			}
 	}
 	int components = sampler_coord_components(sampler);
 	if (!components) {
@@ -4341,7 +4341,7 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 		expected_args = 3;
 		sample_index = 2;
 		break;
-	default:
+		default:
 		type_check_error("%s unsupported sampler type %s", func_name, type_display(sampler));
 		return builtin_result_texture(args, argc);
 	}
@@ -4349,7 +4349,7 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 		expected_args += 1;
 		if (base_dim == TYPE_DIM_BUFFER || base_dim == TYPE_DIM_2D_MS) {
 			type_check_error("%s does not support sampler type %s", func_name, type_display(sampler));
-		}
+			}
 	}
 	if (argc != expected_args) {
 		type_check_error("%s expects %d arguments but received %d", func_name, expected_args, argc);
@@ -4358,22 +4358,22 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 	if (coord_components <= 1) {
 		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
-		}
+			}
 	} else {
 		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
-		}
+			}
 	}
 	if (level_index >= 0) {
 		Type* level = args[level_index];
 		if (!level || !type_is_scalar(level) || !type_is_integer(level)) {
 			type_check_error("%s LOD must be integer scalar, got %s", func_name, level ? type_display(level) : "<null>");
-		}
+			}
 	} else if (sample_index >= 0) {
 		Type* sample = args[sample_index];
 		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample)) {
 			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
-		}
+			}
 	}
 	if (has_offset) {
 		Type* offset = args[expected_args - 1];
@@ -4381,11 +4381,11 @@ static Type* builtin_result_texel_fetch(Type** args, int argc, int has_offset)
 			if (!offset || !type_is_scalar(offset) || !type_is_integer(offset)) {
 				type_check_error("%s offset must be integer scalar, got %s", func_name, offset ? type_display(offset) : "<null>");
 			}
-		} else {
+			} else {
 			if (!offset || !type_is_vector(offset) || offset->cols != coord_components || !type_is_integer(offset)) {
 				type_check_error("%s offset must be ivec%d, got %s", func_name, coord_components, offset ? type_display(offset) : "<null>");
 			}
-		}
+			}
 	}
 	return builtin_result_texture(args, argc);
 }
@@ -4558,7 +4558,7 @@ static const char* image_atomic_name(BuiltinFuncKind kind)
 		return "imageAtomicExchange";
 	case BUILTIN_IMAGE_ATOMIC_COMP_SWAP:
 		return "imageAtomicCompSwap";
-	default:
+		default:
 		return "imageAtomic";
 	}
 }
@@ -4592,18 +4592,18 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 	if (coord_components <= 1) {
 		if (!coord || !type_is_scalar(coord) || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be integer scalar, got %s", func_name, coord ? type_display(coord) : "<null>");
-		}
+			}
 	} else {
 		if (!coord || !type_is_vector(coord) || coord->cols != coord_components || !type_is_integer(coord)) {
 			type_check_error("%s coordinate must be ivec%d, got %s", func_name, coord_components, coord ? type_display(coord) : "<null>");
-		}
+			}
 	}
 	int index = 2;
 	if (is_ms) {
 		Type* sample = (argc > index) ? args[index] : NULL;
 		if (!sample || !type_is_scalar(sample) || !type_is_integer(sample)) {
 			type_check_error("%s sample index must be integer scalar, got %s", func_name, sample ? type_display(sample) : "<null>");
-		}
+			}
 		index += 1;
 	}
 	Type* compare = NULL;
@@ -4612,7 +4612,7 @@ static Type* builtin_result_image_atomic(BuiltinFuncKind kind, Type** args, int 
 		if (!compare || !type_is_scalar(compare) || type_base_type(compare) != base) {
 			const char* expected = (base == T_UINT) ? "uint" : "int";
 			type_check_error("%s compare value must be %s scalar, got %s", func_name, expected, compare ? type_display(compare) : "<null>");
-		}
+			}
 		index += 1;
 	}
 	Type* value = (argc > index) ? args[index] : NULL;
@@ -4737,7 +4737,7 @@ Type* type_infer_builtin_call(const Symbol* sym, Type** args, int argc)
 	case BUILTIN_ANY:
 	case BUILTIN_ALL:
 		return builtin_result_any_all(args, argc);
-	default:
+		default:
 		break;
 	}
 	return NULL;
@@ -4846,7 +4846,7 @@ static int type_numeric_rank(TypeTag tag)
 		return 2;
 	case T_INT:
 		return 1;
-	default:
+		default:
 		return 0;
 	}
 }
@@ -5150,9 +5150,9 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 		case BR_EQ:
 		case BR_LOGICAL:
 			return type_get_scalar(T_BOOL);
-	default:
+		default:
 		return lhs ? lhs : rhs;
-		}
+			}
 	}
 	switch (br->kind) {
 	case BR_ASSIGN:
@@ -5194,11 +5194,11 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 				require_same_base(tok, lhs, rhs);
 				return lhs;
 			}
-		} else if (type_is_scalar(lhs)) {
+			} else if (type_is_scalar(lhs)) {
 			if (!type_is_scalar(rhs))
 				type_check_error("operator %s requires scalar shift amount", tok_name[tok]);
 			return lhs;
-		}
+			}
 		type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
 		return lhs ? lhs : rhs;
 	case BR_REL:
@@ -5213,11 +5213,11 @@ Type* type_check_binary(Tok tok, Type* lhs, Type* rhs)
 			same_vec_len_or_error(tok, lhs, rhs);
 			require_same_base(tok, lhs, rhs);
 			return type_get_vector(T_BOOL, lhs->cols);
-		}
+			}
 		if (type_is_scalar(lhs) && type_is_scalar(rhs)) {
 			require_same_base(tok, lhs, rhs);
 			return type_get_scalar(T_BOOL);
-		}
+			}
 		type_check_error("operator %s unsupported for %s and %s", tok_name[tok], type_display(lhs), type_display(rhs));
 	case BR_LOGICAL:
 		require_bool_scalar(tok, lhs, "left");
@@ -5252,7 +5252,7 @@ Type* type_select_result(Type* cond, Type* true_type, Type* false_type)
 				return type_get_vector(shared_base, aligned_true->cols);
 			if (type_is_matrix(aligned_true) && type_is_matrix(aligned_false))
 				return type_get_matrix(shared_base, aligned_true->cols, aligned_true->rows);
-		}
+			}
 	}
 	type_check_error("ternary branches must match types, got %s and %s", type_display(true_type), type_display(false_type));
 	return true_type;
@@ -5296,7 +5296,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
 				return 1;
 			}
-		}
+			}
 		int count = 0;
 		int consumed = 0;
 		while (count < needed) {
@@ -5315,7 +5315,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 			if (count > needed)
 				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
 			consumed++;
-		}
+			}
 		return consumed;
 	}
 	case T_MAT: {
@@ -5328,7 +5328,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 					type_constructor_error(target, owner, member, "cannot pass %s to constructor", type_display(arg));
 				return 1;
 			}
-		}
+			}
 		int count = 0;
 		int consumed = 0;
 		while (count < needed) {
@@ -5349,7 +5349,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 			if (count > needed)
 				type_constructor_error(target, owner, member, "expected %d components but received %d", needed, count);
 			consumed++;
-		}
+			}
 		return consumed;
 	}
 	case T_ARRAY: {
@@ -5362,11 +5362,11 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 			Type* arg0 = args[start];
 			if (arg0 && arg0 == target)
 				return 1;
-		}
+			}
 		int consumed = 0;
 		for (int i = 0; i < target->array_len; ++i) {
 			consumed += type_constructor_validate(element, args, argc, start + consumed, owner, member);
-		}
+			}
 		return consumed;
 	}
 	case T_STRUCT: {
@@ -5378,7 +5378,7 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 			Type* arg0 = args[start];
 			if (arg0 && arg0 == target)
 				return 1;
-		}
+			}
 		int consumed = 0;
 		int member_count = type_struct_member_count(target);
 		for (int i = 0; i < member_count; ++i) {
@@ -5389,10 +5389,10 @@ static int type_constructor_validate(Type* target, Type** args, int argc, int st
 			if (!field_type)
 				type_constructor_error(target, struct_name, field->name, "has unknown type");
 			consumed += type_constructor_validate(field_type, args, argc, start + consumed, struct_name, field->name);
-		}
+			}
 		return consumed;
 	}
-	default: {
+		default: {
 		if (!type_is_scalar(target))
 			type_constructor_error(target, owner, member, "unsupported target");
 		if (remaining <= 0)
@@ -5414,7 +5414,7 @@ void type_check_constructor(Type* target, Type** args, int argc)
 		if (!args[i]) {
 			has_unknown = 1;
 			break;
-		}
+			}
 	}
 	if (has_unknown)
 		return;
@@ -5516,7 +5516,7 @@ void type_check_ir()
 			apush(storage_stack, storage_flags);
 			apush(symbol_stack, sym);
 			break;
-		}
+			}
 		case IR_UNARY: {
 			Type* operand = type_stack_pop(stack, "unary expression");
 			unsigned operand_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
@@ -5537,7 +5537,7 @@ void type_check_ir()
 			apush(storage_stack, 0);
 			apush(symbol_stack, NULL);
 			break;
-		}
+			}
 		case IR_BINARY: {
 			Type* rhs = type_stack_pop(stack, "binary rhs");
 			if (acount(storage_stack))
@@ -5565,7 +5565,7 @@ void type_check_ir()
 			case TOK_RSHIFT_ASSIGN:
 				is_assignment = 1;
 				break;
-	default:
+		default:
 				break;
 			}
 			if (is_assignment) {
@@ -5590,7 +5590,7 @@ void type_check_ir()
 			apush(storage_stack, result_storage);
 			apush(symbol_stack, is_assignment ? lhs_symbol : NULL);
 			break;
-		}
+			}
 		case IR_CALL: {
 			Type** args = NULL;
 			for (int arg = 0; arg < inst->arg0; ++arg) {
@@ -5660,7 +5660,7 @@ void type_check_ir()
 			apush(storage_stack, 0);
 			apush(symbol_stack, NULL);
 			break;
-		}
+			}
 		case IR_CONSTRUCT: {
 			Type** args = NULL;
 			for (int arg = 0; arg < inst->arg0; ++arg) {
@@ -5695,7 +5695,7 @@ void type_check_ir()
 			apush(storage_stack, 0);
 			apush(symbol_stack, NULL);
 			break;
-		}
+			}
 		case IR_INDEX: {
 			Type* index = type_stack_pop(stack, "index expression");
 			if (acount(qualifier_stack))
@@ -5731,7 +5731,7 @@ void type_check_ir()
 			apush(storage_stack, base_storage);
 			apush(symbol_stack, base_symbol);
 			break;
-		}
+			}
 		case IR_SWIZZLE: {
 			Type* base = type_stack_pop(stack, "swizzle base");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
@@ -5759,7 +5759,7 @@ void type_check_ir()
 			apush(storage_stack, base_storage);
 			apush(symbol_stack, base_symbol);
 			break;
-		}
+			}
 		case IR_MEMBER: {
 			Type* base = type_stack_pop(stack, "member access");
 			unsigned base_qualifier = acount(qualifier_stack) ? apop(qualifier_stack) : 0;
@@ -5781,7 +5781,7 @@ void type_check_ir()
 			apush(storage_stack, base_storage);
 			apush(symbol_stack, base_symbol);
 			break;
-		}
+			}
 		case IR_SELECT: {
 			Type* false_type = type_stack_pop(stack, "ternary false branch");
 			if (acount(qualifier_stack))
@@ -5814,7 +5814,7 @@ void type_check_ir()
 			apush(storage_stack, 0);
 			apush(symbol_stack, NULL);
 			break;
-		}
+			}
 		case IR_DECL_TYPE:
 			current_decl_type = type_system_get(inst->str0);
 			inst->type = current_decl_type;
@@ -5869,7 +5869,7 @@ void type_check_ir()
 				type_check_error("switch selector must be integer scalar, got %s", type_display(selector));
 			}
 			break;
-		}
+			}
 		case IR_SWITCH_CASE: {
 			if (!acount(switch_stack)) {
 				type_check_error("switch case outside of switch");
@@ -5883,7 +5883,7 @@ void type_check_ir()
 			}
 			apush(ctx->cases, label);
 			break;
-		}
+			}
 		case IR_SWITCH_END: {
 			if (!acount(switch_stack)) {
 				type_check_error("mismatched switch end");
@@ -5921,7 +5921,7 @@ void type_check_ir()
 			afree(ctx->cases);
 			apop(switch_stack);
 			break;
-		}
+			}
 		case IR_STMT_EXPR:
 			if (acount(stack) > 0) {
 				type_stack_pop(stack, "expression result");
@@ -5953,7 +5953,7 @@ void type_check_ir()
 				type_check_error("if condition must be boolean scalar, got %s", type_display(cond));
 			}
 			break;
-		}
+			}
 		case IR_RETURN: {
 			Type* ret_type = acount(func_stack) ? func_stack[acount(func_stack) - 1] : NULL;
 			if (inst->arg0) {
@@ -5971,21 +5971,21 @@ void type_check_ir()
 				type_check_error("return statement missing value for function returning %s", type_display(ret_type));
 			}
 			break;
-		}
+			}
 		case IR_FUNC_BEGIN: {
 			Type* ret = type_system_get(inst->str0);
 			inst->type = ret;
 			apush(func_stack, ret);
 			break;
-		}
+			}
 		case IR_FUNC_PROTOTYPE_END:
 		case IR_FUNC_DEFINITION_END:
 			if (acount(func_stack) > 0)
 				apop(func_stack);
 			break;
-	default:
+		default:
 			break;
-		}
+			}
 	}
 	for (int i = 0; i < acount(switch_stack); ++i) {
 		afree(switch_stack[i].cases);
@@ -6054,6 +6054,7 @@ typedef struct SpirvFunctionInfo
 	const char* name;
 	Type* return_type;
 	dyna Type** param_types;
+	dyna Symbol** param_symbols;
 	int has_definition;
 	int ir_begin;
 	int ir_end;
@@ -6251,12 +6252,13 @@ enum SpirvCapabilityEnum
 
 enum SpirvStorageClass
 {
-	SpvStorageClassUniformConstant = 0,
-	SpvStorageClassInput = 1,
-	SpvStorageClassUniform = 2,
-	SpvStorageClassOutput = 3,
-	SpvStorageClassWorkgroup = 4,
-	SpvStorageClassStorageBuffer = 12,
+SpvStorageClassUniformConstant = 0,
+SpvStorageClassInput = 1,
+SpvStorageClassUniform = 2,
+SpvStorageClassOutput = 3,
+SpvStorageClassWorkgroup = 4,
+SpvStorageClassFunction = 7,
+SpvStorageClassStorageBuffer = 12,
 };
 
 enum SpirvDecoration
@@ -6412,7 +6414,7 @@ static SpirvValueKind spirv_value_kind_from_type(const Type* type)
 		case T_FLOAT:
 		case T_DOUBLE:
 		return SPIRV_VALUE_FLOAT;
-		default:
+			default:
 		return SPIRV_VALUE_NONE;
 	}
 }
@@ -6434,9 +6436,9 @@ static uint16_t spirv_binary_opcode_lookup(Tok tok, SpirvValueKind kind)
 			return entry->float_opcode;
 			case SPIRV_VALUE_BOOL:
 			return entry->bool_opcode;
-			default:
+				default:
 			return 0;
-		}
+			}
 	}
 	return 0;
 }
@@ -6463,10 +6465,10 @@ static uint16_t spirv_unary_opcode_lookup(Tok tok, SpirvValueKind kind)
 			case SPIRV_VALUE_BOOL:
 			opcode = entry->bool_opcode;
 			break;
-			default:
+				default:
 			opcode = 0;
 			break;
-		}
+			}
 		if (!opcode && entry->copy_opcode)
 		opcode = entry->copy_opcode;
 		return opcode;
@@ -6491,9 +6493,9 @@ static uint16_t spirv_comparison_opcode_lookup(Tok tok, SpirvValueKind kind)
 			return entry->float_opcode;
 			case SPIRV_VALUE_BOOL:
 			return entry->bool_opcode;
-			default:
+				default:
 			return 0;
-		}
+			}
 	}
 	return 0;
 }
@@ -6530,7 +6532,7 @@ static int spirv_ir_inst_has_value(const IR_Cmd* inst)
 	case IR_SWIZZLE:
 	case IR_SELECT:
 		return 1;
-	default:
+		default:
 		return 0;
 	}
 }
@@ -6562,7 +6564,7 @@ static void spirv_value_table_build(SpirvValueTable* table, SpirvBuilder* builde
 				entry.result_id = spirv_const_bool(cache, const_cache, inst->arg0 != 0);
 				break;
 			case IR_PUSH_INT:
-				{
+					{
 					uint32_t literal = (uint32_t)inst->arg0;
 					entry.result_id = spirv_constant_uint(const_cache, entry.type_id, literal);
 					break;
@@ -6570,11 +6572,11 @@ static void spirv_value_table_build(SpirvValueTable* table, SpirvBuilder* builde
 			case IR_PUSH_FLOAT:
 				entry.result_id = spirv_const_float32(cache, const_cache, (float)inst->float_val);
 				break;
-			default:
+				default:
 				entry.result_id = spirv_alloc_id(builder);
 				break;
 			}
-		}
+			}
 		apush(table->entries, entry);
 	}
 }
@@ -6664,13 +6666,13 @@ static void spirv_emit_string(SpirvBuilder* b, const char* text)
 		{
 			spirv_inst_append(b, word);
 			break;
-		}
+			}
 		if (shift == 32)
 		{
 			spirv_inst_append(b, word);
 			word = 0;
 			shift = 0;
-		}
+			}
 	}
 }
 
@@ -6784,7 +6786,7 @@ static uint32_t spirv_return_literal_constant(SpirvTypeCache* cache, SpirvConsta
 		{
 			uint32_t type_id = spirv_type_cache_get(cache, (Type*)expected_type);
 			return spirv_constant_uint(const_cache, type_id, (uint32_t)inst->arg0);
-		}
+			}
 		return 0u;
 	}
 	case IR_PUSH_FLOAT:
@@ -6795,7 +6797,7 @@ static uint32_t spirv_return_literal_constant(SpirvTypeCache* cache, SpirvConsta
 			return 0u;
 		return spirv_const_float32(cache, const_cache, (float)inst->float_val);
 	}
-	default:
+		default:
 		return 0u;
 	}
 }
@@ -6854,11 +6856,25 @@ typedef struct SpirvControlState
 	SpirvStubIf if_state;
 	SpirvStubLoop loop_state;
 	SpirvStubSwitch switch_state;
-	} u;
+} u;
 } SpirvControlState;
 
+typedef struct SpirvExprValue
+	{
+	Type* type;
+	uint32_t id;
+	uint32_t type_id;
+	uint32_t pointer_id;
+	uint32_t pointer_type_id;
+	unsigned qualifier_flags;
+	unsigned storage_flags;
+	Symbol* symbol;
+	int ir_index;
+	int is_pointer;
+} SpirvExprValue;
+
 typedef struct SpirvEmitContext
-{
+	{
 	SpirvBuilder* builder;
 	SpirvTypeCache* type_cache;
 	SpirvConstantCache* const_cache;
@@ -6870,6 +6886,8 @@ typedef struct SpirvEmitContext
 	uint32_t return_type_id;
 	uint32_t return_placeholder_id;
 	int has_return;
+	dyna SpirvExprValue* value_stack;
+	Symbol* current_decl_symbol;
 } SpirvEmitContext;
 
 typedef struct SpirvControlFlowResult
@@ -6877,6 +6895,115 @@ typedef struct SpirvControlFlowResult
 	int terminated;
 	int has_return;
 } SpirvControlFlowResult;
+
+static inline void spirv_value_stack_push(SpirvEmitContext* ctx, SpirvExprValue value)
+{
+	if (!ctx)
+		return;
+	apush(ctx->value_stack, value);
+}
+
+static inline SpirvExprValue spirv_value_stack_pop(SpirvEmitContext* ctx)
+{
+	if (!ctx || !acount(ctx->value_stack))
+		return (SpirvExprValue){ 0 };
+	SpirvExprValue value = ctx->value_stack[acount(ctx->value_stack) - 1];
+	apop(ctx->value_stack);
+	return value;
+}
+
+static uint32_t spirv_type_pointer(SpirvTypeCache* cache, uint32_t value_type_id, uint32_t storage_class);
+static uint32_t spirv_symbol_storage_class(const Symbol* sym);
+
+static SpirvExprValue spirv_make_symbol_pointer(SpirvEmitContext* ctx, Symbol* sym)
+{
+	SpirvExprValue value = (SpirvExprValue){ 0 };
+	if (!sym)
+		return value;
+	value.symbol = sym;
+	value.type = sym->type;
+	value.qualifier_flags = sym->qualifier_flags;
+	value.storage_flags = sym->storage_flags;
+	value.pointer_id = sym->spirv_result_id;
+	value.pointer_type_id = sym->spirv_pointer_type_id;
+	value.is_pointer = 1;
+	if (ctx && ctx->type_cache && value.type && !value.type_id)
+	{
+		uint32_t type_id = sym->spirv_type_id ? sym->spirv_type_id : spirv_type_cache_get(ctx->type_cache, value.type);
+		value.type_id = type_id;
+		if (!value.pointer_type_id && type_id)
+		{
+			uint32_t storage_class = (sym->scope_depth > 0) ? SpvStorageClassFunction : spirv_symbol_storage_class(sym);
+			value.pointer_type_id = spirv_type_pointer(ctx->type_cache, type_id, storage_class);
+			}
+	}
+	else
+	{
+		value.type_id = sym->spirv_type_id;
+	}
+	return value;
+}
+
+static SpirvExprValue spirv_value_as_rvalue(SpirvEmitContext* ctx, SpirvExprValue value)
+{
+	if (!ctx)
+		return value;
+	if (!value.is_pointer)
+	{
+		if (!value.id && ctx->values)
+		{
+			uint32_t preset = spirv_value_table_result_id(ctx->values, value.ir_index);
+			if (preset)
+				value.id = preset;
+			}
+		return value;
+	}
+	if (!value.pointer_id)
+		return value;
+	if (!value.type_id && ctx->type_cache)
+	{
+		if (value.type)
+			value.type_id = spirv_type_cache_get(ctx->type_cache, value.type);
+		else if (value.symbol && value.symbol->type)
+		{
+			value.type = value.symbol->type;
+			value.type_id = spirv_type_cache_get(ctx->type_cache, value.type);
+			}
+	}
+	if (!value.type_id)
+		return value;
+	uint32_t result_id = 0u;
+	if (ctx->values)
+		result_id = spirv_value_table_result_id(ctx->values, value.ir_index);
+	if (!result_id)
+		result_id = spirv_alloc_id(ctx->builder);
+	int inst = spirv_inst_start(ctx->builder, SpvOpLoad);
+	spirv_inst_append(ctx->builder, value.type_id);
+	spirv_inst_append(ctx->builder, result_id);
+	spirv_inst_append(ctx->builder, value.pointer_id);
+	spirv_inst_finalize(ctx->builder, inst);
+	value.id = result_id;
+	value.is_pointer = 0;
+	return value;
+}
+
+static void spirv_emit_store_value(SpirvEmitContext* ctx, const SpirvExprValue* target, const SpirvExprValue* source)
+{
+	if (!ctx || !target || !source)
+		return;
+	if (!target->is_pointer || !target->pointer_id)
+		return;
+	if (!source->id)
+		return;
+	unsigned qualifiers = target->qualifier_flags;
+	unsigned storage = target->storage_flags;
+	if ((qualifiers & SYM_QUAL_CONST) || ((storage & SYM_STORAGE_IN) && !(storage & SYM_STORAGE_OUT)))
+		return;
+	int inst = spirv_inst_start(ctx->builder, SpvOpStore);
+	spirv_inst_append(ctx->builder, target->pointer_id);
+	spirv_inst_append(ctx->builder, source->id);
+	spirv_inst_finalize(ctx->builder, inst);
+}
 
 static uint32_t spirv_stub_return_placeholder(SpirvEmitContext* ctx)
 {
@@ -6898,7 +7025,7 @@ static uint32_t spirv_stub_return_placeholder(SpirvEmitContext* ctx)
 static void spirv_stub_start_block(SpirvEmitContext* ctx, uint32_t label)
 {
 	if (!ctx)
-	return;
+		return;
 	if (ctx->current_label == label)
 	{
 		ctx->current_terminated = 0;
@@ -6912,7 +7039,7 @@ static void spirv_stub_start_block(SpirvEmitContext* ctx, uint32_t label)
 static void spirv_stub_branch(SpirvEmitContext* ctx, uint32_t target)
 {
 	if (!ctx || ctx->current_terminated)
-	return;
+		return;
 	SPIRV_EMIT1(ctx->builder, SpvOpBranch, target);
 	ctx->current_terminated = 1;
 }
@@ -6920,7 +7047,7 @@ static void spirv_stub_branch(SpirvEmitContext* ctx, uint32_t target)
 static void spirv_stub_branch_conditional(SpirvEmitContext* ctx, uint32_t cond_id, uint32_t true_target, uint32_t false_target)
 {
 	if (!ctx || ctx->current_terminated)
-	return;
+		return;
 	int inst = spirv_inst_start(ctx->builder, SpvOpBranchConditional);
 	spirv_inst_append(ctx->builder, cond_id);
 	spirv_inst_append(ctx->builder, true_target);
@@ -6951,9 +7078,9 @@ static int spirv_stub_if_has_else(const SpirvFunctionInfo* info, int start_index
 			if (!depth)
 			return 1;
 			break;
-	default:
+		default:
 			break;
-		}
+			}
 	}
 	return 0;
 }
@@ -6961,7 +7088,7 @@ static int spirv_stub_if_has_else(const SpirvFunctionInfo* info, int start_index
 static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int start_index, SpirvBuilder* builder, SpirvStubSwitch* sw)
 {
 	if (!info || !sw)
-	return;
+		return;
 	int depth = 0;
 	for (int idx = start_index + 1; idx < info->ir_end; ++idx)
 	{
@@ -6990,9 +7117,9 @@ static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int s
 				sw->default_label = entry.label;
 			}
 			break;
-	default:
+		default:
 			break;
-		}
+			}
 	}
 	if (!sw->default_label)
 	sw->default_label = sw->merge_label;
@@ -7000,24 +7127,228 @@ static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int s
 
 static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label, Type* return_type, uint32_t return_type_id, SpirvValueTable* value_table)
 {
-if (!info)
-return (SpirvControlFlowResult){ 0 };
-if (info->ir_begin < 0 || info->ir_end < 0)
-return (SpirvControlFlowResult){ 0 };
-SpirvEmitContext ctx = { 0 };
-ctx.builder = builder;
-ctx.type_cache = cache;
-ctx.const_cache = const_cache;
-ctx.current_label = entry_label;
-ctx.current_terminated = 0;
-ctx.values = value_table;
-ctx.return_type = return_type ? return_type : g_type_void;
-ctx.return_type_id = return_type_id;
-for (int i = info->ir_begin; i < info->ir_end; ++i)
-{
+	if (!info)
+		return (SpirvControlFlowResult){ 0 };
+	if (info->ir_begin < 0 || info->ir_end < 0)
+		return (SpirvControlFlowResult){ 0 };
+	SpirvEmitContext ctx = (SpirvEmitContext){ 0 };
+	ctx.builder = builder;
+	ctx.type_cache = cache;
+	ctx.const_cache = const_cache;
+	ctx.current_label = entry_label;
+	ctx.current_terminated = 0;
+	ctx.values = value_table;
+	ctx.return_type = return_type ? return_type : g_type_void;
+	ctx.return_type_id = return_type_id;
+	for (int i = info->ir_begin; i < info->ir_end; ++i)
+	{
 		IR_Cmd* inst = &g_ir[i];
 		switch (inst->op)
 		{
+		case IR_DECL_BEGIN:
+			{
+				ctx.current_decl_symbol = NULL;
+				break;
+			}
+		case IR_DECL_VAR:
+			{
+				ctx.current_decl_symbol = NULL;
+				if (inst->str0)
+					{
+					Symbol* sym = symbol_table_find(inst->str0);
+					if (sym && sym->kind == SYM_VAR && sym->scope_depth > 0)
+					{
+						Type* value_type = sym->type ? sym->type : g_type_void;
+						uint32_t value_type_id = sym->spirv_type_id;
+						if (!value_type_id && cache)
+						value_type_id = spirv_type_cache_get(cache, value_type);
+						uint32_t pointer_type_id = sym->spirv_pointer_type_id;
+						if (!pointer_type_id && value_type_id && cache)
+						pointer_type_id = spirv_type_pointer(cache, value_type_id, SpvStorageClassFunction);
+						if (!sym->spirv_result_id && pointer_type_id)
+						{
+							uint32_t var_id = spirv_alloc_id(builder);
+							int var_inst = spirv_inst_start(builder, SpvOpVariable);
+							spirv_inst_append(builder, pointer_type_id);
+							spirv_inst_append(builder, var_id);
+							spirv_inst_append(builder, SpvStorageClassFunction);
+							spirv_inst_finalize(builder, var_inst);
+							sym->spirv_result_id = var_id;
+							sym->spirv_type_id = value_type_id;
+							sym->spirv_pointer_type_id = pointer_type_id;
+						}
+						ctx.current_decl_symbol = sym;
+					}
+				}
+				break;
+			}
+		case IR_DECL_SEPARATOR:
+			{
+				ctx.current_decl_symbol = NULL;
+				break;
+			}
+		case IR_DECL_END:
+			{
+				ctx.current_decl_symbol = NULL;
+				break;
+			}
+		case IR_DECL_INIT_END:
+			{
+				SpirvExprValue value = spirv_value_stack_pop(&ctx);
+				if (value.id || value.is_pointer)
+					{
+					value = spirv_value_as_rvalue(&ctx, value);
+					SpirvExprValue target = spirv_make_symbol_pointer(&ctx, ctx.current_decl_symbol);
+					if (target.pointer_id)
+					spirv_emit_store_value(&ctx, &target, &value);
+				}
+				ctx.current_decl_symbol = NULL;
+				break;
+			}
+		case IR_PUSH_INT:
+		case IR_PUSH_FLOAT:
+		case IR_PUSH_BOOL:
+			{
+				SpirvExprValue value = { 0 };
+				value.type = inst->type;
+				value.type_id = spirv_value_table_type_id(value_table, i);
+				value.id = spirv_value_table_result_id(value_table, i);
+				value.ir_index = i;
+				value.qualifier_flags = inst->qualifier_flags;
+				value.storage_flags = inst->storage_flags;
+				spirv_value_stack_push(&ctx, value);
+				break;
+			}
+		case IR_PUSH_IDENT:
+			{
+				SpirvExprValue value = { 0 };
+				value.ir_index = i;
+				value.type = inst->type;
+				value.qualifier_flags = inst->qualifier_flags;
+				value.storage_flags = inst->storage_flags;
+				if (inst->str0)
+				value.symbol = symbol_table_find(inst->str0);
+				if (value.symbol && value.symbol->kind == SYM_FUNC)
+					{
+					value.id = value.symbol->spirv_result_id;
+					value.type_id = value.symbol->spirv_type_id;
+				}
+				else if (value.symbol && value.symbol->kind == SYM_PARAM)
+					{
+					value.id = value.symbol->spirv_result_id;
+					value.type_id = value.symbol->spirv_type_id ? value.symbol->spirv_type_id : spirv_value_table_type_id(value_table, i);
+				}
+				else if (value.symbol)
+					{
+					value = spirv_make_symbol_pointer(&ctx, value.symbol);
+					value.ir_index = i;
+					value.type = value.type ? value.type : inst->type;
+					if (!value.type_id && value.type && cache)
+					value.type_id = spirv_type_cache_get(cache, value.type);
+					value.qualifier_flags = inst->qualifier_flags;
+					value.storage_flags = inst->storage_flags;
+					if (!inst->is_lvalue)
+					{
+						value = spirv_value_as_rvalue(&ctx, value);
+					}
+					else
+					{
+						value.is_pointer = 1;
+					}
+				}
+				else
+					{
+					value.id = spirv_value_table_result_id(value_table, i);
+					value.type_id = spirv_value_table_type_id(value_table, i);
+				}
+				spirv_value_stack_push(&ctx, value);
+				break;
+			}
+		case IR_CALL:
+			{
+				SpirvExprValue callee = spirv_value_stack_pop(&ctx);
+				dyna SpirvExprValue* args = NULL;
+				for (int arg = 0; arg < inst->arg0; ++arg)
+					{
+					SpirvExprValue value = spirv_value_stack_pop(&ctx);
+					value = spirv_value_as_rvalue(&ctx, value);
+					apush(args, value);
+				}
+				uint32_t callee_id = callee.id;
+				if (!callee_id && callee.symbol)
+				callee_id = callee.symbol->spirv_result_id;
+				if (!callee_id)
+					{
+					afree(args);
+					break;
+			}
+		uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+		if (!result_type_id && inst->type && cache)
+		result_type_id = spirv_type_cache_get(cache, inst->type);
+		uint32_t result_id = spirv_value_table_result_id(value_table, i);
+		if (!result_id)
+		result_id = spirv_alloc_id(builder);
+		int call_inst = spirv_inst_start(builder, SpvOpFunctionCall);
+		spirv_inst_append(builder, result_type_id);
+		spirv_inst_append(builder, result_id);
+		spirv_inst_append(builder, callee_id);
+		for (int arg = acount(args) - 1; arg >= 0; --arg)
+		spirv_inst_append(builder, args[arg].id);
+		spirv_inst_finalize(builder, call_inst);
+		SpirvExprValue result = { 0 };
+		result.type = inst->type;
+		result.type_id = result_type_id;
+		result.id = result_id;
+		result.ir_index = i;
+		spirv_value_stack_push(&ctx, result);
+		afree(args);
+		break;
+			}
+		case IR_BINARY:
+			{
+				int is_assignment = 0;
+				switch (inst->tok)
+					{
+		case TOK_ASSIGN:
+			is_assignment = 1;
+			break;
+			default:
+			break;
+			}
+		if (!is_assignment)
+		break;
+		SpirvExprValue rhs = spirv_value_stack_pop(&ctx);
+		SpirvExprValue lhs = spirv_value_stack_pop(&ctx);
+		rhs = spirv_value_as_rvalue(&ctx, rhs);
+		SpirvExprValue target = lhs.is_pointer ? lhs : spirv_make_symbol_pointer(&ctx, lhs.symbol);
+		if (target.pointer_id)
+		spirv_emit_store_value(&ctx, &target, &rhs);
+		uint32_t result_id = spirv_value_table_result_id(value_table, i);
+		if (result_id && rhs.id && result_id != rhs.id)
+		{
+			uint32_t result_type = rhs.type_id ? rhs.type_id : spirv_value_table_type_id(value_table, rhs.ir_index);
+			int copy_inst = spirv_inst_start(builder, SpvOpCopyObject);
+			spirv_inst_append(builder, result_type);
+			spirv_inst_append(builder, result_id);
+			spirv_inst_append(builder, rhs.id);
+			spirv_inst_finalize(builder, copy_inst);
+			rhs.id = result_id;
+			}
+		rhs.ir_index = i;
+		rhs.symbol = lhs.symbol;
+		rhs.qualifier_flags = lhs.qualifier_flags;
+		rhs.storage_flags = lhs.storage_flags;
+		rhs.type = inst->type ? inst->type : rhs.type;
+		if (!rhs.type_id && cache && rhs.type)
+		rhs.type_id = spirv_type_cache_get(cache, rhs.type);
+		spirv_value_stack_push(&ctx, rhs);
+		break;
+			}
+		case IR_STMT_EXPR:
+			{
+				spirv_value_stack_pop(&ctx);
+				break;
+			}
 		case IR_IF_BEGIN:
 			{
 				SpirvControlState state = { 0 };
@@ -7039,7 +7370,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 				break;
 				SpirvStubIf* stub = &state->u.if_state;
 				if (!stub->selection_emitted)
-				{
+					{
 					int has_else = spirv_stub_if_has_else(info, i);
 					stub->has_else = has_else;
 					stub->else_label = has_else ? spirv_alloc_id(builder) : stub->merge_label;
@@ -7275,7 +7606,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 				spirv_inst_append(builder, selector_id);
 				spirv_inst_append(builder, sw->default_label);
 				for (int c = 0; c < acount(sw->cases); ++c)
-				{
+					{
 					SpirvStubSwitchCase* entry = &sw->cases[c];
 					if (entry->flags & SWITCH_CASE_FLAG_DEFAULT)
 					continue;
@@ -7301,7 +7632,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 				spirv_stub_branch(&ctx, sw->merge_label);
 				spirv_stub_start_block(&ctx, entry->label);
 				if (!(entry->flags & SWITCH_CASE_FLAG_HAS_BODY))
-				{
+					{
 					uint32_t target = sw->merge_label;
 					if ((entry->flags & SWITCH_CASE_FLAG_FALLTHROUGH) && (sw->case_index + 1) < acount(sw->cases))
 					{
@@ -7327,37 +7658,39 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 				afree(sw->cases);
 				apop(ctx.stack);
 				break;
-		}
+			}
 		case IR_RETURN:
-		{
-			uint32_t value_id = 0u;
-			int has_value = inst->arg0;
-			if (has_value && ctx.return_type && ctx.return_type != g_type_void)
 			{
-				const IR_Cmd* value_inst = (i > info->ir_begin) ? &g_ir[i - 1] : NULL;
-				value_id = spirv_return_literal_constant(cache, const_cache, ctx.return_type, value_inst);
-				if (!value_id)
-					value_id = spirv_stub_return_placeholder(&ctx);
+				uint32_t value_id = 0u;
+				int has_value = inst->arg0;
+				if (has_value && ctx.return_type && ctx.return_type != g_type_void)
+					{
+					SpirvExprValue value = spirv_value_stack_pop(&ctx);
+					value = spirv_value_as_rvalue(&ctx, value);
+					value_id = value.id;
+				}
+				if (value_id && ctx.return_type && ctx.return_type != g_type_void)
+					{
+					int inst_return = spirv_inst_start(ctx.builder, SpvOpReturnValue);
+					spirv_inst_append(ctx.builder, value_id);
+					spirv_inst_finalize(ctx.builder, inst_return);
+				}
+				else if (ctx.return_type && ctx.return_type != g_type_void)
+					{
+					uint32_t placeholder = spirv_stub_return_placeholder(&ctx);
+					int inst_return = spirv_inst_start(ctx.builder, SpvOpReturnValue);
+					spirv_inst_append(ctx.builder, placeholder);
+					spirv_inst_finalize(ctx.builder, inst_return);
+				}
+				else
+					{
+					int inst_return = spirv_inst_start(ctx.builder, SpvOpReturn);
+					spirv_inst_finalize(ctx.builder, inst_return);
+				}
+				ctx.current_terminated = 1;
+				ctx.has_return = 1;
+				break;
 			}
-			else if (ctx.return_type && ctx.return_type != g_type_void)
-			{
-				value_id = spirv_stub_return_placeholder(&ctx);
-			}
-			if (value_id && ctx.return_type && ctx.return_type != g_type_void)
-			{
-				int inst_return = spirv_inst_start(ctx.builder, SpvOpReturnValue);
-				spirv_inst_append(ctx.builder, value_id);
-				spirv_inst_finalize(ctx.builder, inst_return);
-			}
-			else
-			{
-				int inst_return = spirv_inst_start(ctx.builder, SpvOpReturn);
-				spirv_inst_finalize(ctx.builder, inst_return);
-			}
-			ctx.current_terminated = 1;
-			ctx.has_return = 1;
-			break;
-		}
 		case IR_BREAK:
 		{
 			uint32_t target = 0u;
@@ -7365,12 +7698,12 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 			{
 				SpirvControlState* state = &ctx.stack[idx];
 				if (state->kind == SPIRV_CONTROL_LOOP)
-				{
+					{
 					target = state->u.loop_state.merge_label;
 					break;
 				}
 				if (state->kind == SPIRV_CONTROL_SWITCH)
-				{
+					{
 					target = state->u.switch_state.merge_label;
 					break;
 				}
@@ -7378,7 +7711,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 			if (target)
 				spirv_stub_branch(&ctx, target);
 			break;
-		}
+			}
 		case IR_CONTINUE:
 		{
 			uint32_t target = 0u;
@@ -7386,7 +7719,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 			{
 				SpirvControlState* state = &ctx.stack[idx];
 				if (state->kind == SPIRV_CONTROL_LOOP)
-				{
+					{
 					target = state->u.loop_state.continue_label;
 					break;
 				}
@@ -7394,7 +7727,7 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 			if (target)
 				spirv_stub_branch(&ctx, target);
 			break;
-		}
+			}
 		case IR_DISCARD:
 		{
 			if (!ctx.current_terminated)
@@ -7404,15 +7737,16 @@ for (int i = info->ir_begin; i < info->ir_end; ++i)
 				ctx.current_terminated = 1;
 			}
 			break;
-		}
-	default:
+			}
+		default:
 			break;
-		}
+			}
 	}
 	SpirvControlFlowResult result = (SpirvControlFlowResult){ 0 };
 	result.terminated = ctx.current_terminated;
 	result.has_return = ctx.has_return;
 	afree(ctx.stack);
+	afree(ctx.value_stack);
 	return result;
 }
 
@@ -7561,10 +7895,10 @@ static void spirv_image_operands(const Type* type, uint32_t* out_dim, uint32_t* 
 			dim = SpvDim2D;
 			ms = 1u;
 			break;
-	default:
+		default:
 			dim = SpvDim2D;
 			break;
-		}
+			}
 	}
 	if (out_dim)
 	*out_dim = dim;
@@ -7596,7 +7930,7 @@ static uint32_t spirv_type_struct(SpirvTypeCache* cache, const Type* type)
 			Type* member_type = member->type ? member->type : member->declared_type;
 			uint32_t member_id = spirv_type_cache_get(cache, member_type);
 			spirv_inst_append(cache->builder, member_id);
-		}
+			}
 	}
 	spirv_inst_finalize(cache->builder, inst);
 	return id;
@@ -7744,7 +8078,7 @@ static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type)
 		return spirv_type_image(cache, type, 2u);
 	case T_ARRAY:
 		return spirv_type_array(cache, type);
-	default:
+		default:
 		return spirv_type_cache_get(cache, g_type_void);
 }
 }
@@ -7773,7 +8107,7 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 			apush(funcs, info);
 			apush(stack, acount(funcs) - 1);
 			break;
-		}
+			}
 		case IR_FUNC_PROTOTYPE_END:
 		{
 			if (acount(stack))
@@ -7781,7 +8115,7 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 				apop(stack);
 			}
 			break;
-		}
+			}
 		case IR_FUNC_DEFINITION_BEGIN:
 		{
 			if (acount(stack))
@@ -7792,7 +8126,7 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 				info->ir_begin = i + 1;
 			}
 			break;
-		}
+			}
 		case IR_FUNC_DEFINITION_END:
 		{
 			if (acount(stack))
@@ -7802,24 +8136,36 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 				apop(stack);
 			}
 			break;
-		}
+			}
 		case IR_FUNC_PARAM_TYPE:
 		{
-			if (acount(stack))
-			{
-				int idx = stack[acount(stack) - 1];
-				Type* param_type = inst->type;
-				if (!param_type && inst->str0)
-					param_type = type_system_get(inst->str0);
-				if (!param_type)
-					param_type = g_type_void;
-				apush(funcs[idx].param_types, param_type);
+		if (acount(stack))
+		{
+		int idx = stack[acount(stack) - 1];
+		Type* param_type = inst->type;
+		if (!param_type && inst->str0)
+		param_type = type_system_get(inst->str0);
+		if (!param_type)
+		param_type = g_type_void;
+		apush(funcs[idx].param_types, param_type);
 			}
+		break;
+			}
+		case IR_FUNC_PARAM_NAME:
+		{
+		if (acount(stack))
+		{
+		int idx = stack[acount(stack) - 1];
+		Symbol* sym = NULL;
+		if (inst->str0)
+		sym = symbol_table_find(inst->str0);
+		apush(funcs[idx].param_symbols, sym);
+			}
+		break;
+			}
+			default:
 			break;
-		}
-	default:
-			break;
-		}
+			}
 	}
 	afree(stack);
 	*out_funcs = funcs;
@@ -7828,9 +8174,9 @@ static void spirv_collect_functions(SpirvFunctionInfo** out_funcs)
 static void spirv_collect_interface_symbols(Symbol*** out_symbols)
 {
 	dyna Symbol** symbols = NULL;
-for (int i = 0; i < acount(st->symbols); ++i)
+	for (int i = 0; i < acount(st->symbols); ++i)
 	{
-		Symbol* sym = &st->symbols[i];
+			Symbol* sym = &st->symbols[i];
 		if (sym->kind != SYM_VAR)
 			continue;
 		if (sym->scope_depth != 0)
@@ -7843,7 +8189,7 @@ for (int i = 0; i < acount(st->symbols); ++i)
 			continue;
 		apush(symbols, sym);
 }
-*out_symbols = symbols;
+	*out_symbols = symbols;
 }
 
 static void spirv_collect_resource_symbols(Symbol*** out_symbols)
@@ -7851,7 +8197,7 @@ static void spirv_collect_resource_symbols(Symbol*** out_symbols)
 	dyna Symbol** symbols = NULL;
 	for (int i = 0; i < acount(st->symbols); ++i)
 	{
-	Symbol* sym = &st->symbols[i];
+		Symbol* sym = &st->symbols[i];
 		if (sym->scope_depth != 0)
 			continue;
 		if (!(sym->storage_flags & (SYM_STORAGE_UNIFORM | SYM_STORAGE_BUFFER | SYM_STORAGE_SHARED)))
@@ -7883,20 +8229,20 @@ static void spirv_collect_stage_layout(SpirvStageLayout* layout)
 			layout->local_size[0] = value;
 			layout->has_local_size = 1;
 			continue;
-		}
+			}
 		if (inst->str0 == local_size_y)
 		{
 			uint32_t value = inst->arg0 > 0 ? (uint32_t)inst->arg0 : 1u;
 			layout->local_size[1] = value;
 			layout->has_local_size = 1;
 			continue;
-		}
+			}
 		if (inst->str0 == local_size_z)
 		{
 			uint32_t value = inst->arg0 > 0 ? (uint32_t)inst->arg0 : 1u;
 			layout->local_size[2] = value;
 			layout->has_local_size = 1;
-		}
+			}
 	}
 }
 
@@ -7970,15 +8316,15 @@ dyna uint32_t* emit_spirv()
 		if (value_type && value_type->tag == T_SAMPLER)
 		{
 			value_type_id = spirv_type_sampler(&cache, value_type);
-		}
+			}
 		else if (value_type && value_type->tag == T_IMAGE)
 		{
 			value_type_id = spirv_type_image(&cache, value_type, 2u);
-		}
+			}
 		else
 		{
 			value_type_id = spirv_type_cache_get(&cache, value_type);
-		}
+			}
 		uint32_t pointer_type_id = spirv_type_pointer(&cache, value_type_id, storage_class);
 		uint32_t var_id = spirv_alloc_id(&builder);
 		int var_inst = spirv_inst_start(&builder, SpvOpVariable);
@@ -7996,7 +8342,7 @@ dyna uint32_t* emit_spirv()
 			spirv_inst_append(&builder, SpvDecorationBinding);
 			spirv_inst_append(&builder, (uint32_t)sym->layout_binding);
 			spirv_inst_finalize(&builder, decorate);
-		}
+			}
 		if ((sym->layout_flags & SYM_LAYOUT_SET) && sym->layout_set >= 0)
 		{
 			int decorate = spirv_inst_start(&builder, SpvOpDecorate);
@@ -8004,7 +8350,7 @@ dyna uint32_t* emit_spirv()
 			spirv_inst_append(&builder, SpvDecorationDescriptorSet);
 			spirv_inst_append(&builder, (uint32_t)sym->layout_set);
 			spirv_inst_finalize(&builder, decorate);
-		}
+			}
 		if (sym->kind == SYM_BLOCK)
 		{
 			uint32_t deco = (sym->storage_flags & SYM_STORAGE_BUFFER) ? SpvDecorationBufferBlock : SpvDecorationBlock;
@@ -8012,7 +8358,7 @@ dyna uint32_t* emit_spirv()
 			for (int b = 0; b < acount(block_type_ids); ++b)
 			{
 				if (block_type_ids[b] == value_type_id)
-				{
+					{
 					already = 1;
 					break;
 				}
@@ -8025,7 +8371,7 @@ dyna uint32_t* emit_spirv()
 				spirv_inst_finalize(&builder, decorate);
 				apush(block_type_ids, value_type_id);
 			}
-		}
+			}
 	}
 	for (int i = 0; i < acount(interface_symbols); ++i)
 	{
@@ -8050,7 +8396,7 @@ dyna uint32_t* emit_spirv()
 			spirv_inst_append(&builder, SpvDecorationLocation);
 			spirv_inst_append(&builder, (uint32_t)sym->layout_location);
 			spirv_inst_finalize(&builder, decorate);
-		}
+			}
 		apush(interface_ids, var_id);
 	}
 
@@ -8069,10 +8415,10 @@ dyna uint32_t* emit_spirv()
 		dyna uint32_t* param_type_ids = NULL;
 		for (int p = 0; p < param_count; ++p)
 		{
-			uint32_t param_type_id = spirv_type_cache_get(&cache, info->param_types[p]);
-			spirv_inst_append(&builder, param_type_id);
-			apush(param_type_ids, param_type_id);
-		}
+		uint32_t param_type_id = spirv_type_cache_get(&cache, info->param_types[p]);
+		spirv_inst_append(&builder, param_type_id);
+		apush(param_type_ids, param_type_id);
+			}
 		spirv_inst_finalize(&builder, type_inst);
 		uint32_t func_id = spirv_alloc_id(&builder);
 		int func_inst = spirv_inst_start(&builder, SpvOpFunction);
@@ -8085,6 +8431,15 @@ dyna uint32_t* emit_spirv()
 		{
 			uint32_t param_id = spirv_alloc_id(&builder);
 			SPIRV_EMIT2(&builder, SpvOpFunctionParameter, param_type_ids[p], param_id);
+				Symbol* param_sym = NULL;
+				if (info->param_symbols && p < acount(info->param_symbols))
+					param_sym = info->param_symbols[p];
+				if (param_sym)
+					{
+					param_sym->spirv_result_id = param_id;
+					param_sym->spirv_type_id = param_type_ids[p];
+					param_sym->spirv_pointer_type_id = 0u;
+			}
 		}
 		uint32_t label_id = spirv_alloc_id(&builder);
 		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
@@ -8107,7 +8462,7 @@ dyna uint32_t* emit_spirv()
 				int inst_return = spirv_inst_start(&builder, SpvOpReturn);
 				spirv_inst_finalize(&builder, inst_return);
 			}
-		}
+			}
 		SPIRV_EMIT1(&builder, SpvOpFunctionEnd, 0);
 		if (info->name && info->name[0])
 		{
@@ -8125,7 +8480,7 @@ dyna uint32_t* emit_spirv()
 			apush(emit_funcs, emit);
 			if (!strcmp(info->name, "main"))
 			apush(entry_ids, func_id);
-		}
+			}
 		afree(param_type_ids);
 	}
 	for (int i = 0; i < acount(entry_ids); ++i)
@@ -8146,16 +8501,18 @@ dyna uint32_t* emit_spirv()
 			spirv_inst_append(&builder, stage_layout.local_size[1]);
 			spirv_inst_append(&builder, stage_layout.local_size[2]);
 			spirv_inst_finalize(&builder, exec_inst);
-		}
+			}
 	}
 	if (acount(builder.words) > 3)
 		builder.words[header_index] = builder.bound;
-	for (int i = 0; i < acount(funcs); ++i)
-	{
+for (int i = 0; i < acount(funcs); ++i)
+{
 		if (funcs[i].param_types)
 			afree(funcs[i].param_types);
-	}
-	afree(funcs);
+		if (funcs[i].param_symbols)
+			afree(funcs[i].param_symbols);
+}
+afree(funcs);
 	afree(emit_funcs);
 	afree(entry_ids);
 	afree(block_type_ids);
@@ -8212,17 +8569,17 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 		{
 			error = "zero_word_instruction";
 			goto spirv_module_validate_fail;
-		}
+			}
 		if (offset + inst_word_count > word_count)
 		{
 			error = "truncated_instruction";
 			goto spirv_module_validate_fail;
-		}
+			}
 		if (in_function && block_terminated && opcode != SpvOpLabel && opcode != SpvOpFunctionEnd)
 		{
 			error = "instruction_after_terminator";
 			goto spirv_module_validate_fail;
-		}
+			}
 		switch (opcode)
 		{
 		case SpvOpEntryPoint:
@@ -8242,7 +8599,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			for (int i = 0; i < acount(entry_points); ++i)
 			{
 				if (entry_points[i].id == function_id)
-				{
+					{
 					entry_index = i;
 					break;
 				}
@@ -8256,13 +8613,13 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			for (int i = 0; i < acount(finished_functions); ++i)
 			{
 				if (finished_functions[i] == function_id)
-				{
+					{
 					entry_points[entry_index].completed = 1;
 					break;
 				}
 			}
 			break;
-		}
+			}
 		case SpvOpFunction:
 		{
 			if (inst_word_count < 5)
@@ -8287,7 +8644,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			saw_block = 0;
 			block_terminated = 0;
 			break;
-		}
+			}
 		case SpvOpFunctionEnd:
 		{
 			if (!in_function)
@@ -8308,7 +8665,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			for (int i = 0; i < acount(entry_points); ++i)
 			{
 				if (entry_points[i].id == current_function)
-				{
+					{
 					entry_points[i].completed = 1;
 					break;
 				}
@@ -8319,7 +8676,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			saw_block = 0;
 			block_terminated = 0;
 			break;
-		}
+			}
 		case SpvOpLabel:
 		{
 			if (!in_function)
@@ -8346,7 +8703,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			saw_block = 1;
 			block_terminated = 0;
 			break;
-		}
+			}
 		case SpvOpLoopMerge:
 		{
 			if (!in_function)
@@ -8367,7 +8724,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 				goto spirv_module_validate_fail;
 			}
 			break;
-		}
+			}
 		case SpvOpSelectionMerge:
 		{
 			if (!in_function)
@@ -8387,7 +8744,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 				goto spirv_module_validate_fail;
 			}
 			break;
-		}
+			}
 		case SpvOpBranch:
 		{
 			if (!in_function)
@@ -8408,7 +8765,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			}
 			block_terminated = 1;
 			break;
-		}
+			}
 		case SpvOpBranchConditional:
 		{
 			if (!in_function)
@@ -8431,7 +8788,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			}
 			block_terminated = 1;
 			break;
-		}
+			}
 		case SpvOpSwitch:
 		{
 			if (!in_function)
@@ -8454,20 +8811,20 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			for (int idx = 3; idx < inst_word_count; idx += 2)
 			{
 				if (idx + 1 >= inst_word_count)
-				{
+					{
 					error = "switch_missing_target";
 					goto spirv_module_validate_fail;
 				}
 				uint32_t label = words[offset + idx + 1];
 				if (label >= bound)
-				{
+					{
 					error = "switch_label_out_of_bounds";
 					goto spirv_module_validate_fail;
 				}
 			}
 			block_terminated = 1;
 			break;
-		}
+			}
 		case SpvOpReturn:
 		{
 			if (!in_function)
@@ -8477,7 +8834,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			}
 			block_terminated = 1;
 			break;
-		}
+			}
 		case SpvOpReturnValue:
 		{
 			if (!in_function)
@@ -8498,7 +8855,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			}
 			block_terminated = 1;
 			break;
-		}
+			}
 		case SpvOpKill:
 		case SpvOpUnreachable:
 		{
@@ -8509,10 +8866,10 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 			}
 			block_terminated = 1;
 			break;
-		}
-	default:
+			}
+		default:
 			break;
-		}
+			}
 		offset += inst_word_count;
 	}
 	if (in_function)
@@ -8531,7 +8888,7 @@ static int spirv_module_is_valid_shader(const uint32_t* words, int word_count, c
 		{
 			error = "entry_point_not_completed";
 			goto spirv_module_validate_fail;
-		}
+			}
 	}
 	goto spirv_module_validate_cleanup;
 
@@ -8565,7 +8922,7 @@ const char* snippet_basic_io = SPINDLE_SNIPPET(
 		void main() {
 			vec4 sampled = texture(u_texture, in_uv);
 			out_color = sampled * u_tint;
-		});
+			});
 
 const char* snippet_stage_builtins_vertex = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8575,7 +8932,7 @@ const char* snippet_stage_builtins_vertex = SPINDLE_SNIPPET(
 			gl_PointSize = 1.0;
 			gl_ClipDistance[0] = base;
 			out_color = vec4(base);
-		});
+			});
 
 const char* snippet_control_flow = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8598,7 +8955,7 @@ const char* snippet_control_flow = SPINDLE_SNIPPET(
 			} else {
 				out_color = vec4(1.0 - accum);
 			}
-		});
+			});
 
 const char* snippet_ternary_vectors = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8607,7 +8964,7 @@ const char* snippet_ternary_vectors = SPINDLE_SNIPPET(
 			vec3 vector_false = flag ? vec3(1.0, 0.0, 0.0) : 0.5;
 			vec4 vector_true = flag ? 0.25 : vec4(0.0, 1.0, 0.0, 1.0);
 			out_color = vec4(vector_false, vector_true.x);
-		});
+			});
 
 const char* snippet_array_indexing = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8634,7 +8991,7 @@ const char* snippet_array_indexing = SPINDLE_SNIPPET(
 			if (literal_true && flag) {
 				out_color.xy += vec2(float(value));
 			}
-		});
+			});
 
 const char* snippet_swizzle = SPINDLE_SNIPPET(
 		layout(location = 0) in vec4 input_vec;
@@ -8647,7 +9004,7 @@ const char* snippet_swizzle = SPINDLE_SNIPPET(
 			vec4 full = input_vec.xyzw;
 			out_vec = vec4(ba, assembled.gr);
 			out_vec += vec4(single, full.wzy);
-		});
+			});
 
 const char* snippet_function_calls = SPINDLE_SNIPPET(
 		layout(location = 0) in vec2 in_uv;
@@ -8658,13 +9015,13 @@ const char* snippet_function_calls = SPINDLE_SNIPPET(
 			if (value > 1.0)
 				return 1.0;
 			return value;
-		} vec4 apply_gain(vec4 color, float gain) {
+			} vec4 apply_gain(vec4 color, float gain) {
 			return vec4(color.rgb * gain, color.a);
-		} void main() {
+			} void main() {
 			vec4 base = vec4(in_uv, 0.5, 1.0);
 			float gain = saturate(base.x + base.y);
 			out_color = apply_gain(base, gain);
-		});
+			});
 
 const char* snippet_matrix_ops = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8684,20 +9041,20 @@ const char* snippet_matrix_ops = SPINDLE_SNIPPET(
 			vec3 rect_vec = rect_a * weights;
 			vec2 rect_row = row_combo * rect_a;
 			out_color = vec4(column + rotated + rect_vec, diagonal + rect_row.x + combined[0][0] + rect_product[0][0]);
-		});
+			});
 
 const char* snippet_struct_block = SPINDLE_SNIPPET(
 		struct Light {
 			vec3 position;
 			float intensity;
-		};
+			};
 		layout(std140, set = 1, binding = 0) uniform LightBlock {
 			Light lights[2];
-		} u_light_data;
+			} u_light_data;
 		layout(location = 0) out vec4 out_color;
 		void main() {
 			out_color = vec4(u_light_data.lights[0].position, u_light_data.lights[0].intensity);
-		});
+			});
 
 const char* snippet_looping = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8716,7 +9073,7 @@ const char* snippet_looping = SPINDLE_SNIPPET(
 				}
 			} while (counter > 0);
 			out_color = vec4(total);
-		});
+			});
 
 const char* snippet_bitwise = SPINDLE_SNIPPET(
 		layout(location = 0) out ivec2 out_bits;
@@ -8734,7 +9091,7 @@ const char* snippet_bitwise = SPINDLE_SNIPPET(
 			values <<= ivec2(1, 0);
 			values >>= 1;
 			out_bits = values + ivec2(mask, mix + shifted);
-		});
+			});
 
 const char* snippet_numeric_literals = SPINDLE_SNIPPET(
 		layout(location = 0) out ivec3 out_values;
@@ -8749,7 +9106,7 @@ const char* snippet_numeric_literals = SPINDLE_SNIPPET(
 			uint udec_val = 42u;
 			out_values = ivec3(hex_val, bin_val, oct_val);
 			out_uvalues = uvec3(uhex_val, ubin_val, uoct_val);
-		});
+			});
 
 const char* snippet_switch_stmt = SPINDLE_SNIPPET(
 		layout(location = 0) in int in_mode;
@@ -8765,12 +9122,12 @@ const char* snippet_switch_stmt = SPINDLE_SNIPPET(
 			case 2:
 				color = vec4(float(mode));
 				break;
-	default:
+		default:
 				color = vec4(0.0, 0.0, 1.0, 1.0);
 				break;
 			}
 			out_color = color;
-		});
+			});
 
 const char* snippet_discard = SPINDLE_SNIPPET(
 		layout(location = 0) in vec4 in_color;
@@ -8781,7 +9138,7 @@ const char* snippet_discard = SPINDLE_SNIPPET(
 				discard;
 			}
 			out_color = color;
-		});
+			});
 
 const char* snippet_stage_builtins_fragment = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8793,7 +9150,7 @@ const char* snippet_stage_builtins_fragment = SPINDLE_SNIPPET(
 				gl_SampleMask[0] = 0;
 			}
 			out_color = coord + vec4(float(sample_id + sample_mask));
-		});
+			});
 
 const char* snippet_stage_builtins_compute = SPINDLE_SNIPPET(
 		layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
@@ -8804,7 +9161,7 @@ const char* snippet_stage_builtins_compute = SPINDLE_SNIPPET(
 			uvec3 lid = gl_LocalInvocationID;
 			uint index = gl_LocalInvocationIndex;
 			tile[index] = float(gid.x + lid.y);
-		});
+			});
 
 const char* snippet_builtin_funcs = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8831,7 +9188,7 @@ const char* snippet_builtin_funcs = SPINDLE_SNIPPET(
 			vec3 reflected = reflect(unit, vec3(0.0, 0.0, 1.0));
 			vec3 refracted = refract(unit, vec3(0.0, 0.0, 1.0), 1.33);
 			out_color = vec4(mixed * (f + soft + stepped + min_component + pow_val), sampled.a);
-		});
+			});
 
 const char* snippet_texture_queries = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8851,7 +9208,7 @@ const char* snippet_texture_queries = SPINDLE_SNIPPET(
 			float texel_extent = float(tex_size.x + tex_size.y);
 			vec3 basis = (all_true && any_true && inv_identity[0][0] == trans_identity[0][0]) ? vec3(texel_extent, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
 			out_color = texel + vec4(basis, 0.0);
-		});
+			});
 
 const char* snippet_extended_intrinsics = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8882,7 +9239,7 @@ const char* snippet_extended_intrinsics = SPINDLE_SNIPPET(
 			vec4 accum = offset_sample + lod_offset + grad_offset;
 			accum += gather0 + gather_offset + fetch_offset;
 			out_color = accum + vec4(vec3(det + matrix_sum + derivative_sum + float(level_count) + float(swapped), lod_info), 1.0);
-		});
+			});
 
 const char* snippet_preprocessor_passthrough =
 		"#define UNUSED_CONSTANT 1\n"
@@ -8904,7 +9261,7 @@ const char* snippet_const_qualifier = SPINDLE_SNIPPET(
 			float mutable_val = 1.0;
 			mutable_val = mutable_val + factor;
 			out_color = vec4(mutable_val);
-		});
+			});
 
 const char* snippet_resource_types = SPINDLE_SNIPPET(
 		layout(location = 0) out vec4 out_color;
@@ -8923,17 +9280,17 @@ const char* snippet_resource_types = SPINDLE_SNIPPET(
 			ivec4 ints = texture(u_sampler_int, vec2(0.0, 0.0));
 			uvec4 uints = texture(u_sampler_uint_array, vec4(0.0, 0.0, 1.0, 0.0));
 			out_color = vec4(base.rgb + volume.rgb, depth);
-		});
+			});
 
 const char* snippet_struct_constructor = SPINDLE_SNIPPET(
 		struct Inner {
 			vec2 coords[2][2];
-		};
+			};
 		struct Outer {
 			float weight;
 			Inner segments[2];
 			float thresholds[2][2];
-		};
+			};
 		layout(location = 0) out vec4 out_color;
 		void main() {
 			Inner first = Inner(vec2(0.0, 1.0), vec2(2.0, 3.0),
@@ -8945,7 +9302,7 @@ const char* snippet_struct_constructor = SPINDLE_SNIPPET(
 							vec2(0.9, 0.1), vec2(0.2, 0.8)),
 					0.0, 1.0, 2.0, 3.0);
 			out_color = vec4(combo.segments[0].coords[1][1], combo.thresholds[1][0], combo.weight);
-		});
+			});
 
 const char* snippet_extended_types = SPINDLE_SNIPPET(
 		layout(location = 0) out dvec4 out_color;
@@ -8964,7 +9321,7 @@ const char* snippet_extended_types = SPINDLE_SNIPPET(
 			atomic_uint counter = atomic_uint(0u);
 			double compare = double(ivec.x < int64_t(uvec.x) ? 1 : 0);
 			out_color = dvec4(expanded.xy, projected.x, compare + double(counter == atomic_uint(0u) ? 0 : 1));
-		});
+			});
 #undef SPINDLE_SNIPPET
 
 void dump_storage_flags(unsigned flags)
@@ -9149,9 +9506,9 @@ void dump_ir()
 		case IR_CONTINUE:
 		case IR_DISCARD:
 			break;
-	default:
+		default:
 			break;
-		}
+			}
 		printf("\n");
 	}
 }
@@ -9164,7 +9521,7 @@ void dump_symbols()
 		printf("  scope[%d] %s %s : %s", sym->scope_depth, symbol_kind_name[sym->kind], sym->name, sym->type_name);
 		if (sym->type) {
 			printf(" (tag=%s)", type_tag_name(sym->type->tag));
-		}
+			}
 		dump_storage_flags(sym->storage_flags);
 		dump_qualifier_flags(sym->qualifier_flags);
 		dump_layout_info(sym->layout_flags, sym->layout_set, sym->layout_binding, sym->layout_location);
@@ -9455,7 +9812,7 @@ DEFINE_TEST(test_array_indexing_ir)
 	for (int i = 0; i < acount(g_ir); ++i) {
 		if (g_ir[i].op == IR_PUSH_BOOL) {
 			saw_bool_literal = 1;
-		}
+			}
 		if (g_ir[i].op != IR_INDEX)
 			continue;
 		saw_index = 1;
@@ -9476,10 +9833,10 @@ DEFINE_TEST(test_array_indexing_ir)
 	case T_BOOL:
 				saw_bool_index = 1;
 				break;
-	default:
+		default:
 				break;
 			}
-		}
+			}
 		if (type_is_vector(type))
 			saw_vec_index = 1;
 		if (type_is_matrix(type))
@@ -9551,7 +9908,7 @@ DEFINE_TEST(test_control_flow_unary_ops)
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_post_inc_lvalue = g_ir[inst->arg0].is_lvalue;
 			}
-		} else if (inst->tok == TOK_MINUS_MINUS) {
+			} else if (inst->tok == TOK_MINUS_MINUS) {
 			if (inst->arg1 == 0) {
 				saw_pre_dec = 1;
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
@@ -9561,7 +9918,7 @@ DEFINE_TEST(test_control_flow_unary_ops)
 				if (inst->arg0 >= 0 && inst->arg0 < acount(g_ir))
 					saw_post_dec_lvalue = g_ir[inst->arg0].is_lvalue;
 			}
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_pre_inc);
@@ -9611,24 +9968,24 @@ DEFINE_TEST(test_function_call_symbols)
 	int saw_main_symbol = 0;
 	int saw_apply_gain_call = 0;
 	for (int i = 0; i < acount(st->symbols); ++i) {
-		Symbol* sym = &st->symbols[i];
+			Symbol* sym = &st->symbols[i];
 		if (sym->name == saturate) {
 			saw_saturate_symbol = sym->kind == SYM_FUNC;
 			assert(sym->type && sym->type->tag == T_FLOAT);
-		}
+			}
 		if (sym->name == apply_gain) {
 			saw_apply_gain_symbol = sym->kind == SYM_FUNC;
 			assert(sym->type && sym->type->tag == T_VEC);
-		}
+			}
 		if (sym->name == main_name) {
 			saw_main_symbol = sym->kind == SYM_FUNC;
-		}
+			}
 	}
 	for (int i = 0; i < acount(g_ir); ++i) {
 		if (g_ir[i].op == IR_CALL && g_ir[i].str0 == apply_gain) {
 			saw_apply_gain_call = 1;
 			break;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_saturate_symbol);
@@ -9698,7 +10055,7 @@ DEFINE_TEST(test_matrix_operations_ir)
 				saw_vector_matrix = 1;
 			if (g_ir[i].type == mat3_type && lhs && rhs && lhs->op == IR_PUSH_IDENT && rhs->op == IR_PUSH_IDENT && lhs->str0 == rect_a_name && rhs->str0 == rect_b_name)
 				saw_rectangular_matrix = 1;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_mat_ctor);
@@ -9784,9 +10141,9 @@ DEFINE_TEST(test_bitwise_operations)
 		case TOK_RSHIFT_ASSIGN:
 			saw_shr_assign = 1;
 			break;
-	default:
+		default:
 			break;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_band);
@@ -9825,7 +10182,7 @@ DEFINE_TEST(test_numeric_literal_bases)
 			} else if (inst->arg0 == 42) {
 				saw_dec_uint = inst->type == g_type_uint;
 			}
-		} else {
+			} else {
 			if (inst->arg0 == 31) {
 				saw_hex_int = inst->type == g_type_int;
 			} else if (inst->arg0 == 10) {
@@ -9833,7 +10190,7 @@ DEFINE_TEST(test_numeric_literal_bases)
 			} else if (inst->arg0 == 61) {
 				saw_oct_int = inst->type == g_type_int;
 			}
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_hex_int);
@@ -9853,7 +10210,7 @@ DEFINE_TEST(test_discard_instruction)
 		if (g_ir[i].op == IR_DISCARD) {
 			saw_discard = 1;
 			break;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_discard);
@@ -9876,21 +10233,21 @@ DEFINE_TEST(test_struct_block_layout)
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op == IR_STRUCT_BEGIN && inst->str0 == light_struct) {
 			saw_struct = 1;
-		}
+			}
 		if (inst->op == IR_BLOCK_DECL_BEGIN && inst->str0 == block_name) {
 			saw_block = (inst->storage_flags & SYM_STORAGE_UNIFORM) &&
 					(inst->layout_flags & SYM_LAYOUT_SET) && (inst->layout_flags & SYM_LAYOUT_BINDING) &&
 					inst->layout_set == 1 && inst->layout_binding == 0;
-		}
+			}
 		if (inst->op == IR_BLOCK_DECL_LAYOUT && inst->str0 == std140_name) {
 			saw_block_layout_identifier = 1;
-		}
+			}
 		if (inst->op == IR_BLOCK_DECL_INSTANCE && inst->str0 == instance_name) {
 			saw_block_instance = 1;
-		}
+			}
 		if (inst->op == IR_BLOCK_DECL_MEMBER && inst->str0 == member_name && inst->arg0 == 2) {
 			saw_block_member_array = 1;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_struct);
@@ -10242,7 +10599,7 @@ DEFINE_TEST(test_compute_layout_and_storage)
 		if (inst->op == IR_STAGE_LAYOUT_BEGIN) {
 			saw_stage_layout = 1;
 			continue;
-		}
+			}
 		if (inst->op == IR_STAGE_LAYOUT_VALUE) {
 			if (inst->str0 == local_size_x && inst->arg0 == 8)
 				saw_x = 1;
@@ -10250,7 +10607,7 @@ DEFINE_TEST(test_compute_layout_and_storage)
 				saw_y = 1;
 			if (inst->str0 == local_size_z && inst->arg0 == 1)
 				saw_z = 1;
-		}
+			}
 	}
 	assert(saw_stage_layout);
 	assert(saw_x && saw_y && saw_z);
@@ -10319,59 +10676,63 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
 	compiler_setup("float compute() { return 1.0; } void main() { float value = compute(); }");
 	dyna uint32_t* words = emit_spirv();
-	const uint32_t expected[] = {
-		0x07230203u,
-		0x00010500u,
-		0x00010001u,
-		0x0000000cu,
-		0x00000000u,
-		0x00020011u,
-		0x00000001u,
-		0x0004000eu,
-		0x00000000u,
-		0x00000001u,
-		0x00000000u,
-		0x00030016u,
-		0x00000001u,
-		0x00000020u,
-		0x0004002bu,
-		0x00000001u,
-		0x00000002u,
-		0x3f800000u,
-		0x00030021u,
-		0x00000005u,
-		0x00000001u,
-		0x00050036u,
-		0x00000001u,
-		0x00000006u,
-		0x00000000u,
-		0x00000005u,
-		0x000200f8u,
-		0x00000007u,
-		0x000200feu,
-		0x00000002u,
-		0x00020038u,
-		0x00000000u,
-		0x00020013u,
-		0x00000008u,
-		0x00030021u,
-		0x00000009u,
-		0x00000008u,
-		0x00050036u,
-		0x00000008u,
-		0x0000000au,
-		0x00000000u,
-		0x00000009u,
-		0x000200f8u,
-		0x0000000bu,
-		0x000100fdu,
-		0x00020038u,
-		0x00000000u,
-		0x0005000fu,
-		0x00000004u,
-		0x0000000au,
-		0x6e69616du,
-		0x00000000u,
+const uint32_t expected[] = {
+0x07230203u,
+0x00010500u,
+0x00010001u,
+0x0000000cu,
+0x00000000u,
+0x00020011u,
+0x00000001u,
+0x0004000eu,
+0x00000000u,
+0x00000001u,
+0x00000000u,
+0x00030016u,
+0x00000001u,
+0x00000020u,
+0x0004002bu,
+0x00000001u,
+0x00000002u,
+0x3f800000u,
+0x00030021u,
+0x00000005u,
+0x00000001u,
+0x00050036u,
+0x00000001u,
+0x00000006u,
+0x00000000u,
+0x00000005u,
+0x000200f8u,
+0x00000007u,
+0x000200feu,
+0x00000002u,
+0x00020038u,
+0x00000000u,
+0x00020013u,
+0x00000008u,
+0x00030021u,
+0x00000009u,
+0x00000008u,
+0x00050036u,
+0x00000008u,
+0x0000000au,
+0x00000000u,
+0x00000009u,
+0x000200f8u,
+0x0000000bu,
+0x00040039u,
+0x00000001u,
+0x00000004u,
+0x00000006u,
+0x000100fdu,
+0x00020038u,
+0x00000000u,
+0x0005000fu,
+0x00000004u,
+0x0000000au,
+0x6e69616du,
+0x00000000u,
 };
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
@@ -10390,67 +10751,69 @@ DEFINE_TEST(test_spirv_emit_function_parameters)
 	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
 	compiler_setup("float saturate(float value) { return value; } void main() { float gain = saturate(0.5); }");
 	dyna uint32_t* words = emit_spirv();
-	const uint32_t expected[] = {
-		0x07230203u,
-		0x00010500u,
-		0x00010001u,
-		0x0000000fu,
-		0x00000000u,
-		0x00020011u,
-		0x00000001u,
-		0x0004000eu,
-		0x00000000u,
-		0x00000001u,
-		0x00000000u,
-		0x00030016u,
-		0x00000001u,
-		0x00000020u,
-		0x0004002bu,
-		0x00000001u,
-		0x00000004u,
-		0x3f000000u,
-		0x00040021u,
-		0x00000006u,
-		0x00000001u,
-		0x00000001u,
-		0x00050036u,
-		0x00000001u,
-		0x00000007u,
-		0x00000000u,
-		0x00000006u,
-		0x00030037u,
-		0x00000001u,
-		0x00000008u,
-		0x000200f8u,
-		0x00000009u,
-		0x00030001u,
-		0x00000001u,
-		0x0000000au,
-		0x000200feu,
-		0x0000000au,
-		0x00020038u,
-		0x00000000u,
-		0x00020013u,
-		0x0000000bu,
-		0x00030021u,
-		0x0000000cu,
-		0x0000000bu,
-		0x00050036u,
-		0x0000000bu,
-		0x0000000du,
-		0x00000000u,
-		0x0000000cu,
-		0x000200f8u,
-		0x0000000eu,
-		0x000100fdu,
-		0x00020038u,
-		0x00000000u,
-		0x0005000fu,
-		0x00000004u,
-		0x0000000du,
-		0x6e69616du,
-		0x00000000u,
-	};
+const uint32_t expected[] = {
+0x07230203u,
+0x00010500u,
+0x00010001u,
+0x0000000eu,
+0x00000000u,
+0x00020011u,
+0x00000001u,
+0x0004000eu,
+0x00000000u,
+0x00000001u,
+0x00000000u,
+0x00030016u,
+0x00000001u,
+0x00000020u,
+0x0004002bu,
+0x00000001u,
+0x00000004u,
+0x3f000000u,
+0x00040021u,
+0x00000006u,
+0x00000001u,
+0x00000001u,
+0x00050036u,
+0x00000001u,
+0x00000007u,
+0x00000000u,
+0x00000006u,
+0x00030037u,
+0x00000001u,
+0x00000008u,
+0x000200f8u,
+0x00000009u,
+0x000200feu,
+0x00000002u,
+0x00020038u,
+0x00000000u,
+0x00020013u,
+0x0000000au,
+0x00030021u,
+0x0000000bu,
+0x0000000au,
+0x00050036u,
+0x0000000au,
+0x0000000cu,
+0x00000000u,
+0x0000000bu,
+0x000200f8u,
+0x0000000du,
+0x00050039u,
+0x00000001u,
+0x00000005u,
+0x00000004u,
+0x00000007u,
+0x000100fdu,
+0x00020038u,
+0x00000000u,
+0x0005000fu,
+0x00000004u,
+0x0000000cu,
+0x6e69616du,
+0x00000000u,
+};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
 	for (int i = 0; i < expected_count; ++i)
@@ -10467,63 +10830,67 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 	compiler_set_shader_stage(SHADER_STAGE_FRAGMENT);
 	compiler_setup("layout(location = 0) out vec4 out_color; void main() { out_color = vec4(1.0); }");
 	dyna uint32_t* words = emit_spirv();
-	const uint32_t expected[] = {
-		0x07230203u,
-		0x00010500u,
-		0x00010001u,
-		0x0000000eu,
-		0x00000000u,
-		0x00020011u,
-		0x00000001u,
-		0x0004000eu,
-		0x00000000u,
-		0x00000001u,
-		0x00000000u,
-		0x00030016u,
-		0x00000001u,
-		0x00000020u,
-		0x00040017u,
-		0x00000002u,
-		0x00000001u,
-		0x00000004u,
-		0x0004002bu,
-		0x00000001u,
-		0x00000005u,
-		0x3f800000u,
-		0x00040020u,
-		0x00000008u,
-		0x00000003u,
-		0x00000002u,
-		0x0004003bu,
-		0x00000008u,
-		0x00000009u,
-		0x00000003u,
-		0x00040047u,
-		0x00000009u,
-		0x0000001eu,
-		0x00000000u,
-		0x00020013u,
-		0x0000000au,
-		0x00030021u,
-		0x0000000bu,
-		0x0000000au,
-		0x00050036u,
-		0x0000000au,
-		0x0000000cu,
-		0x00000000u,
-		0x0000000bu,
-		0x000200f8u,
-		0x0000000du,
-		0x000100fdu,
-		0x00020038u,
-		0x00000000u,
-		0x0006000fu,
-		0x00000004u,
-		0x0000000cu,
-		0x6e69616du,
-		0x00000000u,
-		0x00000009u,
-	};
+const uint32_t expected[] = {
+0x07230203u,
+0x00010500u,
+0x00010001u,
+0x0000000eu,
+0x00000000u,
+0x00020011u,
+0x00000001u,
+0x0004000eu,
+0x00000000u,
+0x00000001u,
+0x00000000u,
+0x00030016u,
+0x00000001u,
+0x00000020u,
+0x00040017u,
+0x00000002u,
+0x00000001u,
+0x00000004u,
+0x0004002bu,
+0x00000001u,
+0x00000005u,
+0x3f800000u,
+0x00040020u,
+0x00000008u,
+0x00000003u,
+0x00000002u,
+0x0004003bu,
+0x00000008u,
+0x00000009u,
+0x00000003u,
+0x00040047u,
+0x00000009u,
+0x0000001eu,
+0x00000000u,
+0x00020013u,
+0x0000000au,
+0x00030021u,
+0x0000000bu,
+0x0000000au,
+0x00050036u,
+0x0000000au,
+0x0000000cu,
+0x00000000u,
+0x0000000bu,
+0x000200f8u,
+0x0000000du,
+0x00040053u,
+0x00000001u,
+0x00000007u,
+0x00000005u,
+0x000100fdu,
+0x00020038u,
+0x00000000u,
+0x0006000fu,
+0x00000004u,
+0x0000000cu,
+0x6e69616du,
+0x00000000u,
+0x00000009u,
+};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
 	for (int i = 0; i < expected_count; ++i)
@@ -10572,7 +10939,7 @@ DEFINE_TEST(test_spirv_emit_uniform_resources)
 				block_type_id = words[offset + 3];
 			}
 			break;
-		}
+			}
 		case SpvOpTypeStruct:
 			if (!block_type_id)
 				block_type_id = words[offset + 1];
@@ -10590,7 +10957,7 @@ DEFINE_TEST(test_spirv_emit_uniform_resources)
 				block_var = result_id;
 			}
 			break;
-		}
+			}
 		case SpvOpDecorate:
 		{
 			uint32_t target = words[offset + 1];
@@ -10612,10 +10979,10 @@ DEFINE_TEST(test_spirv_emit_uniform_resources)
 			if (target == block_type_id && decoration == SpvDecorationBlock)
 				saw_block_decorate = 1;
 			break;
-		}
-		default:
+			}
+			default:
 			break;
-		}
+			}
 		offset += inst_count;
 	}
 	assert(saw_type_image);
@@ -10690,7 +11057,7 @@ DEFINE_TEST(test_spirv_emit_compute_local_size)
 				found = 1;
 				break;
 			}
-		}
+			}
 		offset += inst_word_count;
 	}
 	assert(found);
@@ -10717,7 +11084,7 @@ DEFINE_TEST(test_spirv_emit_compute_local_size)
 				found = 1;
 				break;
 			}
-		}
+			}
 		offset += inst_word_count;
 	}
 	assert(found);
@@ -10770,7 +11137,7 @@ DEFINE_TEST(test_preprocessor_passthrough)
 		if (g_ir[i].op == IR_FUNC_BEGIN) {
 			saw_func = 1;
 			break;
-		}
+			}
 	}
 	assert(saw_func);
 	compiler_teardown();
@@ -10783,13 +11150,13 @@ DEFINE_TEST(test_const_qualifier_metadata)
 	int saw_const_symbol = 0;
 	int saw_mutable_symbol = 0;
 	for (int i = 0; i < acount(st->symbols); ++i) {
-		Symbol* sym = &st->symbols[i];
+			Symbol* sym = &st->symbols[i];
 		if (sym->name == factor) {
 			saw_const_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
+			}
 		if (sym->name == mutable_val) {
 			saw_mutable_symbol = (sym->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
+			}
 	}
 	int saw_const_decl = 0;
 	int saw_mutable_decl = 0;
@@ -10801,18 +11168,18 @@ DEFINE_TEST(test_const_qualifier_metadata)
 		IR_Cmd* inst = &g_ir[i];
 		if (inst->op == IR_DECL_VAR && inst->str0 == factor) {
 			saw_const_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
+			}
 		if (inst->op == IR_DECL_VAR && inst->str0 == mutable_val) {
 			saw_mutable_decl = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
-		}
+			}
 		if (inst->op == IR_PUSH_IDENT && inst->str0 == factor) {
 			saw_const_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 			saw_const_lvalue |= inst->is_lvalue;
-		}
+			}
 		if (inst->op == IR_PUSH_IDENT && inst->str0 == mutable_val) {
 			saw_mutable_ident = (inst->qualifier_flags & SYM_QUAL_CONST) != 0;
 			saw_mutable_lvalue |= inst->is_lvalue;
-		}
+			}
 	}
 	compiler_teardown();
 	assert(saw_const_symbol);
