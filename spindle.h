@@ -7005,6 +7005,443 @@ static void spirv_emit_store_value(SpirvEmitContext* ctx, const SpirvExprValue* 
 	spirv_inst_finalize(ctx->builder, inst);
 }
 
+static void spirv_resolve_expr_value_type(SpirvEmitContext* ctx, SpirvExprValue* value)
+{
+	if (!ctx || !value)
+		return;
+	if (!value->type && value->symbol && value->symbol->type)
+		value->type = value->symbol->type;
+	if (!value->type && value->ir_index >= 0 && value->ir_index < acount(g_ir))
+	{
+		IR_Cmd* inst = &g_ir[value->ir_index];
+		if (inst && inst->type)
+			value->type = inst->type;
+	}
+	if (!value->type_id && value->type && ctx->type_cache)
+		value->type_id = spirv_type_cache_get(ctx->type_cache, value->type);
+}
+
+static SpirvExprValue spirv_scalar_to_vector(SpirvEmitContext* ctx, SpirvExprValue scalar, Type* vector_type)
+{
+	if (!ctx || !vector_type)
+		return scalar;
+	scalar = spirv_value_as_rvalue(ctx, scalar);
+	spirv_resolve_expr_value_type(ctx, &scalar);
+	uint32_t vector_type_id = spirv_type_cache_get(ctx->type_cache, vector_type);
+	uint32_t result_id = spirv_alloc_id(ctx->builder);
+	int inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+	spirv_inst_append(ctx->builder, vector_type_id);
+	spirv_inst_append(ctx->builder, result_id);
+	for (int c = 0; c < vector_type->cols; ++c)
+		spirv_inst_append(ctx->builder, scalar.id);
+	spirv_inst_finalize(ctx->builder, inst);
+	SpirvExprValue result = scalar;
+	result.type = vector_type;
+	result.type_id = vector_type_id;
+	result.id = result_id;
+	result.is_pointer = 0;
+	return result;
+}
+
+static SpirvExprValue spirv_scalar_to_matrix(SpirvEmitContext* ctx, SpirvExprValue scalar, Type* matrix_type)
+{
+	if (!ctx || !matrix_type)
+		return scalar;
+	Type* column_type = type_get_vector((TypeTag)matrix_type->base, matrix_type->rows);
+	SpirvExprValue column = spirv_scalar_to_vector(ctx, scalar, column_type);
+	if (!column.id)
+		return scalar;
+	uint32_t matrix_type_id = spirv_type_cache_get(ctx->type_cache, matrix_type);
+	uint32_t result_id = spirv_alloc_id(ctx->builder);
+	int inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+	spirv_inst_append(ctx->builder, matrix_type_id);
+	spirv_inst_append(ctx->builder, result_id);
+	for (int c = 0; c < matrix_type->cols; ++c)
+		spirv_inst_append(ctx->builder, column.id);
+	spirv_inst_finalize(ctx->builder, inst);
+	SpirvExprValue result = scalar;
+	result.type = matrix_type;
+	result.type_id = matrix_type_id;
+	result.id = result_id;
+	result.is_pointer = 0;
+	return result;
+}
+
+static SpirvExprValue spirv_emit_value_conversion(SpirvEmitContext* ctx, SpirvExprValue value, Type* target_type)
+{
+	if (!ctx || !target_type)
+		return value;
+	spirv_resolve_expr_value_type(ctx, &value);
+	if (value.type && type_equal(value.type, target_type))
+	{
+		if (!value.type_id && ctx->type_cache)
+			value.type_id = spirv_type_cache_get(ctx->type_cache, target_type);
+		return value;
+	}
+	value = spirv_value_as_rvalue(ctx, value);
+	Type* source_type = value.type;
+	if (!source_type && value.symbol && value.symbol->type)
+		source_type = value.symbol->type;
+	if (!source_type)
+		return value;
+	int source_is_scalar = type_is_scalar(source_type);
+	int source_is_vector = type_is_vector(source_type);
+	int target_is_vector = type_is_vector(target_type);
+	int target_is_matrix = type_is_matrix(target_type);
+	if (source_is_scalar && target_is_vector)
+	{
+		SpirvExprValue promoted = spirv_scalar_to_vector(ctx, value, target_type);
+		promoted.ir_index = value.ir_index;
+		return promoted;
+	}
+	if (source_is_scalar && target_is_matrix)
+	{
+		SpirvExprValue promoted = spirv_scalar_to_matrix(ctx, value, target_type);
+		promoted.ir_index = value.ir_index;
+		return promoted;
+	}
+	SpirvValueKind from_kind = spirv_value_kind_from_type(source_type);
+	SpirvValueKind to_kind = spirv_value_kind_from_type(target_type);
+	uint16_t opcode = spirv_conversion_opcode_lookup(from_kind, to_kind);
+	if (opcode)
+	{
+		uint32_t target_type_id = spirv_type_cache_get(ctx->type_cache, target_type);
+		uint32_t result_id = spirv_alloc_id(ctx->builder);
+		int inst = spirv_inst_start(ctx->builder, opcode);
+		spirv_inst_append(ctx->builder, target_type_id);
+		spirv_inst_append(ctx->builder, result_id);
+		spirv_inst_append(ctx->builder, value.id);
+		spirv_inst_finalize(ctx->builder, inst);
+		value.id = result_id;
+		value.type = target_type;
+		value.type_id = target_type_id;
+		value.is_pointer = 0;
+		return value;
+	}
+	if (source_is_vector && target_is_vector && source_type->cols == target_type->cols && type_base_type(source_type) == type_base_type(target_type))
+	{
+		uint32_t target_type_id = spirv_type_cache_get(ctx->type_cache, target_type);
+		uint32_t result_id = spirv_alloc_id(ctx->builder);
+		int inst = spirv_inst_start(ctx->builder, SpvOpBitcast);
+		spirv_inst_append(ctx->builder, target_type_id);
+		spirv_inst_append(ctx->builder, result_id);
+		spirv_inst_append(ctx->builder, value.id);
+		spirv_inst_finalize(ctx->builder, inst);
+		value.id = result_id;
+		value.type = target_type;
+		value.type_id = target_type_id;
+		value.is_pointer = 0;
+	}
+	return value;
+}
+
+static SpirvExprValue spirv_emit_binary_operation(SpirvEmitContext* ctx, int ir_index, const IR_Cmd* inst, Tok tok, uint32_t result_type_id, uint32_t result_id, SpirvExprValue lhs, SpirvExprValue rhs)
+{
+	SpirvExprValue empty = (SpirvExprValue){ 0 };
+	if (!ctx)
+		return empty;
+	spirv_resolve_expr_value_type(ctx, &lhs);
+	spirv_resolve_expr_value_type(ctx, &rhs);
+	lhs = spirv_value_as_rvalue(ctx, lhs);
+	rhs = spirv_value_as_rvalue(ctx, rhs);
+	Type* lhs_type = lhs.type ? lhs.type : (lhs.symbol ? lhs.symbol->type : NULL);
+	Type* rhs_type = rhs.type ? rhs.type : (rhs.symbol ? rhs.symbol->type : NULL);
+	if (!lhs.type)
+		lhs.type = lhs_type;
+	if (!rhs.type)
+		rhs.type = rhs_type;
+	Type* result_type = inst ? inst->type : NULL;
+	if (tok == TOK_STAR && lhs_type && rhs_type)
+	{
+		if (type_is_vector(lhs_type) && type_is_scalar(rhs_type))
+		{
+			if (!result_type)
+				result_type = lhs_type;
+			lhs = spirv_emit_value_conversion(ctx, lhs, result_type);
+			Type* scalar_type = type_get_scalar(type_base_type(result_type));
+			rhs = spirv_emit_value_conversion(ctx, rhs, scalar_type);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			if (!result_type_id && ctx->type_cache)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpVectorTimesScalar);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_scalar(lhs_type) && type_is_vector(rhs_type))
+		{
+			if (!result_type)
+				result_type = rhs_type;
+			rhs = spirv_emit_value_conversion(ctx, rhs, result_type);
+			Type* scalar_type = type_get_scalar(type_base_type(result_type));
+			lhs = spirv_emit_value_conversion(ctx, lhs, scalar_type);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			if (!result_type_id && ctx->type_cache)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpVectorTimesScalar);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_matrix(lhs_type) && type_is_scalar(rhs_type))
+		{
+			if (!result_type)
+				result_type = lhs_type;
+			lhs = spirv_emit_value_conversion(ctx, lhs, result_type);
+			Type* scalar_type = type_get_scalar(type_base_type(result_type));
+			rhs = spirv_emit_value_conversion(ctx, rhs, scalar_type);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			if (!result_type_id && ctx->type_cache)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpMatrixTimesScalar);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_scalar(lhs_type) && type_is_matrix(rhs_type))
+		{
+			if (!result_type)
+				result_type = rhs_type;
+			rhs = spirv_emit_value_conversion(ctx, rhs, result_type);
+			Type* scalar_type = type_get_scalar(type_base_type(result_type));
+			lhs = spirv_emit_value_conversion(ctx, lhs, scalar_type);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			if (!result_type_id && ctx->type_cache)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpMatrixTimesScalar);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_matrix(lhs_type) && type_is_vector(rhs_type))
+		{
+			if (!result_type)
+				result_type = inst ? inst->type : rhs_type;
+			lhs = spirv_emit_value_conversion(ctx, lhs, lhs_type);
+			rhs = spirv_emit_value_conversion(ctx, rhs, rhs_type);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			if (!result_type_id && ctx->type_cache && result_type)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpMatrixTimesVector);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_vector(lhs_type) && type_is_matrix(rhs_type))
+		{
+			if (!result_type)
+				result_type = inst ? inst->type : lhs_type;
+			lhs = spirv_emit_value_conversion(ctx, lhs, lhs_type);
+			rhs = spirv_emit_value_conversion(ctx, rhs, rhs_type);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			if (!result_type_id && ctx->type_cache && result_type)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpVectorTimesMatrix);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		if (type_is_matrix(lhs_type) && type_is_matrix(rhs_type))
+		{
+			if (!result_type)
+				result_type = inst ? inst->type : lhs_type;
+			lhs = spirv_emit_value_conversion(ctx, lhs, lhs_type);
+			rhs = spirv_emit_value_conversion(ctx, rhs, rhs_type);
+			lhs = spirv_value_as_rvalue(ctx, lhs);
+			rhs = spirv_value_as_rvalue(ctx, rhs);
+			if (!result_type_id && ctx->type_cache && result_type)
+				result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+			if (!result_id)
+				result_id = spirv_alloc_id(ctx->builder);
+			int mul_inst = spirv_inst_start(ctx->builder, SpvOpMatrixTimesMatrix);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, lhs.id);
+			spirv_inst_append(ctx->builder, rhs.id);
+			spirv_inst_finalize(ctx->builder, mul_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+	}
+	int is_comparison = (tok == TOK_EQ || tok == TOK_NE || tok == TOK_LT || tok == TOK_LE || tok == TOK_GT || tok == TOK_GE);
+	uint16_t opcode = 0;
+	if (is_comparison)
+	{
+		Type* operand_type = lhs.type ? lhs.type : rhs.type;
+		if (operand_type && rhs.type && !type_equal(rhs.type, operand_type))
+			rhs = spirv_emit_value_conversion(ctx, rhs, operand_type);
+		if (operand_type && lhs.type && !type_equal(lhs.type, operand_type))
+			lhs = spirv_emit_value_conversion(ctx, lhs, operand_type);
+		lhs = spirv_value_as_rvalue(ctx, lhs);
+		rhs = spirv_value_as_rvalue(ctx, rhs);
+		SpirvValueKind kind = spirv_value_kind_from_type(operand_type);
+		opcode = spirv_comparison_opcode_lookup(tok, kind);
+		if (!result_type)
+			result_type = inst ? inst->type : NULL;
+		if (!result_type_id && result_type && ctx->type_cache)
+			result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+	}
+	else
+	{
+		if (result_type)
+		{
+			lhs = spirv_emit_value_conversion(ctx, lhs, result_type);
+			rhs = spirv_emit_value_conversion(ctx, rhs, result_type);
+		}
+		lhs = spirv_value_as_rvalue(ctx, lhs);
+		rhs = spirv_value_as_rvalue(ctx, rhs);
+		Type* kind_type = result_type ? result_type : (lhs.type ? lhs.type : rhs.type);
+		SpirvValueKind kind = spirv_value_kind_from_type(kind_type);
+		opcode = spirv_binary_opcode_lookup(tok, kind);
+		if (!result_type)
+			result_type = kind_type;
+		if (!result_type_id && result_type && ctx->type_cache)
+			result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+	}
+	if (!opcode)
+		return empty;
+	if (!result_id)
+		result_id = spirv_alloc_id(ctx->builder);
+	int inst_index = spirv_inst_start(ctx->builder, opcode);
+	spirv_inst_append(ctx->builder, result_type_id);
+	spirv_inst_append(ctx->builder, result_id);
+	spirv_inst_append(ctx->builder, lhs.id);
+	spirv_inst_append(ctx->builder, rhs.id);
+	spirv_inst_finalize(ctx->builder, inst_index);
+	SpirvExprValue result = (SpirvExprValue){ 0 };
+	result.type = result_type;
+	result.type_id = result_type_id;
+	result.id = result_id;
+	result.ir_index = ir_index;
+	return result;
+}
+
+static SpirvExprValue spirv_emit_unary_operation(SpirvEmitContext* ctx, int ir_index, const IR_Cmd* inst, uint32_t result_type_id, uint32_t result_id, SpirvExprValue operand)
+{
+	SpirvExprValue empty = (SpirvExprValue){ 0 };
+	if (!ctx)
+		return empty;
+	spirv_resolve_expr_value_type(ctx, &operand);
+	operand = spirv_value_as_rvalue(ctx, operand);
+	Type* result_type = inst ? inst->type : operand.type;
+	if (result_type)
+	{
+		operand = spirv_emit_value_conversion(ctx, operand, result_type);
+		operand = spirv_value_as_rvalue(ctx, operand);
+	}
+	if (!result_type && operand.type)
+		result_type = operand.type;
+	if (!result_type_id && result_type && ctx->type_cache)
+		result_type_id = spirv_type_cache_get(ctx->type_cache, result_type);
+	if (!result_id)
+		result_id = spirv_alloc_id(ctx->builder);
+	SpirvValueKind kind = spirv_value_kind_from_type(result_type ? result_type : operand.type);
+	uint16_t opcode = inst ? spirv_unary_opcode_lookup(inst->tok, kind) : 0;
+	if (!opcode)
+	{
+		if (operand.id && result_id == operand.id)
+		{
+			operand.ir_index = ir_index;
+			return operand;
+		}
+		if (operand.id && result_type_id)
+		{
+			int copy_inst = spirv_inst_start(ctx->builder, SpvOpCopyObject);
+			spirv_inst_append(ctx->builder, result_type_id);
+			spirv_inst_append(ctx->builder, result_id);
+			spirv_inst_append(ctx->builder, operand.id);
+			spirv_inst_finalize(ctx->builder, copy_inst);
+			SpirvExprValue result = operand;
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = ir_index;
+			return result;
+		}
+		return operand;
+	}
+	int inst_index = spirv_inst_start(ctx->builder, opcode);
+	spirv_inst_append(ctx->builder, result_type_id);
+	spirv_inst_append(ctx->builder, result_id);
+	spirv_inst_append(ctx->builder, operand.id);
+	spirv_inst_finalize(ctx->builder, inst_index);
+	SpirvExprValue result = (SpirvExprValue){ 0 };
+	result.type = result_type;
+	result.type_id = result_type_id;
+	result.id = result_id;
+	result.ir_index = ir_index;
+	return result;
+}
 static uint32_t spirv_stub_return_placeholder(SpirvEmitContext* ctx)
 {
 	if (!ctx)
@@ -7304,46 +7741,105 @@ static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder
 		afree(args);
 		break;
 			}
-		case IR_BINARY:
-			{
-				int is_assignment = 0;
-				switch (inst->tok)
-					{
-		case TOK_ASSIGN:
-			is_assignment = 1;
-			break;
-			default:
-			break;
-			}
-		if (!is_assignment)
-		break;
-		SpirvExprValue rhs = spirv_value_stack_pop(&ctx);
-		SpirvExprValue lhs = spirv_value_stack_pop(&ctx);
-		rhs = spirv_value_as_rvalue(&ctx, rhs);
-		SpirvExprValue target = lhs.is_pointer ? lhs : spirv_make_symbol_pointer(&ctx, lhs.symbol);
-		if (target.pointer_id)
-		spirv_emit_store_value(&ctx, &target, &rhs);
-		uint32_t result_id = spirv_value_table_result_id(value_table, i);
-		if (result_id && rhs.id && result_id != rhs.id)
+		case IR_UNARY:
 		{
-			uint32_t result_type = rhs.type_id ? rhs.type_id : spirv_value_table_type_id(value_table, rhs.ir_index);
-			int copy_inst = spirv_inst_start(builder, SpvOpCopyObject);
-			spirv_inst_append(builder, result_type);
-			spirv_inst_append(builder, result_id);
-			spirv_inst_append(builder, rhs.id);
-			spirv_inst_finalize(builder, copy_inst);
-			rhs.id = result_id;
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && inst->type && cache)
+				result_type_id = spirv_type_cache_get(cache, inst->type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue operand = spirv_value_stack_pop(&ctx);
+			SpirvExprValue result = spirv_emit_unary_operation(&ctx, i, inst, result_type_id, result_id, operand);
+			if (!result.type && inst->type)
+				result.type = inst->type;
+			if (!result.type_id && result_type_id)
+				result.type_id = result_type_id;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+		case IR_BINARY:
+		{
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && inst->type && cache)
+				result_type_id = spirv_type_cache_get(cache, inst->type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue rhs = spirv_value_stack_pop(&ctx);
+			SpirvExprValue lhs = spirv_value_stack_pop(&ctx);
+			const BinRule* rule = find_bin_rule(inst->tok);
+			int is_assignment = rule && (rule->kind == BR_ASSIGN || rule->kind == BR_COMPOUND);
+			Tok underlying = (rule && rule->kind == BR_COMPOUND) ? rule->underlying : TOK_EOF;
+			if (is_assignment)
+			{
+				SpirvExprValue pointer = lhs.is_pointer ? lhs : spirv_make_symbol_pointer(&ctx, lhs.symbol);
+				SpirvExprValue rhs_value = spirv_value_as_rvalue(&ctx, rhs);
+				if (rule && rule->kind == BR_COMPOUND && underlying != TOK_EOF)
+				{
+					SpirvExprValue lhs_value = pointer;
+					lhs_value = spirv_value_as_rvalue(&ctx, lhs_value);
+					IR_Cmd op_inst = *inst;
+					op_inst.tok = underlying;
+					op_inst.type = inst->type ? inst->type : lhs_value.type;
+					SpirvExprValue op_result = spirv_emit_binary_operation(&ctx, i, &op_inst, underlying, result_type_id, result_id, lhs_value, rhs_value);
+					if (op_result.id)
+					{
+						rhs_value = op_result;
+						if (op_result.type_id)
+							result_type_id = op_result.type_id;
+						result_id = op_result.id;
+					}
+				}
+				else
+				{
+					if (inst->type)
+						rhs_value = spirv_emit_value_conversion(&ctx, rhs_value, inst->type);
+					rhs_value = spirv_value_as_rvalue(&ctx, rhs_value);
+				}
+				if (inst->type && !rhs_value.type)
+					rhs_value.type = inst->type;
+				if (inst->type && !rhs_value.type_id && cache)
+					rhs_value.type_id = spirv_type_cache_get(cache, inst->type);
+				if (pointer.pointer_id)
+					spirv_emit_store_value(&ctx, &pointer, &rhs_value);
+				if (result_id && rhs_value.id && result_id != rhs_value.id)
+				{
+					uint32_t copy_type = rhs_value.type_id;
+					if (!copy_type && inst->type && cache)
+						copy_type = spirv_type_cache_get(cache, inst->type);
+					int copy_inst = spirv_inst_start(builder, SpvOpCopyObject);
+					spirv_inst_append(builder, copy_type);
+					spirv_inst_append(builder, result_id);
+					spirv_inst_append(builder, rhs_value.id);
+					spirv_inst_finalize(builder, copy_inst);
+					rhs_value.id = result_id;
+					rhs_value.type_id = copy_type;
+				}
+				rhs_value.ir_index = i;
+				rhs_value.symbol = lhs.symbol;
+				rhs_value.qualifier_flags = lhs.qualifier_flags;
+				rhs_value.storage_flags = lhs.storage_flags;
+				if (!rhs_value.type && inst->type)
+					rhs_value.type = inst->type;
+				if (!rhs_value.type_id && result_type_id)
+					rhs_value.type_id = result_type_id;
+				spirv_value_stack_push(&ctx, rhs_value);
+				break;
 			}
-		rhs.ir_index = i;
-		rhs.symbol = lhs.symbol;
-		rhs.qualifier_flags = lhs.qualifier_flags;
-		rhs.storage_flags = lhs.storage_flags;
-		rhs.type = inst->type ? inst->type : rhs.type;
-		if (!rhs.type_id && cache && rhs.type)
-		rhs.type_id = spirv_type_cache_get(cache, rhs.type);
-		spirv_value_stack_push(&ctx, rhs);
-		break;
-			}
+			SpirvExprValue result = spirv_emit_binary_operation(&ctx, i, inst, inst->tok, result_type_id, result_id, lhs, rhs);
+			if (!result.type && inst->type)
+				result.type = inst->type;
+			if (!result.type_id && result_type_id)
+				result.type_id = result_type_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
 		case IR_STMT_EXPR:
 			{
 				spirv_value_stack_pop(&ctx);
@@ -8204,7 +8700,7 @@ static void spirv_collect_resource_symbols(Symbol*** out_symbols)
 			continue;
 		if (!sym->type)
 			continue;
-			apush(symbols, sym);
+		apush(symbols, sym);
 	}
 	*out_symbols = symbols;
 }
@@ -10834,7 +11330,7 @@ const uint32_t expected[] = {
 0x07230203u,
 0x00010500u,
 0x00010001u,
-0x0000000eu,
+0x0000000fu,
 0x00000000u,
 0x00020011u,
 0x00000001u,
@@ -10877,10 +11373,17 @@ const uint32_t expected[] = {
 0x0000000bu,
 0x000200f8u,
 0x0000000du,
-0x00040053u,
-0x00000001u,
-0x00000007u,
+0x00070050u,
+0x00000002u,
+0x0000000eu,
 0x00000005u,
+0x00000005u,
+0x00000005u,
+0x00000005u,
+0x00040053u,
+0x00000002u,
+0x00000007u,
+0x0000000eu,
 0x000100fdu,
 0x00020038u,
 0x00000000u,
