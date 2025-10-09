@@ -6115,6 +6115,7 @@ enum SpirvOp
 	SpvOpStore = 62,
 	SpvOpAccessChain = 65,
 	SpvOpInBoundsAccessChain = 66,
+	SpvOpVectorExtractDynamic = 77,
 	SpvOpCompositeConstruct = 80,
 	SpvOpCompositeExtract = 81,
 	SpvOpCompositeInsert = 82,
@@ -7005,6 +7006,75 @@ static void spirv_emit_store_value(SpirvEmitContext* ctx, const SpirvExprValue* 
 	spirv_inst_finalize(ctx->builder, inst);
 }
 
+static uint32_t spirv_value_storage_class(const SpirvExprValue* value)
+{
+	if (!value)
+		return SpvStorageClassFunction;
+	if (value->symbol)
+	{
+		if (value->symbol->scope_depth > 0)
+			return SpvStorageClassFunction;
+		return spirv_symbol_storage_class(value->symbol);
+	}
+	unsigned storage = value->storage_flags;
+	if (storage & SYM_STORAGE_SHARED)
+		return SpvStorageClassWorkgroup;
+	if (storage & SYM_STORAGE_BUFFER)
+		return SpvStorageClassStorageBuffer;
+	if (storage & SYM_STORAGE_UNIFORM)
+	{
+		Type* type = value->type ? value->type : (value->symbol ? value->symbol->type : NULL);
+		if (type && (type->tag == T_SAMPLER || type->tag == T_IMAGE))
+			return SpvStorageClassUniformConstant;
+		return SpvStorageClassUniform;
+	}
+	if (storage & SYM_STORAGE_IN)
+		return SpvStorageClassInput;
+	if (storage & SYM_STORAGE_OUT)
+		return SpvStorageClassOutput;
+	return SpvStorageClassFunction;
+}
+
+static int spirv_value_constant_uint(const SpirvExprValue* value, uint32_t* literal)
+{
+	if (!value || !literal)
+		return 0;
+	if (value->ir_index < 0 || value->ir_index >= acount(g_ir))
+		return 0;
+	IR_Cmd* inst = &g_ir[value->ir_index];
+	if (!inst)
+		return 0;
+	switch (inst->op)
+	{
+	case IR_PUSH_INT:
+		*literal = (uint32_t)inst->arg0;
+		return 1;
+	case IR_PUSH_BOOL:
+		*literal = inst->arg0 ? 1u : 0u;
+		return 1;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static Type* spirv_expr_value_resolved_type(const SpirvExprValue* value)
+{
+	if (!value)
+		return NULL;
+	if (value->type)
+		return value->type;
+	if (value->symbol && value->symbol->type)
+		return value->symbol->type;
+	if (value->ir_index >= 0 && value->ir_index < acount(g_ir))
+	{
+		IR_Cmd* inst = &g_ir[value->ir_index];
+		if (inst && inst->type)
+			return inst->type;
+	}
+	return NULL;
+}
+
 static void spirv_resolve_expr_value_type(SpirvEmitContext* ctx, SpirvExprValue* value)
 {
 	if (!ctx || !value)
@@ -7021,6 +7091,30 @@ static void spirv_resolve_expr_value_type(SpirvEmitContext* ctx, SpirvExprValue*
 		value->type_id = spirv_type_cache_get(ctx->type_cache, value->type);
 }
 
+static SpirvExprValue spirv_ensure_result_id(SpirvEmitContext* ctx, SpirvExprValue value, uint32_t type_id, uint32_t preset_id)
+{
+	if (!ctx)
+		return value;
+	spirv_resolve_expr_value_type(ctx, &value);
+	if (!value.type_id && type_id)
+		value.type_id = type_id;
+	if (!value.type_id && value.type && ctx->type_cache)
+		value.type_id = spirv_type_cache_get(ctx->type_cache, value.type);
+	value = spirv_value_as_rvalue(ctx, value);
+	if (!value.id)
+		return value;
+	if (preset_id && value.id != preset_id)
+	{
+		int copy_inst = spirv_inst_start(ctx->builder, SpvOpCopyObject);
+		spirv_inst_append(ctx->builder, value.type_id);
+		spirv_inst_append(ctx->builder, preset_id);
+		spirv_inst_append(ctx->builder, value.id);
+		spirv_inst_finalize(ctx->builder, copy_inst);
+		value.id = preset_id;
+	}
+	return value;
+}
+
 static SpirvExprValue spirv_scalar_to_vector(SpirvEmitContext* ctx, SpirvExprValue scalar, Type* vector_type)
 {
 	if (!ctx || !vector_type)
@@ -7029,12 +7123,25 @@ static SpirvExprValue spirv_scalar_to_vector(SpirvEmitContext* ctx, SpirvExprVal
 	spirv_resolve_expr_value_type(ctx, &scalar);
 	uint32_t vector_type_id = spirv_type_cache_get(ctx->type_cache, vector_type);
 	uint32_t result_id = spirv_alloc_id(ctx->builder);
-	int inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+	uint32_t current_id = 0u;
+	uint32_t base_id = spirv_alloc_id(ctx->builder);
+	int undef_inst = spirv_inst_start(ctx->builder, SpvOpUndef);
 	spirv_inst_append(ctx->builder, vector_type_id);
-	spirv_inst_append(ctx->builder, result_id);
+	spirv_inst_append(ctx->builder, base_id);
+	spirv_inst_finalize(ctx->builder, undef_inst);
+	current_id = base_id;
 	for (int c = 0; c < vector_type->cols; ++c)
+	{
+		uint32_t target_id = (c == vector_type->cols - 1) ? result_id : spirv_alloc_id(ctx->builder);
+		int insert_inst = spirv_inst_start(ctx->builder, SpvOpCompositeInsert);
+		spirv_inst_append(ctx->builder, vector_type_id);
+		spirv_inst_append(ctx->builder, target_id);
 		spirv_inst_append(ctx->builder, scalar.id);
-	spirv_inst_finalize(ctx->builder, inst);
+		spirv_inst_append(ctx->builder, current_id);
+		spirv_inst_append(ctx->builder, (uint32_t)c);
+		spirv_inst_finalize(ctx->builder, insert_inst);
+		current_id = target_id;
+	}
 	SpirvExprValue result = scalar;
 	result.type = vector_type;
 	result.type_id = vector_type_id;
@@ -7069,16 +7176,16 @@ static SpirvExprValue spirv_scalar_to_matrix(SpirvEmitContext* ctx, SpirvExprVal
 
 static SpirvExprValue spirv_emit_value_conversion(SpirvEmitContext* ctx, SpirvExprValue value, Type* target_type)
 {
-	if (!ctx || !target_type)
-		return value;
-	spirv_resolve_expr_value_type(ctx, &value);
-	if (value.type && type_equal(value.type, target_type))
-	{
-		if (!value.type_id && ctx->type_cache)
-			value.type_id = spirv_type_cache_get(ctx->type_cache, target_type);
-		return value;
-	}
-	value = spirv_value_as_rvalue(ctx, value);
+if (!ctx || !target_type)
+return value;
+spirv_resolve_expr_value_type(ctx, &value);
+if (value.type && type_equal(value.type, target_type))
+{
+if (!value.type_id && ctx->type_cache)
+value.type_id = spirv_type_cache_get(ctx->type_cache, target_type);
+return value;
+}
+value = spirv_value_as_rvalue(ctx, value);
 	Type* source_type = value.type;
 	if (!source_type && value.symbol && value.symbol->type)
 		source_type = value.symbol->type;
@@ -7131,9 +7238,318 @@ static SpirvExprValue spirv_emit_value_conversion(SpirvEmitContext* ctx, SpirvEx
 		value.type = target_type;
 		value.type_id = target_type_id;
 		value.is_pointer = 0;
-	}
-	return value;
 }
+return value;
+}
+
+static SpirvExprValue spirv_emit_construct_value_internal(SpirvEmitContext* ctx, Type* target, SpirvExprValue* args, int argc, int* arg_index, uint32_t preset_id)
+{
+	SpirvExprValue empty = (SpirvExprValue){ 0 };
+	if (!ctx || !target || !arg_index)
+	return empty;
+	int remaining = argc - *arg_index;
+	if (remaining <= 0)
+	return empty;
+	SpirvExprValue first_arg = args[*arg_index];
+	Type* first_type = spirv_expr_value_resolved_type(&first_arg);
+	uint32_t type_id = target ? spirv_type_cache_get(ctx->type_cache, target) : 0u;
+	if (remaining == 1 && first_type == target)
+	{
+		(*arg_index)++;
+		SpirvExprValue copy = spirv_emit_value_conversion(ctx, first_arg, target);
+		if (target && !type_id && ctx->type_cache)
+		type_id = spirv_type_cache_get(ctx->type_cache, target);
+		SpirvExprValue ensured = spirv_ensure_result_id(ctx, copy, type_id, preset_id);
+		if (target && !ensured.type)
+		ensured.type = target;
+		if (type_id && !ensured.type_id)
+		ensured.type_id = type_id;
+		return ensured;
+	}
+	switch (target->tag)
+	{
+		case T_VEC:
+			{
+				if (target->cols > 1 && remaining == 1 && first_type && type_is_scalar(first_type))
+				{
+					(*arg_index)++;
+					Type* scalar_type = type_get_scalar(type_base_type(target));
+					SpirvExprValue scalar_value = spirv_emit_value_conversion(ctx, first_arg, scalar_type);
+					SpirvExprValue promoted = spirv_scalar_to_vector(ctx, scalar_value, target);
+					if (target && !type_id && ctx->type_cache)
+					type_id = spirv_type_cache_get(ctx->type_cache, target);
+					promoted = spirv_ensure_result_id(ctx, promoted, type_id, preset_id);
+					promoted.type = target;
+					if (type_id && !promoted.type_id)
+					promoted.type_id = type_id;
+					return promoted;
+				}
+				dyna uint32_t* components = NULL;
+				Type* scalar_type = type_get_scalar(type_base_type(target));
+				uint32_t scalar_type_id = scalar_type ? spirv_type_cache_get(ctx->type_cache, scalar_type) : 0u;
+				int collected = 0;
+				while (collected < target->cols && *arg_index < argc)
+				{
+					SpirvExprValue arg = args[*arg_index];
+					Type* arg_type = spirv_expr_value_resolved_type(&arg);
+					if (arg_type && type_is_vector(arg_type))
+					{
+						Type* expected = type_get_vector(type_base_type(target), arg_type->cols);
+						arg = spirv_emit_value_conversion(ctx, arg, expected);
+						arg = spirv_value_as_rvalue(ctx, arg);
+						for (int c = 0; c < arg_type->cols && collected < target->cols; ++c)
+						{
+							uint32_t extract_id = spirv_alloc_id(ctx->builder);
+							int extract_inst = spirv_inst_start(ctx->builder, SpvOpCompositeExtract);
+							spirv_inst_append(ctx->builder, scalar_type_id);
+							spirv_inst_append(ctx->builder, extract_id);
+							spirv_inst_append(ctx->builder, arg.id);
+							spirv_inst_append(ctx->builder, (uint32_t)c);
+							spirv_inst_finalize(ctx->builder, extract_inst);
+							apush(components, extract_id);
+							collected++;
+						}
+						(*arg_index)++;
+						continue;
+					}
+					arg = spirv_emit_value_conversion(ctx, arg, scalar_type);
+					arg = spirv_value_as_rvalue(ctx, arg);
+					apush(components, arg.id);
+					collected++;
+					(*arg_index)++;
+				}
+				if (collected < target->cols)
+				{
+					afree(components);
+					return empty;
+				}
+				uint32_t result_id = preset_id ? preset_id : spirv_alloc_id(ctx->builder);
+				if (target && !type_id && ctx->type_cache)
+				type_id = spirv_type_cache_get(ctx->type_cache, target);
+				int construct_inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+				spirv_inst_append(ctx->builder, type_id);
+				spirv_inst_append(ctx->builder, result_id);
+				for (int i = 0; i < acount(components); ++i)
+				spirv_inst_append(ctx->builder, components[i]);
+				spirv_inst_finalize(ctx->builder, construct_inst);
+				afree(components);
+				SpirvExprValue result = (SpirvExprValue){ 0 };
+				result.type = target;
+				result.type_id = type_id;
+				result.id = result_id;
+				result.is_pointer = 0;
+				return result;
+			}
+			case T_MAT:
+				{
+					if (target->cols > 1 && remaining == 1 && first_type && type_is_scalar(first_type))
+					{
+						(*arg_index)++;
+						Type* scalar_type = type_get_scalar(type_base_type(target));
+						SpirvExprValue scalar_value = spirv_emit_value_conversion(ctx, first_arg, scalar_type);
+						SpirvExprValue promoted = spirv_scalar_to_matrix(ctx, scalar_value, target);
+						if (target && !type_id && ctx->type_cache)
+						type_id = spirv_type_cache_get(ctx->type_cache, target);
+						promoted = spirv_ensure_result_id(ctx, promoted, type_id, preset_id);
+						promoted.type = target;
+						if (type_id && !promoted.type_id)
+						promoted.type_id = type_id;
+						return promoted;
+					}
+					dyna uint32_t* columns = NULL;
+					dyna uint32_t* rows = NULL;
+					Type* column_type = type_get_vector((TypeTag)target->base, target->rows);
+					uint32_t column_type_id = column_type ? spirv_type_cache_get(ctx->type_cache, column_type) : 0u;
+					Type* scalar_type = type_get_scalar(type_base_type(target));
+					int collected = 0;
+					while (collected < target->cols && *arg_index < argc)
+					{
+						SpirvExprValue arg = args[*arg_index];
+						Type* arg_type = spirv_expr_value_resolved_type(&arg);
+						if (arg_type && type_is_matrix(arg_type))
+						{
+							arg = spirv_emit_value_conversion(ctx, arg, target);
+							arg = spirv_value_as_rvalue(ctx, arg);
+							for (int c = 0; c < arg_type->cols && collected < target->cols; ++c)
+							{
+								uint32_t extract_id = spirv_alloc_id(ctx->builder);
+								int extract_inst = spirv_inst_start(ctx->builder, SpvOpCompositeExtract);
+								spirv_inst_append(ctx->builder, column_type_id);
+								spirv_inst_append(ctx->builder, extract_id);
+								spirv_inst_append(ctx->builder, arg.id);
+								spirv_inst_append(ctx->builder, (uint32_t)c);
+								spirv_inst_finalize(ctx->builder, extract_inst);
+								apush(columns, extract_id);
+								collected++;
+							}
+							(*arg_index)++;
+							continue;
+						}
+						if (arg_type && type_is_vector(arg_type))
+						{
+							arg = spirv_emit_value_conversion(ctx, arg, column_type);
+							arg = spirv_value_as_rvalue(ctx, arg);
+							apush(columns, arg.id);
+							collected++;
+							(*arg_index)++;
+							continue;
+						}
+						arg = spirv_emit_value_conversion(ctx, arg, scalar_type);
+						arg = spirv_value_as_rvalue(ctx, arg);
+						apush(rows, arg.id);
+						(*arg_index)++;
+						if (acount(rows) == target->rows)
+						{
+							uint32_t column_id = spirv_alloc_id(ctx->builder);
+							int column_inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+							spirv_inst_append(ctx->builder, column_type_id);
+							spirv_inst_append(ctx->builder, column_id);
+							for (int r = 0; r < target->rows; ++r)
+							spirv_inst_append(ctx->builder, rows[r]);
+							spirv_inst_finalize(ctx->builder, column_inst);
+							aclear(rows);
+							apush(columns, column_id);
+							collected++;
+						}
+					}
+					afree(rows);
+					if (collected < target->cols)
+					{
+						afree(columns);
+						return empty;
+					}
+					uint32_t result_id = preset_id ? preset_id : spirv_alloc_id(ctx->builder);
+					if (target && !type_id && ctx->type_cache)
+					type_id = spirv_type_cache_get(ctx->type_cache, target);
+					int construct_inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+					spirv_inst_append(ctx->builder, type_id);
+					spirv_inst_append(ctx->builder, result_id);
+					for (int i = 0; i < acount(columns); ++i)
+					spirv_inst_append(ctx->builder, columns[i]);
+					spirv_inst_finalize(ctx->builder, construct_inst);
+					afree(columns);
+					SpirvExprValue result = (SpirvExprValue){ 0 };
+					result.type = target;
+					result.type_id = type_id;
+					result.id = result_id;
+					result.is_pointer = 0;
+					return result;
+				}
+				case T_ARRAY:
+					{
+						Type* element_type = target->user ? (Type*)target->user : NULL;
+						if (!element_type || target->array_len < 0)
+						return empty;
+						if (remaining == 1 && first_type == target)
+						{
+							(*arg_index)++;
+							SpirvExprValue copy = spirv_emit_value_conversion(ctx, first_arg, target);
+							if (target && !type_id && ctx->type_cache)
+							type_id = spirv_type_cache_get(ctx->type_cache, target);
+							SpirvExprValue ensured = spirv_ensure_result_id(ctx, copy, type_id, preset_id);
+							ensured.type = target;
+							if (type_id && !ensured.type_id)
+							ensured.type_id = type_id;
+							return ensured;
+						}
+						dyna uint32_t* elements = NULL;
+						for (int i = 0; i < target->array_len; ++i)
+						{
+							SpirvExprValue element = spirv_emit_construct_value_internal(ctx, element_type, args, argc, arg_index, 0);
+							element = spirv_value_as_rvalue(ctx, element);
+							apush(elements, element.id);
+						}
+						uint32_t result_id = preset_id ? preset_id : spirv_alloc_id(ctx->builder);
+						if (target && !type_id && ctx->type_cache)
+						type_id = spirv_type_cache_get(ctx->type_cache, target);
+						int construct_inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+						spirv_inst_append(ctx->builder, type_id);
+						spirv_inst_append(ctx->builder, result_id);
+						for (int i = 0; i < acount(elements); ++i)
+						spirv_inst_append(ctx->builder, elements[i]);
+						spirv_inst_finalize(ctx->builder, construct_inst);
+						afree(elements);
+						SpirvExprValue result = (SpirvExprValue){ 0 };
+						result.type = target;
+						result.type_id = type_id;
+						result.id = result_id;
+						result.is_pointer = 0;
+						return result;
+					}
+					case T_STRUCT:
+						{
+							StructInfo* info = type_struct_info(target);
+							if (!info)
+							return empty;
+							if (remaining == 1 && first_type == target)
+							{
+								(*arg_index)++;
+								SpirvExprValue copy = spirv_emit_value_conversion(ctx, first_arg, target);
+								if (target && !type_id && ctx->type_cache)
+								type_id = spirv_type_cache_get(ctx->type_cache, target);
+								SpirvExprValue ensured = spirv_ensure_result_id(ctx, copy, type_id, preset_id);
+								ensured.type = target;
+								if (type_id && !ensured.type_id)
+								ensured.type_id = type_id;
+								return ensured;
+							}
+							dyna uint32_t* members = NULL;
+							int member_count = type_struct_member_count(target);
+							for (int i = 0; i < member_count; ++i)
+							{
+								StructMember* member = type_struct_member_at(target, i);
+								if (!member)
+								continue;
+								Type* member_type = member->type ? member->type : member->declared_type;
+								SpirvExprValue field = spirv_emit_construct_value_internal(ctx, member_type, args, argc, arg_index, 0);
+								field = spirv_value_as_rvalue(ctx, field);
+								apush(members, field.id);
+							}
+							uint32_t result_id = preset_id ? preset_id : spirv_alloc_id(ctx->builder);
+							if (target && !type_id && ctx->type_cache)
+							type_id = spirv_type_cache_get(ctx->type_cache, target);
+							int construct_inst = spirv_inst_start(ctx->builder, SpvOpCompositeConstruct);
+							spirv_inst_append(ctx->builder, type_id);
+							spirv_inst_append(ctx->builder, result_id);
+							for (int i = 0; i < acount(members); ++i)
+							spirv_inst_append(ctx->builder, members[i]);
+							spirv_inst_finalize(ctx->builder, construct_inst);
+							afree(members);
+							SpirvExprValue result = (SpirvExprValue){ 0 };
+							result.type = target;
+							result.type_id = type_id;
+							result.id = result_id;
+							result.is_pointer = 0;
+							return result;
+						}
+						default:
+							{
+								SpirvExprValue arg = args[*arg_index];
+								(*arg_index)++;
+								SpirvExprValue converted = spirv_emit_value_conversion(ctx, arg, target);
+								if (target && !type_id && ctx->type_cache)
+								type_id = spirv_type_cache_get(ctx->type_cache, target);
+								converted = spirv_ensure_result_id(ctx, converted, type_id, preset_id);
+								converted.type = target;
+								if (type_id && !converted.type_id)
+								converted.type_id = type_id;
+								return converted;
+							}
+						}
+						return empty;
+					}
+
+					static SpirvExprValue spirv_emit_construct_value(SpirvEmitContext* ctx, Type* target, SpirvExprValue* args, int argc, uint32_t preset_id)
+					{
+						int index = 0;
+						SpirvExprValue result = spirv_emit_construct_value_internal(ctx, target, args, argc, &index, preset_id);
+						if (target && !result.type)
+						result.type = target;
+						if (target && !result.type_id && ctx->type_cache)
+						result.type_id = spirv_type_cache_get(ctx->type_cache, target);
+						result.is_pointer = 0;
+						return result;
+					}
 
 static SpirvExprValue spirv_emit_binary_operation(SpirvEmitContext* ctx, int ir_index, const IR_Cmd* inst, Tok tok, uint32_t result_type_id, uint32_t result_id, SpirvExprValue lhs, SpirvExprValue rhs)
 {
@@ -7702,48 +8118,332 @@ static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder
 				break;
 			}
 		case IR_CALL:
-			{
-				SpirvExprValue callee = spirv_value_stack_pop(&ctx);
-				dyna SpirvExprValue* args = NULL;
-				for (int arg = 0; arg < inst->arg0; ++arg)
-					{
-					SpirvExprValue value = spirv_value_stack_pop(&ctx);
-					value = spirv_value_as_rvalue(&ctx, value);
-					apush(args, value);
-				}
-				uint32_t callee_id = callee.id;
-				if (!callee_id && callee.symbol)
-				callee_id = callee.symbol->spirv_result_id;
-				if (!callee_id)
-					{
-					afree(args);
-					break;
-			}
-		uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
-		if (!result_type_id && inst->type && cache)
-		result_type_id = spirv_type_cache_get(cache, inst->type);
-		uint32_t result_id = spirv_value_table_result_id(value_table, i);
-		if (!result_id)
-		result_id = spirv_alloc_id(builder);
-		int call_inst = spirv_inst_start(builder, SpvOpFunctionCall);
-		spirv_inst_append(builder, result_type_id);
-		spirv_inst_append(builder, result_id);
-		spirv_inst_append(builder, callee_id);
-		for (int arg = acount(args) - 1; arg >= 0; --arg)
-		spirv_inst_append(builder, args[arg].id);
-		spirv_inst_finalize(builder, call_inst);
-		SpirvExprValue result = { 0 };
-		result.type = inst->type;
-		result.type_id = result_type_id;
-		result.id = result_id;
-		result.ir_index = i;
-		spirv_value_stack_push(&ctx, result);
-		afree(args);
-		break;
-			}
-		case IR_UNARY:
 		{
+			SpirvExprValue callee = spirv_value_stack_pop(&ctx);
+			dyna SpirvExprValue* args = NULL;
+			for (int arg = 0; arg < inst->arg0; ++arg)
+			{
+				SpirvExprValue value = spirv_value_stack_pop(&ctx);
+				value = spirv_value_as_rvalue(&ctx, value);
+				apush(args, value);
+			}
+			uint32_t callee_id = callee.id;
+			if (!callee_id && callee.symbol)
+				callee_id = callee.symbol->spirv_result_id;
+			if (!callee_id)
+			{
+				afree(args);
+				break;
+			}
 			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && inst->type && cache)
+				result_type_id = spirv_type_cache_get(cache, inst->type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			int call_inst = spirv_inst_start(builder, SpvOpFunctionCall);
+			spirv_inst_append(builder, result_type_id);
+			spirv_inst_append(builder, result_id);
+			spirv_inst_append(builder, callee_id);
+			for (int arg = acount(args) - 1; arg >= 0; --arg)
+				spirv_inst_append(builder, args[arg].id);
+			spirv_inst_finalize(builder, call_inst);
+			SpirvExprValue result = { 0 };
+			result.type = inst->type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = i;
+			spirv_value_stack_push(&ctx, result);
+			afree(args);
+			break;
+		}
+		case IR_CONSTRUCT:
+		{
+			dyna SpirvExprValue* args = NULL;
+			for (int arg = 0; arg < inst->arg0; ++arg)
+			{
+				SpirvExprValue value = spirv_value_stack_pop(&ctx);
+				apush(args, value);
+			}
+			SpirvExprValue target = spirv_value_stack_pop(&ctx);
+			int arg_count = acount(args);
+			for (int l = 0, r = arg_count - 1; l < r; ++l, --r)
+			{
+				SpirvExprValue tmp = args[l];
+				args[l] = args[r];
+				args[r] = tmp;
+			}
+			Type* result_type = inst->type ? inst->type : spirv_expr_value_resolved_type(&target);
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && result_type && cache)
+				result_type_id = spirv_type_cache_get(cache, result_type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue result = spirv_emit_construct_value(&ctx, result_type, args, arg_count, result_id);
+			afree(args);
+			if (!result.type && result_type)
+				result.type = result_type;
+			if (!result.type_id && result_type_id)
+				result.type_id = result_type_id;
+			if (!result.id)
+				result.id = result_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+		case IR_INDEX:
+		{
+			SpirvExprValue index = spirv_value_stack_pop(&ctx);
+			SpirvExprValue base = spirv_value_stack_pop(&ctx);
+			Type* result_type = inst->type;
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && result_type && cache)
+				result_type_id = spirv_type_cache_get(cache, result_type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			Type* index_type = spirv_expr_value_resolved_type(&index);
+			if (index_type && index_type != g_type_int)
+				index = spirv_emit_value_conversion(&ctx, index, g_type_int);
+			index = spirv_value_as_rvalue(&ctx, index);
+			if (inst->is_lvalue)
+			{
+				SpirvExprValue pointer = base.is_pointer ? base : spirv_make_symbol_pointer(&ctx, base.symbol);
+				if (pointer.pointer_id)
+				{
+					uint32_t storage_class = spirv_value_storage_class(&pointer);
+					if (!result_type_id && result_type && cache)
+						result_type_id = spirv_type_cache_get(cache, result_type);
+					uint32_t pointer_type_id = result_type_id ? spirv_type_pointer(cache, result_type_id, storage_class) : 0u;
+					uint32_t access_id = spirv_alloc_id(builder);
+					int chain_inst = spirv_inst_start(builder, SpvOpAccessChain);
+					spirv_inst_append(builder, pointer_type_id);
+					spirv_inst_append(builder, access_id);
+					spirv_inst_append(builder, pointer.pointer_id);
+					spirv_inst_append(builder, index.id);
+					spirv_inst_finalize(builder, chain_inst);
+					result.is_pointer = 1;
+					result.pointer_id = access_id;
+					result.pointer_type_id = pointer_type_id;
+					result.symbol = pointer.symbol;
+					result.qualifier_flags = pointer.qualifier_flags;
+					result.storage_flags = pointer.storage_flags;
+					spirv_value_stack_push(&ctx, result);
+					break;
+				}
+			}
+			SpirvExprValue composite = spirv_value_as_rvalue(&ctx, base);
+			Type* base_type = spirv_expr_value_resolved_type(&composite);
+			uint32_t literal = 0u;
+			int has_literal = spirv_value_constant_uint(&index, &literal);
+			if (base_type && type_is_vector(base_type))
+			{
+				if (has_literal)
+				{
+					int extract_inst = spirv_inst_start(builder, SpvOpCompositeExtract);
+					spirv_inst_append(builder, result_type_id);
+					spirv_inst_append(builder, result_id);
+					spirv_inst_append(builder, composite.id);
+					spirv_inst_append(builder, literal);
+					spirv_inst_finalize(builder, extract_inst);
+				}
+				else
+				{
+					int extract_inst = spirv_inst_start(builder, SpvOpVectorExtractDynamic);
+					spirv_inst_append(builder, result_type_id);
+					spirv_inst_append(builder, result_id);
+					spirv_inst_append(builder, composite.id);
+					spirv_inst_append(builder, index.id);
+					spirv_inst_finalize(builder, extract_inst);
+				}
+			}
+			else if (has_literal)
+			{
+				int extract_inst = spirv_inst_start(builder, SpvOpCompositeExtract);
+				spirv_inst_append(builder, result_type_id);
+				spirv_inst_append(builder, result_id);
+				spirv_inst_append(builder, composite.id);
+				spirv_inst_append(builder, literal);
+				spirv_inst_finalize(builder, extract_inst);
+			}
+			result.id = result_id;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+		case IR_MEMBER:
+		{
+			SpirvExprValue base = spirv_value_stack_pop(&ctx);
+			Type* result_type = inst->type;
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && result_type && cache)
+				result_type_id = spirv_type_cache_get(cache, result_type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			Type* base_type = spirv_expr_value_resolved_type(&base);
+			int member_index = 0;
+			if (base_type && inst->str0)
+			{
+				StructInfo* info = type_struct_info(base_type);
+				if (info)
+				{
+					int member_count = type_struct_member_count(base_type);
+					for (int m = 0; m < member_count; ++m)
+					{
+						StructMember* member = type_struct_member_at(base_type, m);
+						if (member && member->name == inst->str0)
+						{
+							member_index = m;
+							break;
+						}
+					}
+				}
+			}
+			if (inst->is_lvalue)
+			{
+				SpirvExprValue pointer = base.is_pointer ? base : spirv_make_symbol_pointer(&ctx, base.symbol);
+				if (pointer.pointer_id)
+				{
+					uint32_t storage_class = spirv_value_storage_class(&pointer);
+					if (!result_type_id && result_type && cache)
+						result_type_id = spirv_type_cache_get(cache, result_type);
+					uint32_t pointer_type_id = result_type_id ? spirv_type_pointer(cache, result_type_id, storage_class) : 0u;
+					uint32_t access_id = spirv_alloc_id(builder);
+					int chain_inst = spirv_inst_start(builder, SpvOpAccessChain);
+					spirv_inst_append(builder, pointer_type_id);
+					spirv_inst_append(builder, access_id);
+					spirv_inst_append(builder, pointer.pointer_id);
+					spirv_inst_append(builder, (uint32_t)member_index);
+					spirv_inst_finalize(builder, chain_inst);
+					result.is_pointer = 1;
+					result.pointer_id = access_id;
+					result.pointer_type_id = pointer_type_id;
+					result.symbol = pointer.symbol;
+					result.qualifier_flags = pointer.qualifier_flags;
+					result.storage_flags = pointer.storage_flags;
+					spirv_value_stack_push(&ctx, result);
+					break;
+				}
+			}
+			SpirvExprValue composite = spirv_value_as_rvalue(&ctx, base);
+			int extract_inst = spirv_inst_start(builder, SpvOpCompositeExtract);
+			spirv_inst_append(builder, result_type_id);
+			spirv_inst_append(builder, result_id);
+			spirv_inst_append(builder, composite.id);
+			spirv_inst_append(builder, (uint32_t)member_index);
+			spirv_inst_finalize(builder, extract_inst);
+			result.id = result_id;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+		case IR_SWIZZLE:
+		{
+			SpirvExprValue base = spirv_value_stack_pop(&ctx);
+			Type* result_type = inst->type;
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && result_type && cache)
+				result_type_id = spirv_type_cache_get(cache, result_type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			Type* base_type = spirv_expr_value_resolved_type(&base);
+			if (base_type)
+				base = spirv_emit_value_conversion(&ctx, base, base_type);
+			base = spirv_value_as_rvalue(&ctx, base);
+			int count = inst->arg0;
+			int mask = inst->arg1;
+			if (count <= 1)
+			{
+				uint32_t component = (uint32_t)(mask & 0xF);
+				int extract_inst = spirv_inst_start(builder, SpvOpCompositeExtract);
+				spirv_inst_append(builder, result_type_id);
+				spirv_inst_append(builder, result_id);
+				spirv_inst_append(builder, base.id);
+				spirv_inst_append(builder, component);
+				spirv_inst_finalize(builder, extract_inst);
+			}
+			else
+			{
+				int shuffle_inst = spirv_inst_start(builder, SpvOpVectorShuffle);
+				spirv_inst_append(builder, result_type_id);
+				spirv_inst_append(builder, result_id);
+				spirv_inst_append(builder, base.id);
+				spirv_inst_append(builder, base.id);
+				for (int c = 0; c < count; ++c)
+				{
+					uint32_t selector = (uint32_t)((mask >> (c * 4)) & 0xF);
+					spirv_inst_append(builder, selector);
+				}
+				spirv_inst_finalize(builder, shuffle_inst);
+			}
+			result.id = result_id;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+		case IR_SELECT:
+		{
+			SpirvExprValue false_value = spirv_value_stack_pop(&ctx);
+			SpirvExprValue true_value = spirv_value_stack_pop(&ctx);
+			SpirvExprValue condition = spirv_value_stack_pop(&ctx);
+			Type* result_type = inst->type;
+			uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
+			if (!result_type_id && result_type && cache)
+				result_type_id = spirv_type_cache_get(cache, result_type);
+			uint32_t result_id = spirv_value_table_result_id(value_table, i);
+			if (!result_id)
+				result_id = spirv_alloc_id(builder);
+			Type* cond_type = NULL;
+			if (result_type && type_is_vector(result_type))
+				cond_type = type_get_vector(T_BOOL, result_type->cols);
+			else
+				cond_type = g_type_bool;
+			condition = spirv_emit_value_conversion(&ctx, condition, cond_type);
+			condition = spirv_value_as_rvalue(&ctx, condition);
+			true_value = spirv_emit_value_conversion(&ctx, true_value, result_type);
+			true_value = spirv_value_as_rvalue(&ctx, true_value);
+			false_value = spirv_emit_value_conversion(&ctx, false_value, result_type);
+			false_value = spirv_value_as_rvalue(&ctx, false_value);
+			int select_inst = spirv_inst_start(builder, SpvOpSelect);
+			spirv_inst_append(builder, result_type_id);
+			spirv_inst_append(builder, result_id);
+			spirv_inst_append(builder, condition.id);
+			spirv_inst_append(builder, true_value.id);
+			spirv_inst_append(builder, false_value.id);
+			spirv_inst_finalize(builder, select_inst);
+			SpirvExprValue result = (SpirvExprValue){ 0 };
+			result.type = result_type;
+			result.type_id = result_type_id;
+			result.id = result_id;
+			result.ir_index = i;
+			result.qualifier_flags = inst->qualifier_flags;
+			result.storage_flags = inst->storage_flags;
+			spirv_value_stack_push(&ctx, result);
+			break;
+		}
+case IR_UNARY:
+{
+uint32_t result_type_id = spirv_value_table_type_id(value_table, i);
 			if (!result_type_id && inst->type && cache)
 				result_type_id = spirv_type_cache_get(cache, inst->type);
 			uint32_t result_id = spirv_value_table_result_id(value_table, i);
@@ -11125,38 +11825,38 @@ DEFINE_TEST(test_spirv_emit_minimal_vertex_main)
 	compiler_setup("void main() {}");
 	dyna uint32_t* words = emit_spirv();
 	const uint32_t expected[] = {
-		0x07230203u,
-		0x00010500u,
-		0x00010001u,
-		0x00000005u,
-		0x00000000u,
-		0x00020011u,
-		0x00000001u,
-		0x0004000eu,
-		0x00000000u,
-		0x00000001u,
-		0x00000000u,
-		0x00020013u,
-		0x00000001u,
-		0x00030021u,
-		0x00000002u,
-		0x00000001u,
-		0x00050036u,
-		0x00000001u,
-		0x00000003u,
-		0x00000000u,
-		0x00000002u,
-		0x000200f8u,
-		0x00000004u,
-		0x000100fdu,
-		0x00020038u,
-		0x00000000u,
-		0x0005000fu,
-		0x00000000u,
-		0x00000003u,
-		0x6e69616du,
-		0x00000000u,
-	};
+0x07230203u,
+0x00010500u,
+0x00010001u,
+0x00000005u,
+0x00000000u,
+0x00020011u,
+0x00000001u,
+0x0004000eu,
+0x00000000u,
+0x00000001u,
+0x00000000u,
+0x00020013u,
+0x00000001u,
+0x00030021u,
+0x00000002u,
+0x00000001u,
+0x00050036u,
+0x00000001u,
+0x00000003u,
+0x00000000u,
+0x00000002u,
+0x000200f8u,
+0x00000004u,
+0x000100fdu,
+0x00020038u,
+0x00000000u,
+0x0005000fu,
+0x00000000u,
+0x00000003u,
+0x6e69616du,
+0x00000000u,
+};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
 	for (int i = 0; i < expected_count; ++i)
@@ -11330,7 +12030,7 @@ const uint32_t expected[] = {
 0x07230203u,
 0x00010500u,
 0x00010001u,
-0x0000000fu,
+0x00000013u,
 0x00000000u,
 0x00020011u,
 0x00000001u,
@@ -11373,17 +12073,44 @@ const uint32_t expected[] = {
 0x0000000bu,
 0x000200f8u,
 0x0000000du,
-0x00070050u,
+0x00030001u,
+0x00000002u,
+0x0000000fu,
+0x00060052u,
+0x00000002u,
+0x00000010u,
+0x00000005u,
+0x0000000fu,
+0x00000000u,
+0x00060052u,
+0x00000002u,
+0x00000011u,
+0x00000005u,
+0x00000010u,
+0x00000001u,
+0x00060052u,
+0x00000002u,
+0x00000012u,
+0x00000005u,
+0x00000011u,
+0x00000002u,
+0x00060052u,
 0x00000002u,
 0x0000000eu,
 0x00000005u,
-0x00000005u,
-0x00000005u,
-0x00000005u,
+0x00000012u,
+0x00000003u,
+0x00040053u,
+0x00000002u,
+0x00000006u,
+0x0000000eu,
+0x0003003eu,
+0x00000009u,
+0x00000006u,
 0x00040053u,
 0x00000002u,
 0x00000007u,
-0x0000000eu,
+0x00000006u,
 0x000100fdu,
 0x00020038u,
 0x00000000u,
