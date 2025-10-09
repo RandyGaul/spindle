@@ -6072,6 +6072,7 @@ typedef struct SpirvStageLayout
 	int has_local_size;
 } SpirvStageLayout;
 
+
 enum
 {
 	SPIRV_MAGIC = 0x07230203u,
@@ -6101,23 +6102,114 @@ enum SpirvOp
 	SpvOpTypeArray = 28,
 	SpvOpTypeRuntimeArray = 29,
 	SpvOpTypeStruct = 30,
-SpvOpTypePointer = 32,
+	SpvOpTypePointer = 32,
 	SpvOpTypeFunction = 33,
 	SpvOpConstant = 43,
 	SpvOpFunction = 54,
 	SpvOpFunctionParameter = 55,
 	SpvOpFunctionEnd = 56,
+	SpvOpFunctionCall = 57,
 	SpvOpVariable = 59,
+	SpvOpLoad = 61,
+	SpvOpStore = 62,
+	SpvOpAccessChain = 65,
+	SpvOpInBoundsAccessChain = 66,
+	SpvOpCompositeConstruct = 80,
+	SpvOpCompositeExtract = 81,
+	SpvOpCompositeInsert = 82,
+	SpvOpCopyObject = 83,
+	SpvOpVectorShuffle = 79,
+	SpvOpConvertFToU = 109,
+	SpvOpConvertFToS = 110,
+	SpvOpConvertSToF = 111,
+	SpvOpConvertUToF = 112,
+	SpvOpUConvert = 113,
+	SpvOpSConvert = 114,
+	SpvOpFConvert = 115,
+	SpvOpConvertPtrToU = 116,
+	SpvOpSatConvertSToU = 117,
+	SpvOpSatConvertUToS = 118,
+	SpvOpConvertUToPtr = 119,
+	SpvOpPtrCastToGeneric = 120,
+	SpvOpGenericCastToPtr = 121,
+	SpvOpGenericCastToPtrExplicit = 122,
+	SpvOpBitcast = 123,
+	SpvOpSNegate = 124,
+	SpvOpFNegate = 125,
+	SpvOpIAdd = 128,
+	SpvOpFAdd = 129,
+	SpvOpISub = 130,
+	SpvOpFSub = 131,
+	SpvOpIMul = 132,
+	SpvOpFMul = 133,
+	SpvOpUDiv = 134,
+	SpvOpSDiv = 135,
+	SpvOpFDiv = 136,
+	SpvOpUMod = 137,
+	SpvOpSRem = 138,
+	SpvOpSMod = 139,
+	SpvOpFRem = 140,
+	SpvOpFMod = 141,
+	SpvOpVectorTimesScalar = 142,
+	SpvOpMatrixTimesScalar = 143,
+	SpvOpVectorTimesMatrix = 144,
+	SpvOpMatrixTimesVector = 145,
+	SpvOpMatrixTimesMatrix = 146,
+	SpvOpOuterProduct = 147,
+	SpvOpDot = 148,
+	SpvOpIAddCarry = 149,
+	SpvOpISubBorrow = 150,
+	SpvOpUMulExtended = 151,
+	SpvOpSMulExtended = 152,
+	SpvOpAny = 154,
+	SpvOpAll = 155,
+	SpvOpIsNan = 156,
+	SpvOpIsInf = 157,
+	SpvOpLogicalEqual = 164,
+	SpvOpLogicalNotEqual = 165,
+	SpvOpLogicalOr = 166,
+	SpvOpLogicalAnd = 167,
+	SpvOpLogicalNot = 168,
+	SpvOpSelect = 169,
+	SpvOpIEqual = 170,
+	SpvOpINotEqual = 171,
+	SpvOpUGreaterThan = 172,
+	SpvOpSGreaterThan = 173,
+	SpvOpUGreaterThanEqual = 174,
+	SpvOpSGreaterThanEqual = 175,
+	SpvOpULessThan = 176,
+	SpvOpSLessThan = 177,
+	SpvOpULessThanEqual = 178,
+	SpvOpSLessThanEqual = 179,
+	SpvOpFOrdEqual = 180,
+	SpvOpFUnordEqual = 181,
+	SpvOpFOrdNotEqual = 182,
+	SpvOpFUnordNotEqual = 183,
+	SpvOpFOrdLessThan = 184,
+	SpvOpFUnordLessThan = 185,
+	SpvOpFOrdGreaterThan = 186,
+	SpvOpFUnordGreaterThan = 187,
+	SpvOpFOrdLessThanEqual = 188,
+	SpvOpFUnordLessThanEqual = 189,
+	SpvOpFOrdGreaterThanEqual = 190,
+	SpvOpFUnordGreaterThanEqual = 191,
+	SpvOpShiftRightLogical = 194,
+	SpvOpShiftRightArithmetic = 195,
+	SpvOpShiftLeftLogical = 196,
+	SpvOpBitwiseOr = 197,
+	SpvOpBitwiseXor = 198,
+	SpvOpBitwiseAnd = 199,
+	SpvOpNot = 200,
 	SpvOpLoopMerge = 246,
 	SpvOpSelectionMerge = 247,
 	SpvOpLabel = 248,
 	SpvOpBranch = 249,
 	SpvOpBranchConditional = 250,
-        SpvOpSwitch = 251,
-        SpvOpKill = 252,
-        SpvOpReturn = 253,
-        SpvOpReturnValue = 254,
-        SpvOpUnreachable = 255,
+	SpvOpSwitch = 251,
+	SpvOpKill = 252,
+	SpvOpReturn = 253,
+	SpvOpReturnValue = 254,
+	SpvOpUnreachable = 255,
 };
 
 enum SpirvSelectionControl
@@ -6159,21 +6251,21 @@ enum SpirvCapabilityEnum
 
 enum SpirvStorageClass
 {
-SpvStorageClassUniformConstant = 0,
-SpvStorageClassInput = 1,
-SpvStorageClassUniform = 2,
-SpvStorageClassOutput = 3,
-SpvStorageClassWorkgroup = 4,
-SpvStorageClassStorageBuffer = 12,
+	SpvStorageClassUniformConstant = 0,
+	SpvStorageClassInput = 1,
+	SpvStorageClassUniform = 2,
+	SpvStorageClassOutput = 3,
+	SpvStorageClassWorkgroup = 4,
+	SpvStorageClassStorageBuffer = 12,
 };
 
 enum SpirvDecoration
 {
-SpvDecorationBlock = 2,
-SpvDecorationBufferBlock = 3,
-SpvDecorationLocation = 30,
-SpvDecorationBinding = 33,
-SpvDecorationDescriptorSet = 34,
+	SpvDecorationBlock = 2,
+	SpvDecorationBufferBlock = 3,
+	SpvDecorationLocation = 30,
+	SpvDecorationBinding = 33,
+	SpvDecorationDescriptorSet = 34,
 };
 
 enum SpirvDim
@@ -6195,6 +6287,311 @@ enum SpirvFunctionControl
 {
 	SpvFunctionControlMaskNone = 0,
 };
+
+
+typedef enum SpirvValueKind
+{
+	SPIRV_VALUE_NONE,
+	SPIRV_VALUE_BOOL,
+	SPIRV_VALUE_SIGNED,
+	SPIRV_VALUE_UNSIGNED,
+	SPIRV_VALUE_FLOAT,
+	SPIRV_VALUE_COUNT
+} SpirvValueKind;
+
+typedef struct SpirvValue
+{
+	uint32_t result_id;
+	uint32_t type_id;
+} SpirvValue;
+
+typedef struct SpirvValueTable
+{
+	dyna SpirvValue* entries;
+} SpirvValueTable;
+
+typedef struct SpirvBinaryOpcode
+{
+	Tok tok;
+	uint16_t signed_opcode;
+	uint16_t unsigned_opcode;
+	uint16_t float_opcode;
+	uint16_t bool_opcode;
+} SpirvBinaryOpcode;
+
+typedef struct SpirvUnaryOpcode
+{
+	Tok tok;
+	uint16_t copy_opcode;
+	uint16_t signed_opcode;
+	uint16_t unsigned_opcode;
+	uint16_t float_opcode;
+	uint16_t bool_opcode;
+} SpirvUnaryOpcode;
+
+typedef struct SpirvComparisonOpcode
+{
+	Tok tok;
+	uint16_t signed_opcode;
+	uint16_t unsigned_opcode;
+	uint16_t float_opcode;
+	uint16_t bool_opcode;
+} SpirvComparisonOpcode;
+
+typedef struct SpirvConversionOpcode
+{
+	SpirvValueKind from_kind;
+	SpirvValueKind to_kind;
+	uint16_t opcode;
+} SpirvConversionOpcode;
+
+static const SpirvBinaryOpcode spirv_binary_op_table[] = {
+	{ TOK_PLUS, SpvOpIAdd, SpvOpIAdd, SpvOpFAdd, 0 },
+	{ TOK_MINUS, SpvOpISub, SpvOpISub, SpvOpFSub, 0 },
+	{ TOK_STAR, SpvOpIMul, SpvOpIMul, SpvOpFMul, 0 },
+	{ TOK_SLASH, SpvOpSDiv, SpvOpUDiv, SpvOpFDiv, 0 },
+	{ TOK_PERCENT, SpvOpSMod, SpvOpUMod, 0, 0 },
+	{ TOK_AMP, SpvOpBitwiseAnd, SpvOpBitwiseAnd, 0, SpvOpLogicalAnd },
+	{ TOK_PIPE, SpvOpBitwiseOr, SpvOpBitwiseOr, 0, SpvOpLogicalOr },
+	{ TOK_CARET, SpvOpBitwiseXor, SpvOpBitwiseXor, 0, SpvOpLogicalNotEqual },
+	{ TOK_LSHIFT, SpvOpShiftLeftLogical, SpvOpShiftLeftLogical, 0, 0 },
+	{ TOK_RSHIFT, SpvOpShiftRightArithmetic, SpvOpShiftRightLogical, 0, 0 },
+	{ TOK_AND_AND, 0, 0, 0, SpvOpLogicalAnd },
+	{ TOK_OR_OR, 0, 0, 0, SpvOpLogicalOr },
+};
+
+static const SpirvUnaryOpcode spirv_unary_op_table[] = {
+	{ TOK_PLUS, SpvOpCopyObject, 0, 0, 0, 0 },
+	{ TOK_MINUS, 0, SpvOpSNegate, 0, SpvOpFNegate, 0 },
+	{ TOK_NOT, 0, 0, 0, 0, SpvOpLogicalNot },
+	{ TOK_TILDE, 0, SpvOpNot, SpvOpNot, 0, 0 },
+};
+
+static const SpirvComparisonOpcode spirv_comparison_op_table[] = {
+	{ TOK_EQ, SpvOpIEqual, SpvOpIEqual, SpvOpFOrdEqual, SpvOpLogicalEqual },
+	{ TOK_NE, SpvOpINotEqual, SpvOpINotEqual, SpvOpFOrdNotEqual, SpvOpLogicalNotEqual },
+	{ TOK_LT, SpvOpSLessThan, SpvOpULessThan, SpvOpFOrdLessThan, 0 },
+	{ TOK_LE, SpvOpSLessThanEqual, SpvOpULessThanEqual, SpvOpFOrdLessThanEqual, 0 },
+	{ TOK_GT, SpvOpSGreaterThan, SpvOpUGreaterThan, SpvOpFOrdGreaterThan, 0 },
+	{ TOK_GE, SpvOpSGreaterThanEqual, SpvOpUGreaterThanEqual, SpvOpFOrdGreaterThanEqual, 0 },
+};
+
+static const SpirvConversionOpcode spirv_conversion_op_table[] = {
+{ SPIRV_VALUE_SIGNED, SPIRV_VALUE_FLOAT, SpvOpConvertSToF },
+{ SPIRV_VALUE_UNSIGNED, SPIRV_VALUE_FLOAT, SpvOpConvertUToF },
+{ SPIRV_VALUE_FLOAT, SPIRV_VALUE_SIGNED, SpvOpConvertFToS },
+{ SPIRV_VALUE_FLOAT, SPIRV_VALUE_UNSIGNED, SpvOpConvertFToU },
+{ SPIRV_VALUE_SIGNED, SPIRV_VALUE_UNSIGNED, SpvOpBitcast },
+{ SPIRV_VALUE_UNSIGNED, SPIRV_VALUE_SIGNED, SpvOpBitcast },
+{ SPIRV_VALUE_SIGNED, SPIRV_VALUE_SIGNED, SpvOpSConvert },
+{ SPIRV_VALUE_UNSIGNED, SPIRV_VALUE_UNSIGNED, SpvOpUConvert },
+{ SPIRV_VALUE_FLOAT, SPIRV_VALUE_FLOAT, SpvOpFConvert },
+};
+
+static uint32_t spirv_alloc_id(SpirvBuilder* b);
+static uint32_t spirv_type_cache_get(SpirvTypeCache* cache, const Type* type);
+static uint32_t spirv_constant_uint(SpirvConstantCache* cache, uint32_t type_id, uint32_t value);
+static uint32_t spirv_const_bool(SpirvTypeCache* cache, SpirvConstantCache* const_cache, int value);
+static uint32_t spirv_const_float32(SpirvTypeCache* cache, SpirvConstantCache* const_cache, float value);
+
+static SpirvValueKind spirv_value_kind_from_type(const Type* type)
+{
+	if (!type)
+	return SPIRV_VALUE_NONE;
+	TypeTag base = type_base_type(type);
+	switch (base)
+	{
+		case T_BOOL:
+		return SPIRV_VALUE_BOOL;
+		case T_INT:
+		case T_INT64:
+		return SPIRV_VALUE_SIGNED;
+		case T_UINT:
+		case T_UINT64:
+		return SPIRV_VALUE_UNSIGNED;
+		case T_FLOAT:
+		case T_DOUBLE:
+		return SPIRV_VALUE_FLOAT;
+		default:
+		return SPIRV_VALUE_NONE;
+	}
+}
+
+static uint16_t spirv_binary_opcode_lookup(Tok tok, SpirvValueKind kind)
+{
+	for (size_t i = 0; i < sizeof(spirv_binary_op_table) / sizeof(spirv_binary_op_table[0]); ++i)
+	{
+		const SpirvBinaryOpcode* entry = &spirv_binary_op_table[i];
+		if (entry->tok != tok)
+		continue;
+		switch (kind)
+		{
+			case SPIRV_VALUE_SIGNED:
+			return entry->signed_opcode;
+			case SPIRV_VALUE_UNSIGNED:
+			return entry->unsigned_opcode;
+			case SPIRV_VALUE_FLOAT:
+			return entry->float_opcode;
+			case SPIRV_VALUE_BOOL:
+			return entry->bool_opcode;
+			default:
+			return 0;
+		}
+	}
+	return 0;
+}
+
+static uint16_t spirv_unary_opcode_lookup(Tok tok, SpirvValueKind kind)
+{
+	for (size_t i = 0; i < sizeof(spirv_unary_op_table) / sizeof(spirv_unary_op_table[0]); ++i)
+	{
+		const SpirvUnaryOpcode* entry = &spirv_unary_op_table[i];
+		if (entry->tok != tok)
+		continue;
+		uint16_t opcode = 0;
+		switch (kind)
+		{
+			case SPIRV_VALUE_SIGNED:
+			opcode = entry->signed_opcode;
+			break;
+			case SPIRV_VALUE_UNSIGNED:
+			opcode = entry->unsigned_opcode;
+			break;
+			case SPIRV_VALUE_FLOAT:
+			opcode = entry->float_opcode;
+			break;
+			case SPIRV_VALUE_BOOL:
+			opcode = entry->bool_opcode;
+			break;
+			default:
+			opcode = 0;
+			break;
+		}
+		if (!opcode && entry->copy_opcode)
+		opcode = entry->copy_opcode;
+		return opcode;
+	}
+	return 0;
+}
+
+static uint16_t spirv_comparison_opcode_lookup(Tok tok, SpirvValueKind kind)
+{
+	for (size_t i = 0; i < sizeof(spirv_comparison_op_table) / sizeof(spirv_comparison_op_table[0]); ++i)
+	{
+		const SpirvComparisonOpcode* entry = &spirv_comparison_op_table[i];
+		if (entry->tok != tok)
+		continue;
+		switch (kind)
+		{
+			case SPIRV_VALUE_SIGNED:
+			return entry->signed_opcode;
+			case SPIRV_VALUE_UNSIGNED:
+			return entry->unsigned_opcode;
+			case SPIRV_VALUE_FLOAT:
+			return entry->float_opcode;
+			case SPIRV_VALUE_BOOL:
+			return entry->bool_opcode;
+			default:
+			return 0;
+		}
+	}
+	return 0;
+}
+
+static uint16_t spirv_conversion_opcode_lookup(SpirvValueKind from_kind, SpirvValueKind to_kind)
+{
+	if (from_kind == to_kind)
+		return 0;
+	for (size_t i = 0; i < sizeof(spirv_conversion_op_table) / sizeof(spirv_conversion_op_table[0]); ++i)
+	{
+		const SpirvConversionOpcode* entry = &spirv_conversion_op_table[i];
+		if (entry->from_kind == from_kind && entry->to_kind == to_kind)
+			return entry->opcode;
+	}
+	return 0;
+}
+
+static int spirv_ir_inst_has_value(const IR_Cmd* inst)
+{
+	if (!inst)
+		return 0;
+	switch (inst->op)
+	{
+	case IR_PUSH_INT:
+	case IR_PUSH_IDENT:
+	case IR_PUSH_FLOAT:
+	case IR_PUSH_BOOL:
+	case IR_UNARY:
+	case IR_BINARY:
+	case IR_CALL:
+	case IR_CONSTRUCT:
+	case IR_INDEX:
+	case IR_MEMBER:
+	case IR_SWIZZLE:
+	case IR_SELECT:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static void spirv_value_table_free(SpirvValueTable* table)
+{
+	if (!table)
+		return;
+	if (table->entries)
+		afree(table->entries);
+	table->entries = NULL;
+}
+
+static void spirv_value_table_build(SpirvValueTable* table, SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache)
+{
+	if (!table)
+		return;
+	spirv_value_table_free(table);
+	for (int i = 0; i < acount(g_ir); ++i)
+	{
+		SpirvValue entry = { 0 };
+		IR_Cmd* inst = &g_ir[i];
+		if (spirv_ir_inst_has_value(inst) && inst->type && inst->type != g_type_void)
+		{
+			entry.type_id = spirv_type_cache_get(cache, inst->type);
+			switch (inst->op)
+			{
+			case IR_PUSH_BOOL:
+				entry.result_id = spirv_const_bool(cache, const_cache, inst->arg0 != 0);
+				break;
+			case IR_PUSH_INT:
+				{
+					uint32_t literal = (uint32_t)inst->arg0;
+					entry.result_id = spirv_constant_uint(const_cache, entry.type_id, literal);
+					break;
+				}
+			case IR_PUSH_FLOAT:
+				entry.result_id = spirv_const_float32(cache, const_cache, (float)inst->float_val);
+				break;
+			default:
+				entry.result_id = spirv_alloc_id(builder);
+				break;
+			}
+		}
+		apush(table->entries, entry);
+	}
+}
+
+static inline uint32_t spirv_value_table_result_id(const SpirvValueTable* table, int index)
+{
+	if (!table || index < 0 || index >= acount(table->entries))
+		return 0u;
+	return table->entries[index].result_id;
+}
+
+static inline uint32_t spirv_value_table_type_id(const SpirvValueTable* table, int index)
+{
+	if (!table || index < 0 || index >= acount(table->entries))
+		return 0u;
+	return table->entries[index].type_id;
+}
 
 static void spirv_builder_init(SpirvBuilder* b)
 {
@@ -6468,6 +6865,7 @@ typedef struct SpirvEmitContext
 	uint32_t current_label;
 	int current_terminated;
 	dyna SpirvControlState* stack;
+	SpirvValueTable* values;
 	Type* return_type;
 	uint32_t return_type_id;
 	uint32_t return_placeholder_id;
@@ -6600,7 +6998,7 @@ static void spirv_stub_collect_switch_cases(const SpirvFunctionInfo* info, int s
 	sw->default_label = sw->merge_label;
 }
 
-static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label, Type* return_type, uint32_t return_type_id)
+static SpirvControlFlowResult spirv_emit_control_flow_stub(SpirvBuilder* builder, SpirvTypeCache* cache, SpirvConstantCache* const_cache, const SpirvFunctionInfo* info, uint32_t entry_label, Type* return_type, uint32_t return_type_id, SpirvValueTable* value_table)
 {
 if (!info)
 return (SpirvControlFlowResult){ 0 };
@@ -6612,6 +7010,7 @@ ctx.type_cache = cache;
 ctx.const_cache = const_cache;
 ctx.current_label = entry_label;
 ctx.current_terminated = 0;
+ctx.values = value_table;
 ctx.return_type = return_type ? return_type : g_type_void;
 ctx.return_type_id = return_type_id;
 for (int i = info->ir_begin; i < info->ir_end; ++i)
@@ -7553,6 +7952,8 @@ dyna uint32_t* emit_spirv()
 	{
 		stage_layout.has_local_size = 1;
 	}
+	SpirvValueTable value_table = (SpirvValueTable){ 0 };
+	spirv_value_table_build(&value_table, &builder, &cache, &const_cache);
 	dyna uint32_t* block_type_ids = NULL;
 	dyna uint32_t* interface_ids = NULL;
 	static const uint32_t exec_model_table[SHADER_STAGE_COUNT] = {
@@ -7687,7 +8088,7 @@ dyna uint32_t* emit_spirv()
 		}
 		uint32_t label_id = spirv_alloc_id(&builder);
 		SPIRV_EMIT1(&builder, SpvOpLabel, label_id);
-		SpirvControlFlowResult flow = spirv_emit_control_flow_stub(&builder, &cache, &const_cache, info, label_id, return_type, return_type_id);
+		SpirvControlFlowResult flow = spirv_emit_control_flow_stub(&builder, &cache, &const_cache, info, label_id, return_type, return_type_id, &value_table);
 		if (!flow.terminated)
 		{
 			if (return_type && return_type != g_type_void)
@@ -7761,6 +8162,7 @@ dyna uint32_t* emit_spirv()
 	afree(interface_ids);
 	afree(resource_symbols);
 	afree(interface_symbols);
+	spirv_value_table_free(&value_table);
 	afree(cache.sampled_images);
 	afree(cache.pointers);
 	afree(cache.entries);
@@ -9921,7 +10323,7 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 		0x07230203u,
 		0x00010500u,
 		0x00010001u,
-		0x0000000au,
+		0x0000000cu,
 		0x00000000u,
 		0x00020011u,
 		0x00000001u,
@@ -9932,45 +10334,45 @@ DEFINE_TEST(test_spirv_emit_non_void_return_helper)
 		0x00030016u,
 		0x00000001u,
 		0x00000020u,
-		0x00030021u,
+		0x0004002bu,
+		0x00000001u,
 		0x00000002u,
+		0x3f800000u,
+		0x00030021u,
+		0x00000005u,
 		0x00000001u,
 		0x00050036u,
 		0x00000001u,
-		0x00000003u,
+		0x00000006u,
 		0x00000000u,
-		0x00000002u,
+		0x00000005u,
 		0x000200f8u,
-		0x00000004u,
-		0x0004002bu,
-		0x00000001u,
-		0x00000005u,
-		0x3f800000u,
+		0x00000007u,
 		0x000200feu,
-		0x00000005u,
+		0x00000002u,
 		0x00020038u,
 		0x00000000u,
 		0x00020013u,
-		0x00000006u,
-		0x00030021u,
-		0x00000007u,
-		0x00000006u,
-		0x00050036u,
-		0x00000006u,
 		0x00000008u,
-		0x00000000u,
-		0x00000007u,
-		0x000200f8u,
+		0x00030021u,
 		0x00000009u,
+		0x00000008u,
+		0x00050036u,
+		0x00000008u,
+		0x0000000au,
+		0x00000000u,
+		0x00000009u,
+		0x000200f8u,
+		0x0000000bu,
 		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0005000fu,
 		0x00000004u,
-		0x00000008u,
+		0x0000000au,
 		0x6e69616du,
 		0x00000000u,
-	};
+};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
 	for (int i = 0; i < expected_count; ++i)
@@ -9992,7 +10394,7 @@ DEFINE_TEST(test_spirv_emit_function_parameters)
 		0x07230203u,
 		0x00010500u,
 		0x00010001u,
-		0x0000000bu,
+		0x0000000fu,
 		0x00000000u,
 		0x00020011u,
 		0x00000001u,
@@ -10003,45 +10405,49 @@ DEFINE_TEST(test_spirv_emit_function_parameters)
 		0x00030016u,
 		0x00000001u,
 		0x00000020u,
+		0x0004002bu,
+		0x00000001u,
+		0x00000004u,
+		0x3f000000u,
 		0x00040021u,
-		0x00000002u,
+		0x00000006u,
 		0x00000001u,
 		0x00000001u,
 		0x00050036u,
 		0x00000001u,
-		0x00000003u,
+		0x00000007u,
 		0x00000000u,
-		0x00000002u,
+		0x00000006u,
 		0x00030037u,
 		0x00000001u,
-		0x00000004u,
+		0x00000008u,
 		0x000200f8u,
-		0x00000005u,
+		0x00000009u,
 		0x00030001u,
 		0x00000001u,
-		0x00000006u,
+		0x0000000au,
 		0x000200feu,
-		0x00000006u,
+		0x0000000au,
 		0x00020038u,
 		0x00000000u,
 		0x00020013u,
-		0x00000007u,
+		0x0000000bu,
 		0x00030021u,
-		0x00000008u,
-		0x00000007u,
+		0x0000000cu,
+		0x0000000bu,
 		0x00050036u,
-		0x00000007u,
-		0x00000009u,
+		0x0000000bu,
+		0x0000000du,
 		0x00000000u,
-		0x00000008u,
+		0x0000000cu,
 		0x000200f8u,
-		0x0000000au,
+		0x0000000eu,
 		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0005000fu,
 		0x00000004u,
-		0x00000009u,
+		0x0000000du,
 		0x6e69616du,
 		0x00000000u,
 	};
@@ -10065,7 +10471,7 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 		0x07230203u,
 		0x00010500u,
 		0x00010001u,
-		0x00000009u,
+		0x0000000eu,
 		0x00000000u,
 		0x00020011u,
 		0x00000001u,
@@ -10080,39 +10486,43 @@ DEFINE_TEST(test_spirv_emit_stage_interface)
 		0x00000002u,
 		0x00000001u,
 		0x00000004u,
+		0x0004002bu,
+		0x00000001u,
+		0x00000005u,
+		0x3f800000u,
 		0x00040020u,
-		0x00000003u,
+		0x00000008u,
 		0x00000003u,
 		0x00000002u,
 		0x0004003bu,
-		0x00000003u,
-		0x00000004u,
+		0x00000008u,
+		0x00000009u,
 		0x00000003u,
 		0x00040047u,
-		0x00000004u,
+		0x00000009u,
 		0x0000001eu,
 		0x00000000u,
 		0x00020013u,
-		0x00000005u,
+		0x0000000au,
 		0x00030021u,
-		0x00000006u,
-		0x00000005u,
+		0x0000000bu,
+		0x0000000au,
 		0x00050036u,
-		0x00000005u,
-		0x00000007u,
+		0x0000000au,
+		0x0000000cu,
 		0x00000000u,
-		0x00000006u,
+		0x0000000bu,
 		0x000200f8u,
-		0x00000008u,
+		0x0000000du,
 		0x000100fdu,
 		0x00020038u,
 		0x00000000u,
 		0x0006000fu,
 		0x00000004u,
-		0x00000007u,
+		0x0000000cu,
 		0x6e69616du,
 		0x00000000u,
-		0x00000004u,
+		0x00000009u,
 	};
 	const int expected_count = (int)(sizeof(expected) / sizeof(expected[0]));
 	assert(acount(words) == expected_count);
